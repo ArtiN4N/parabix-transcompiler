@@ -36,25 +36,20 @@ using namespace llvm;
 
 namespace re {
 
-template<typename T, typename... Args>
-std::unique_ptr<T> make_unique(Args&&... args) {
-    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
-}
-
 RE * RE_Parser::parse(const std::string & regular_expression, ModeFlagSet initialFlags, RE_Syntax syntax, bool ByteMode) {
     std::unique_ptr<RE_Parser> parser = nullptr;
     switch (syntax) {
         case RE_Syntax::PCRE:
-            parser = make_unique<RE_Parser_PCRE>(regular_expression);
+            parser = std::make_unique<RE_Parser_PCRE>(regular_expression);
             break;
         case RE_Syntax::ERE:
-            parser = make_unique<RE_Parser_ERE>(regular_expression);
+            parser = std::make_unique<RE_Parser_ERE>(regular_expression);
             break;
         case RE_Syntax ::BRE:
-            parser = make_unique<RE_Parser_BRE>(regular_expression);
+            parser = std::make_unique<RE_Parser_BRE>(regular_expression);
             break;
         case RE_Syntax ::PROSITE:
-            parser = make_unique<RE_Parser_PROSITE>(regular_expression);
+            parser = std::make_unique<RE_Parser_PROSITE>(regular_expression);
             break;
         default:
             //TODO handle FixString

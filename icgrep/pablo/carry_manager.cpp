@@ -290,7 +290,7 @@ void CarryManager::enterLoopBody(const std::unique_ptr<kernel::KernelBuilder> & 
         Value * const newCapacitySize = iBuilder->CreateShl(capacitySize, 1); // x 2
         Value * const newArray = iBuilder->CreateCacheAlignedMalloc(newCapacitySize);
         const auto a = iBuilder->getCacheAlignment();
-        iBuilder->CreateMemCpy(newArray, a, array, a, capacitySize);
+        iBuilder->CreateMemCpy(newArray, array, capacitySize, a);
         iBuilder->CreateFree(array);
         iBuilder->CreateStore(newArray, arrayPtr);
         Value * const startNewArrayPtr = iBuilder->CreateGEP(iBuilder->CreatePointerCast(newArray, int8PtrTy), capacitySize);
@@ -302,7 +302,7 @@ void CarryManager::enterLoopBody(const std::unique_ptr<kernel::KernelBuilder> & 
         Constant * const additionalSpace = iBuilder->getSize(2 * BlockWidth);
         Value * const newSummarySize = iBuilder->CreateAdd(summarySize, additionalSpace);
         Value * const newSummary = iBuilder->CreateBlockAlignedMalloc(newSummarySize);
-        iBuilder->CreateMemCpy(newSummary, BlockWidth, summary, BlockWidth, summarySize);
+        iBuilder->CreateMemCpy(newSummary, summary, summarySize, BlockWidth);
         iBuilder->CreateFree(summary);
         iBuilder->CreateStore(iBuilder->CreatePointerCast(newSummary, carryPtrTy), summaryPtr);
         Value * const startNewSummaryPtr = iBuilder->CreateGEP(iBuilder->CreatePointerCast(newSummary, int8PtrTy), summarySize);
@@ -631,8 +631,8 @@ inline Value * CarryManager::longAdvanceCarryInCarryOut(const std::unique_ptr<ke
             Value * carry = iBuilder->CreateZExt(iBuilder->bitblock_any(value), streamTy);
             const auto summaryBlocks = ceil_udiv(shiftAmount, blockWidth);
             const auto summarySize = ceil_udiv(summaryBlocks, blockWidth);
-            VectorType * const bitBlockTy = iBuilder->getBitBlockType();
-            IntegerType * const laneTy = cast<IntegerType>(bitBlockTy->getVectorElementType());
+            FixedVectorType * const bitBlockTy = iBuilder->getBitBlockType();
+            IntegerType * const laneTy = cast<IntegerType>(bitBlockTy->getElementType());
             const auto laneWidth = laneTy->getIntegerBitWidth();
 
             assert (summarySize > 0);
@@ -658,17 +658,17 @@ inline Value * CarryManager::longAdvanceCarryInCarryOut(const std::unique_ptr<ke
                 }
                 Value * stream = iBuilder->CreateBitCast(advanced, bitBlockTy);
                 if (LLVM_LIKELY(i == summarySize)) {
-                    const auto n = bitBlockTy->getVectorNumElements();
-                    Constant * mask[n];                                        
+                    const auto n = bitBlockTy->getNumElements();
+                    SmallVector<Constant *, 64> mask(n);
                     const auto m = udiv(summaryBlocks, laneWidth);
                     if (m) {
-                        std::fill_n(mask, m, ConstantInt::getAllOnesValue(laneTy));
+                        std::fill_n(mask.begin(), m, ConstantInt::getAllOnesValue(laneTy));
                     }
                     mask[m] = ConstantInt::get(laneTy, (1UL << (summaryBlocks & (laneWidth - 1))) - 1UL);
                     if (n > m) {
-                        std::fill_n(mask + m + 1, n - m, UndefValue::get(laneTy));
+                        std::fill_n(mask.begin() + m + 1, n - m, UndefValue::get(laneTy));
                     }
-                    stream = iBuilder->CreateAnd(stream, ConstantVector::get(ArrayRef<Constant *>(mask, n)));
+                    stream = iBuilder->CreateAnd(stream, ConstantVector::get(mask));
 
                     addToCarryOutSummary(iBuilder, stream);
                     iBuilder->CreateBlockAlignedStore(stream, ptr);

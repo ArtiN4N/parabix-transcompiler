@@ -30,6 +30,7 @@
 #include <llvm/Transforms/Scalar/SROA.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Utils.h>
+#include <llvm/Support/Host.h>
 
 using namespace llvm;
 using Kernel = kernel::Kernel;
@@ -207,7 +208,7 @@ void ParabixDriver::finalizeObject() {
             ASMOutputStream.reset(new raw_fd_ostream(STDERR_FILENO, false, false));
         }
 
-        if (LLVM_UNLIKELY(mTarget->addPassesToEmitFile(PM, *ASMOutputStream, nullptr, TargetMachine::CGFT_AssemblyFile))) {
+        if (LLVM_UNLIKELY(mTarget->addPassesToEmitFile(PM, *ASMOutputStream, nullptr, CGFT_AssemblyFile))) {
             report_fatal_error("LLVM error: could not add emit assembly pass");
         }
     }
@@ -252,6 +253,9 @@ bool ParabixDriver::hasExternalFunction(llvm::StringRef functionName) const {
 
 void * ParabixDriver::getMain() {
     void * mainFunc = mEngine->getPointerToNamedFunction("Main");
+    if (LLVM_UNLIKELY(mainFunc == nullptr)) {
+        report_fatal_error("Unable to locate Main function.");
+    }
     assert (mainFunc);
     return mainFunc;
 }

@@ -73,7 +73,7 @@ public:
         return CreateAlignedMalloc(size, mBitBlockWidth / 8);
     }
 
-    llvm::VectorType * fwVectorType(const unsigned fw);
+    llvm::FixedVectorType * fwVectorType(const unsigned fw);
 
     llvm::Constant * simd_himask(unsigned fw);
     llvm::Constant * simd_lomask(unsigned fw);
@@ -136,19 +136,19 @@ public:
     llvm::Value * simd_not(llvm::Value * a);
     llvm::Value * fwCast(unsigned fw, llvm::Value * a);
     
-    inline llvm::VectorType * getBitBlockType() const {
+    inline llvm::FixedVectorType * getBitBlockType() const {
         return mBitBlockType;
     }
 
-    static llvm::VectorType * getStreamTy(llvm::LLVMContext & C, const unsigned FieldWidth = 1) {
-        return llvm::VectorType::get(llvm::IntegerType::getIntNTy(C, FieldWidth), 0);
+    static llvm::FixedVectorType * getStreamTy(llvm::LLVMContext & C, const unsigned FieldWidth = 1) {
+        return llvm::FixedVectorType::get(llvm::IntegerType::getIntNTy(C, FieldWidth), static_cast<unsigned>(0));
     }
 
     static llvm::ArrayType * getStreamSetTy(llvm::LLVMContext & C, const unsigned NumElements = 1, const unsigned FieldWidth = 1) {
         return llvm::ArrayType::get(getStreamTy(C, FieldWidth), NumElements);
     }
 
-    llvm::VectorType * getStreamTy(const unsigned FieldWidth = 1) {
+    llvm::FixedVectorType * getStreamTy(const unsigned FieldWidth = 1) {
         return getStreamTy(getContext(), FieldWidth);
     }
 
@@ -161,7 +161,7 @@ public:
 protected:
     const unsigned              mBitBlockWidth;
     const unsigned              mStride;
-    llvm::VectorType * const    mBitBlockType;
+    llvm::FixedVectorType * const    mBitBlockType;
     llvm::Constant * const      mZeroInitializer;
     llvm::Constant * const      mOneInitializer;
     llvm::Constant *            mPrintRegisterFunction;

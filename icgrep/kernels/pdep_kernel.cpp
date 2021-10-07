@@ -5,6 +5,7 @@
 #include "pdep_kernel.h"
 #include <kernels/kernel_builder.h>
 #include <llvm/Support/raw_ostream.h>
+#include <llvm/IR/IntrinsicsX86.h>
 
 using namespace llvm;
 
@@ -29,7 +30,7 @@ void PDEPkernel::generateDoBlockMethod(const std::unique_ptr<KernelBuilder> & kb
     Value * blockWidth = kb->getSize(kb->getBitBlockWidth());
     Value * base_block_idx = kb->CreateUDiv(processedBits, blockWidth);
     Value * pdepWidth = kb->getSize(mPDEPWidth);
-    Value * PDEP_func = nullptr;
+    Function * PDEP_func = nullptr;
     if (mPDEPWidth == 64) {
         PDEP_func = Intrinsic::getDeclaration(kb->getModule(), Intrinsic::x86_bmi_pdep_64);
     } else if (mPDEPWidth == 32) {

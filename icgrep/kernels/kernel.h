@@ -7,6 +7,7 @@
 #define KERNEL_H
 
 #include "interface.h"
+#include <map>
 #include <boost/container/flat_map.hpp>
 #include <llvm/IR/Constants.h>
 
@@ -26,7 +27,7 @@ class KernelBuilder;
 class Kernel : public KernelInterface {
     friend class KernelBuilder;
 protected:
-    using KernelMap = boost::container::flat_map<std::string, unsigned>;
+    using KernelMap = std::map<std::string, unsigned>;
     enum class Port { Input, Output };
     using StreamPort = std::pair<Port, unsigned>;
     using StreamMap = boost::container::flat_map<std::string, StreamPort>;

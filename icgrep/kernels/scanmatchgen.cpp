@@ -47,7 +47,7 @@ void ScanMatchKernel::generateMultiBlockLogic(const std::unique_ptr<KernelBuilde
     BasicBlock * const blocksExit = iBuilder->CreateBasicBlock("blocksExit");
     IntegerType * const sizeTy = iBuilder->getSizeTy();
     const unsigned fieldCount = iBuilder->getBitBlockWidth() / sizeTy->getBitWidth();
-    VectorType * const scanwordVectorType =  VectorType::get(sizeTy, fieldCount);
+    VectorType * const scanwordVectorType =  FixedVectorType::get(sizeTy, fieldCount);
     Constant * blockSize = iBuilder->getSize(iBuilder->getBitBlockWidth());
     Constant * blockSizeLess1 = iBuilder->getSize(iBuilder->getBitBlockWidth() - 1);
 

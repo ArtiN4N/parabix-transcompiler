@@ -19,7 +19,7 @@ void editdScanKernel::generateDoBlockMethod(const std::unique_ptr<kernel::Kernel
 
     const unsigned fieldCount = idb->getBitBlockWidth() / mScanwordBitWidth;
     Type * T = idb->getIntNTy(mScanwordBitWidth);
-    VectorType * scanwordVectorType =  VectorType::get(T, fieldCount);
+    VectorType * scanwordVectorType =  FixedVectorType::get(T, fieldCount);
     Value * blockNo = idb->getScalarField("BlockNo");
     Value * scanwordPos = idb->CreateMul(blockNo, ConstantInt::get(blockNo->getType(), idb->getBitBlockWidth()));
     
@@ -45,8 +45,13 @@ Function * editdScanKernel::generateScanWordRoutine(const std::unique_ptr<Kernel
     IntegerType * T = iBuilder->getIntNTy(mScanwordBitWidth);
     Module * const m = iBuilder->getModule();
 
-    Function * scanFunc = cast<Function>(m->getOrInsertFunction("scan_word", iBuilder->getVoidTy(), T, iBuilder->getInt32Ty(), T));
-    scanFunc->setCallingConv(CallingConv::C);
+    FunctionType * scanFuncTy = FunctionType::get(iBuilder->getVoidTy(), { T, iBuilder->getInt32Ty(), T}, false);
+    Function * scanFunc = m->getFunction("scan_word");
+    if (scanFunc == nullptr) {
+        scanFunc = Function::Create(scanFuncTy, Function::InternalLinkage, "scan_word", m);
+        scanFunc->setCallingConv(CallingConv::C);
+    }
+
     Function::arg_iterator args = scanFunc->arg_begin();
 
     Value * matchWord = &*(args++);
@@ -56,11 +61,18 @@ Function * editdScanKernel::generateScanWordRoutine(const std::unique_ptr<Kernel
     Value * basePos = &*(args++);
     basePos->setName("basePos");
 
-    Constant * matchProcessor = m->getOrInsertFunction("wrapped_report_pos", iBuilder->getVoidTy(), T, iBuilder->getInt32Ty());
-    BasicBlock * entryBlock = BasicBlock::Create(iBuilder->getContext(), "entry", scanFunc, 0);
-    BasicBlock * matchesCondBlock = BasicBlock::Create(iBuilder->getContext(), "matchesCond", scanFunc, 0);
-    BasicBlock * matchesLoopBlock = BasicBlock::Create(iBuilder->getContext(), "matchesLoop", scanFunc, 0);
-    BasicBlock * matchesDoneBlock = BasicBlock::Create(iBuilder->getContext(), "matchesDone", scanFunc, 0);
+
+    FunctionType * matchProcessorTy = FunctionType::get(iBuilder->getVoidTy(), { T, iBuilder->getInt32Ty()}, false);
+    Function * matchProcessor = m->getFunction("wrapped_report_pos");
+    if (matchProcessor == nullptr) {
+        matchProcessor = Function::Create(matchProcessorTy, Function::InternalLinkage, "wrapped_report_pos", m);
+        matchProcessor->setCallingConv(CallingConv::C);
+    }
+
+    BasicBlock * entryBlock = BasicBlock::Create(iBuilder->getContext(), "entry", scanFunc);
+    BasicBlock * matchesCondBlock = BasicBlock::Create(iBuilder->getContext(), "matchesCond", scanFunc);
+    BasicBlock * matchesLoopBlock = BasicBlock::Create(iBuilder->getContext(), "matchesLoop", scanFunc);
+    BasicBlock * matchesDoneBlock = BasicBlock::Create(iBuilder->getContext(), "matchesDone", scanFunc);
 
     iBuilder->SetInsertPoint(entryBlock);
     iBuilder->CreateBr(matchesCondBlock);

@@ -67,15 +67,9 @@ public:
 
     llvm::Value * CreateRealloc(llvm::Value * ptr, llvm::Value * size);
 
-    llvm::CallInst * CreateMemZero(llvm::Value * ptr, llvm::Value * size, const unsigned alignment = 1) {
-        return CreateMemSet(ptr, getInt8(0), size, alignment);
-    }
+    llvm::CallInst * CreateMemZero(llvm::Value * ptr, llvm::Value * size, const unsigned alignment = 1);
 
-    llvm::AllocaInst * CreateCacheAlignedAlloca(llvm::Type * Ty, llvm::Value * ArraySize = nullptr) {
-        llvm::AllocaInst * instr = CreateAlloca(Ty, ArraySize);
-        instr->setAlignment(getCacheAlignment());
-        return instr;
-    }
+    llvm::AllocaInst * CreateCacheAlignedAlloca(llvm::Type * Ty, llvm::Value * ArraySize = nullptr);
 
     llvm::Value * CreateCacheAlignedMalloc(llvm::Value * size);
 
@@ -249,6 +243,37 @@ public:
 
     virtual llvm::StoreInst * CreateStore(llvm::Value * Val, llvm::Value * Ptr, bool isVolatile = false);
     #endif
+
+    llvm::CallInst * CreateMemMove(llvm::Value *Dst, llvm::Value *Src, llvm::Value *Size, const unsigned Align,
+                            bool isVolatile = false, llvm::MDNode *TBAATag = nullptr,
+                            llvm::MDNode *ScopeTag = nullptr,
+                            llvm::MDNode *NoAliasTag = nullptr);
+
+    llvm::CallInst * CreateMemCpy(llvm::Value *Dst, llvm::Value *Src, uint64_t Size, const unsigned Align,
+                           bool isVolatile = false, llvm::MDNode *TBAATag = nullptr,
+                           llvm::MDNode *TBAAStructTag = nullptr,
+                           llvm::MDNode *ScopeTag = nullptr,
+                           llvm::MDNode *NoAliasTag = nullptr) {
+        return CreateMemCpy(Dst, Src, getInt64(Size), Align, isVolatile, TBAATag, TBAAStructTag, ScopeTag, NoAliasTag);
+    }
+
+    llvm::CallInst * CreateMemCpy(llvm::Value *Dst, llvm::Value *Src, llvm::Value *Size, const unsigned Align,
+                           bool isVolatile = false, llvm::MDNode *TBAATag = nullptr,
+                           llvm::MDNode *TBAAStructTag = nullptr,
+                           llvm::MDNode *ScopeTag = nullptr,
+                           llvm::MDNode *NoAliasTag = nullptr);
+
+    llvm::CallInst * CreateMemSet(llvm::Value *Ptr, llvm::Value *Val, uint64_t Size, const unsigned Align,
+                           bool isVolatile = false, llvm::MDNode *TBAATag = nullptr,
+                           llvm::MDNode *ScopeTag = nullptr,
+                           llvm::MDNode *NoAliasTag = nullptr) {
+        return CreateMemSet(Ptr, Val, getInt64(Size), Align, isVolatile, TBAATag, ScopeTag, NoAliasTag);
+    }
+
+    llvm::CallInst * CreateMemSet(llvm::Value *Ptr, llvm::Value *Val, llvm::Value *Size, const unsigned Align,
+                           bool isVolatile = false, llvm::MDNode *TBAATag = nullptr,
+                           llvm::MDNode *ScopeTag = nullptr,
+                           llvm::MDNode *NoAliasTag = nullptr);
 
     llvm::LoadInst * CreateAlignedLoad(llvm::Value * Ptr, unsigned Align, const char * Name);
 

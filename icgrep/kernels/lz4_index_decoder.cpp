@@ -6,7 +6,8 @@
 
 #include "lz4_index_decoder.h"
 #include <kernels/kernel_builder.h>
- 
+ #include <llvm/IR/IntrinsicsX86.h>
+
 using namespace llvm;
 using namespace kernel;
 
@@ -28,7 +29,7 @@ using namespace kernel;
 namespace {
 
 Value * generateBitswap(const std::unique_ptr<KernelBuilder> & iBuilder, Value * v) {
-    Value * bswapFunc = Intrinsic::getDeclaration(iBuilder->getModule(),
+    Function * bswapFunc = Intrinsic::getDeclaration(iBuilder->getModule(),
             Intrinsic::bswap, v->getType());
     return iBuilder->CreateCall(bswapFunc, {v});
 }
@@ -188,7 +189,7 @@ void LZ4IndexDecoderKernel::generateDoBlockMethod(const std::unique_ptr<KernelBu
     blockStartPos = iBuilder->CreateMul(blockNo, iBuilder->getInt32(iBuilder->getBitBlockWidth()), "blockStartPos");
     extenders = iBuilder->CreateBitCast(
             iBuilder->loadInputStreamBlock("extenders", iBuilder->getInt32(0)),
-            VectorType::get(iBuilder->getSizeTy(), iBuilder->getBitBlockWidth() / iBuilder->getSizeTy()->getBitWidth()),
+            FixedVectorType::get(iBuilder->getSizeTy(), iBuilder->getBitBlockWidth() / iBuilder->getSizeTy()->getBitWidth()),
             "extenders");
     // Create a series of stack variables which will be promoted by mem2reg.
     sOffset = createStackVar(iBuilder, iBuilder->getInt32Ty(), "offset");

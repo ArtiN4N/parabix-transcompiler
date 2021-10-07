@@ -119,11 +119,11 @@ void PabloCompiler::compileIf(const std::unique_ptr<kernel::KernelBuilder> &  iB
         if (LLVM_UNLIKELY(var->isKernelParameter())) {
             Value * marker = nullptr;
             if (var->isScalar()) {
-                marker = iBuilder->getScalarFieldPtr(var->getName());
+                marker = iBuilder->getScalarFieldPtr(var->getName().str());
             } else if (var->isReadOnly()) {
-                marker = iBuilder->getInputStreamBlockPtr(var->getName(), iBuilder->getInt32(0));
+                marker = iBuilder->getInputStreamBlockPtr(var->getName().str(), iBuilder->getInt32(0));
             } else if (var->isReadNone()) {
-                marker = iBuilder->getOutputStreamBlockPtr(var->getName(), iBuilder->getInt32(0));
+                marker = iBuilder->getOutputStreamBlockPtr(var->getName().str(), iBuilder->getInt32(0));
             }
             mMarker[var] = marker;
         } else {
@@ -230,11 +230,11 @@ void PabloCompiler::compileWhile(const std::unique_ptr<kernel::KernelBuilder> & 
         if (LLVM_UNLIKELY(var->isKernelParameter())) {
             Value * marker = nullptr;
             if (var->isScalar()) {
-                marker = iBuilder->getScalarFieldPtr(var->getName());
+                marker = iBuilder->getScalarFieldPtr(var->getName().str());
             } else if (var->isReadOnly()) {
-                marker = iBuilder->getInputStreamBlockPtr(var->getName(), iBuilder->getInt32(0));
+                marker = iBuilder->getInputStreamBlockPtr(var->getName().str(), iBuilder->getInt32(0));
             } else if (var->isReadNone()) {
-                marker = iBuilder->getOutputStreamBlockPtr(var->getName(), iBuilder->getInt32(0));
+                marker = iBuilder->getOutputStreamBlockPtr(var->getName().str(), iBuilder->getInt32(0));
             }
             mMarker[var] = marker;
         }
@@ -381,9 +381,9 @@ void PabloCompiler::compileStatement(const std::unique_ptr<kernel::KernelBuilder
                 }
                 if (var->isKernelParameter()) {
                     if (var->isScalar()) {
-                        ptr = iBuilder->getScalarFieldPtr(var->getName());
+                        ptr = iBuilder->getScalarFieldPtr(var->getName().str());
                     } else {
-                        ptr = iBuilder->getOutputStreamBlockPtr(var->getName(), iBuilder->getInt32(0));
+                        ptr = iBuilder->getOutputStreamBlockPtr(var->getName().str(), iBuilder->getInt32(0));
                     }
                 }
             } else if (isa<Extract>(expr)) {
@@ -412,9 +412,9 @@ void PabloCompiler::compileStatement(const std::unique_ptr<kernel::KernelBuilder
             Var * const array = dyn_cast<Var>(extract->getArray());
             if (LLVM_LIKELY(array && array->isKernelParameter())) {
                 if (array->isReadOnly()) {
-                    value = iBuilder->getInputStreamBlockPtr(array->getName(), index);
+                    value = iBuilder->getInputStreamBlockPtr(array->getName().str(), index);
                 } else if (array->isReadNone()) {
-                    value = iBuilder->getOutputStreamBlockPtr(array->getName(), index);
+                    value = iBuilder->getOutputStreamBlockPtr(array->getName().str(), index);
                 } else {
                     std::string tmp;
                     raw_string_ostream out(tmp);
@@ -544,12 +544,12 @@ void PabloCompiler::compileStatement(const std::unique_ptr<kernel::KernelBuilder
             const auto bit_shift = (l->getAmount() % iBuilder->getBitBlockWidth());
             const auto block_shift = (l->getAmount() / iBuilder->getBitBlockWidth());
 
-            Value * ptr = iBuilder->getAdjustedInputStreamBlockPtr(iBuilder->getSize(block_shift), var->getName(), index);
+            Value * ptr = iBuilder->getAdjustedInputStreamBlockPtr(iBuilder->getSize(block_shift), var->getName().str(), index);
             Value * lookAhead = iBuilder->CreateBlockAlignedLoad(ptr);
             if (bit_shift == 0) {  // Simple case with no intra-block shifting.
                 value = lookAhead;
             } else { // Need to form shift result from two adjacent blocks.
-                Value * ptr = iBuilder->getAdjustedInputStreamBlockPtr(iBuilder->getSize(block_shift + 1), var->getName(), index);
+                Value * ptr = iBuilder->getAdjustedInputStreamBlockPtr(iBuilder->getSize(block_shift + 1), var->getName().str(), index);
                 Value * lookAhead1 = iBuilder->CreateBlockAlignedLoad(ptr);
                 if (LLVM_UNLIKELY((bit_shift % 8) == 0)) { // Use a single whole-byte shift, if possible.
                     value = iBuilder->mvmd_dslli(8, lookAhead1, lookAhead, (bit_shift / 8));

@@ -222,7 +222,7 @@ int main(int argc, char *argv[]) {
 //        if (Threads <= 1) {
             for (unsigned i = 0; i != allFiles.size(); ++i) {
                 #ifdef ENABLE_PAPI
-                papi::PapiCounter<6> jitExecution{{PAPI_BR_MSP, PAPI_BR_CN, PAPI_L3_TCM, PAPI_L3_TCA, PAPI_TOT_INS, PAPI_TOT_CYC}};
+                papi::PapiCounter<4> jitExecution{{PAPI_L3_TCM, PAPI_L3_TCA, PAPI_TOT_INS, PAPI_TOT_CYC}};
 //                papi::PapiCounter<4> jitExecution{{PAPI_L1_TCM, PAPI_L2_TCM, PAPI_L1_ICM, PAPI_L2_ICM}};
                 jitExecution.start();
                 #endif

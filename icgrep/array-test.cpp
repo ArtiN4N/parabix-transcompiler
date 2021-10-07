@@ -145,8 +145,13 @@ void pipeline(ParabixDriver & pxDriver, const unsigned count) {
 
     Type * const byteStreamTy = iBuilder->getStreamSetTy(1, 8);
 
-    Function * const main = cast<Function>(mod->getOrInsertFunction("Main", iBuilder->getVoidTy(), iBuilder->getSizeTy(), nullptr));
-    main->setCallingConv(CallingConv::C);
+    FunctionType * mainTy = FunctionType::get(iBuilder->getVoidTy(), { iBuilder->getSizeTy() }, false);
+    Function * main = mod->getFunction("Main");
+    if (main == nullptr) {
+        main = Function::Create(mainTy, Function::InternalLinkage, "Main", mod);
+        main->setCallingConv(CallingConv::C);
+    }
+
     auto args = main->arg_begin();
     
     Value * const fileDecriptor = &*(args++);
@@ -155,30 +160,30 @@ void pipeline(ParabixDriver & pxDriver, const unsigned count) {
     const unsigned segmentSize = codegen::SegmentSize;
     const unsigned bufferSegments = codegen::BufferSegments;
     
-    auto ByteStream = pxDriver.addBuffer(make_unique<SourceBuffer>(iBuilder, byteStreamTy));
+    auto ByteStream = pxDriver.addBuffer(std::make_unique<SourceBuffer>(iBuilder, byteStreamTy));
 
-    auto mmapK = pxDriver.addKernelInstance(make_unique<MMapSourceKernel>(iBuilder, segmentSize));
+    auto mmapK = pxDriver.addKernelInstance(std::make_unique<MMapSourceKernel>(iBuilder, segmentSize));
     mmapK->setInitialArguments({fileDecriptor});
 
     pxDriver.makeKernelCall(mmapK, {}, {ByteStream});
 
-    auto BasisBits = pxDriver.addBuffer(make_unique<CircularBuffer>(iBuilder, byteStreamTy, segmentSize * bufferSegments));
+    auto BasisBits = pxDriver.addBuffer(std::make_unique<CircularBuffer>(iBuilder, byteStreamTy, segmentSize * bufferSegments));
 
-    auto s2pk = pxDriver.addKernelInstance(make_unique<S2PKernel>(iBuilder));
+    auto s2pk = pxDriver.addKernelInstance(std::make_unique<S2PKernel>(iBuilder));
     pxDriver.makeKernelCall(s2pk, {ByteStream}, {BasisBits});
 
-    auto bm = pxDriver.addKernelInstance(make_unique<ParenthesisMatchingKernel>(iBuilder, count));
+    auto bm = pxDriver.addKernelInstance(std::make_unique<ParenthesisMatchingKernel>(iBuilder, count));
 
-    auto matches = pxDriver.addBuffer(make_unique<ExpandableBuffer>(iBuilder, iBuilder->getStreamSetTy(count), segmentSize * bufferSegments));
+    auto matches = pxDriver.addBuffer(std::make_unique<ExpandableBuffer>(iBuilder, iBuilder->getStreamSetTy(count), segmentSize * bufferSegments));
 
-    auto errors = pxDriver.addBuffer(make_unique<CircularBuffer>(iBuilder, iBuilder->getStreamTy(), segmentSize * bufferSegments));
+    auto errors = pxDriver.addBuffer(std::make_unique<CircularBuffer>(iBuilder, iBuilder->getStreamTy(), segmentSize * bufferSegments));
 
     pxDriver.makeKernelCall(bm, {BasisBits}, {matches, errors});
 
-    auto printer = pxDriver.addKernelInstance(make_unique<PrintStreamSet>(iBuilder, std::vector<std::string>{"matches", "errors"}));
+    auto printer = pxDriver.addKernelInstance(std::make_unique<PrintStreamSet>(iBuilder, std::vector<std::string>{"matches", "errors"}));
     pxDriver.makeKernelCall(printer, {&matches, &errors}, {});
 
-    iBuilder->SetInsertPoint(BasicBlock::Create(mod->getContext(), "entry", main, 0));
+    iBuilder->SetInsertPoint(BasicBlock::Create(mod->getContext(), "entry", main));
     pxDriver.generatePipelineIR();
     iBuilder->CreateRetVoid();
 

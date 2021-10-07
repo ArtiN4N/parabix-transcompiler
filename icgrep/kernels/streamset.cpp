@@ -176,7 +176,7 @@ void StreamSetBuffer::createBlockCopy(IDISA::IDISA_Builder * const iBuilder, Val
     }
     const auto fieldWidth = mBaseType->getArrayElementType()->getScalarSizeInBits();
     Value * blockCopyBytes = iBuilder->CreateMul(blocksToCopy, iBuilder->getSize(iBuilder->getBitBlockWidth() * numStreams * fieldWidth/8));
-    iBuilder->CreateMemMove(iBuilder->CreateBitCast(targetBlockPtr, i8ptr), alignment, iBuilder->CreateBitCast(sourceBlockPtr, i8ptr), alignment, blockCopyBytes);
+    iBuilder->CreateMemMove(iBuilder->CreateBitCast(targetBlockPtr, i8ptr), iBuilder->CreateBitCast(sourceBlockPtr, i8ptr), blockCopyBytes, alignment);
 }
 
 void StreamSetBuffer::createBlockAlignedCopy(IDISA::IDISA_Builder * const iBuilder, Value * targetBlockPtr, Value * sourceBlockPtr, Value * itemsToCopy) const {
@@ -191,14 +191,14 @@ void StreamSetBuffer::createBlockAlignedCopy(IDISA::IDISA_Builder * const iBuild
     if (numStreams == 1) {
         Value * copyBits = iBuilder->CreateMul(itemsToCopy, iBuilder->getSize(fieldWidth));
         Value * copyBytes = iBuilder->CreateLShr(iBuilder->CreateAdd(copyBits, iBuilder->getSize(7)), iBuilder->getSize(3));
-        iBuilder->CreateMemMove(iBuilder->CreateBitCast(targetBlockPtr, int8PtrTy), alignment, iBuilder->CreateBitCast(sourceBlockPtr, int8PtrTy), alignment, copyBytes);
+        iBuilder->CreateMemMove(iBuilder->CreateBitCast(targetBlockPtr, int8PtrTy), iBuilder->CreateBitCast(sourceBlockPtr, int8PtrTy), copyBytes, alignment);
     } else {
         Value * blocksToCopy = iBuilder->CreateUDiv(itemsToCopy, blockSize);
         Value * partialItems = iBuilder->CreateURem(itemsToCopy, blockSize);
         Value * partialBlockTargetPtr = iBuilder->CreateGEP(targetBlockPtr, blocksToCopy);
         Value * partialBlockSourcePtr = iBuilder->CreateGEP(sourceBlockPtr, blocksToCopy);
         Value * blockCopyBytes = iBuilder->CreateMul(blocksToCopy, iBuilder->getSize(iBuilder->getBitBlockWidth() * numStreams * fieldWidth/8));
-        iBuilder->CreateMemMove(iBuilder->CreateBitCast(targetBlockPtr, int8PtrTy), alignment, iBuilder->CreateBitCast(sourceBlockPtr, int8PtrTy), alignment, blockCopyBytes);
+        iBuilder->CreateMemMove(iBuilder->CreateBitCast(targetBlockPtr, int8PtrTy), iBuilder->CreateBitCast(sourceBlockPtr, int8PtrTy), blockCopyBytes, alignment);
         Value * partialCopyBitsPerStream = iBuilder->CreateMul(partialItems, iBuilder->getSize(fieldWidth));
         Value * partialCopyBytesPerStream = iBuilder->CreateLShr(iBuilder->CreateAdd(partialCopyBitsPerStream, iBuilder->getSize(7)), iBuilder->getSize(3));
         for (unsigned strm = 0; strm < numStreams; strm++) {
@@ -206,7 +206,7 @@ void StreamSetBuffer::createBlockAlignedCopy(IDISA::IDISA_Builder * const iBuild
             Value * strmSourcePtr = iBuilder->CreateGEP(partialBlockSourcePtr, {iBuilder->getInt32(0), iBuilder->getInt32(strm)});
             strmTargetPtr = iBuilder->CreateBitCast(strmTargetPtr, int8PtrTy);
             strmSourcePtr = iBuilder->CreateBitCast(strmSourcePtr, int8PtrTy);
-            iBuilder->CreateMemMove(strmTargetPtr, alignment, strmSourcePtr, alignment, partialCopyBytesPerStream);
+            iBuilder->CreateMemMove(strmTargetPtr, strmSourcePtr, partialCopyBytesPerStream, alignment);
         }
     }
 }
@@ -367,7 +367,7 @@ void SwizzledCopybackBuffer::createBlockAlignedCopy(IDISA::IDISA_Builder * const
     iBuilder->SetInsertPoint(wholeBlockCopy);
     const unsigned alignment = iBuilder->getBitBlockWidth() / 8;
     Value * copyLength = iBuilder->CreateSub(iBuilder->CreatePtrToInt(partialBlockTargetPtr, intAddrTy), iBuilder->CreatePtrToInt(targetBlockPtr, intAddrTy));
-    iBuilder->CreateMemMove(iBuilder->CreatePointerCast(targetBlockPtr, int8PtrTy), alignment, iBuilder->CreatePointerCast(sourceBlockPtr, int8PtrTy), alignment, copyLength);
+    iBuilder->CreateMemMove(iBuilder->CreatePointerCast(targetBlockPtr, int8PtrTy), iBuilder->CreatePointerCast(sourceBlockPtr, int8PtrTy), copyLength, alignment);
     iBuilder->CreateCondBr(iBuilder->CreateICmpUGT(partialItems, iBuilder->getSize(0)), partialBlockCopy, copyDone);
     iBuilder->SetInsertPoint(partialBlockCopy);
     Value * copyBits = iBuilder->CreateMul(itemsToCopy, iBuilder->getSize(fieldWidth * swizzleFactor));
@@ -375,7 +375,7 @@ void SwizzledCopybackBuffer::createBlockAlignedCopy(IDISA::IDISA_Builder * const
     for (unsigned strm = 0; strm < numStreams; strm += swizzleFactor) {
         Value * strmTargetPtr = iBuilder->CreateGEP(partialBlockTargetPtr, {iBuilder->getInt32(0), iBuilder->getInt32(strm)});
         Value * strmSourcePtr = iBuilder->CreateGEP(partialBlockSourcePtr, {iBuilder->getInt32(0), iBuilder->getInt32(strm)});
-        iBuilder->CreateMemMove(iBuilder->CreatePointerCast(strmTargetPtr, int8PtrTy), alignment, iBuilder->CreatePointerCast(strmSourcePtr, int8PtrTy), alignment, copyBytes);
+        iBuilder->CreateMemMove(iBuilder->CreatePointerCast(strmTargetPtr, int8PtrTy), iBuilder->CreatePointerCast(strmSourcePtr, int8PtrTy), copyBytes, alignment);
     }
     iBuilder->CreateBr(copyDone);
 
@@ -487,7 +487,7 @@ std::pair<Value *, Value *> ExpandableBuffer::getInternalStreamBuffer(IDISA::IDI
             Value * srcPtr = iBuilder->CreateGEP(streamSet, srcOffset);
             Value * destOffset = iBuilder->CreateMul(newCapacity, offset);
             Value * destPtr = iBuilder->CreateGEP(newStreamSet, destOffset);
-            iBuilder->CreateMemCpy(destPtr, alignment, srcPtr, alignment, iBuilder->CreateMul(capacity, vectorWidth));
+            iBuilder->CreateMemCpy(destPtr, srcPtr, iBuilder->CreateMul(capacity, vectorWidth), alignment);
             Value * destZeroOffset = iBuilder->CreateAdd(destOffset, capacity);
             Value * destZeroPtr = iBuilder->CreateGEP(newStreamSet, destZeroOffset);
             iBuilder->CreateMemZero(destZeroPtr, diffCapacity, alignment);
@@ -720,8 +720,8 @@ ArrayType * resolveStreamSetType(const std::unique_ptr<kernel::KernelBuilder> & 
         numElements = type->getArrayNumElements();
         type = type->getArrayElementType();
     }
-    if (LLVM_LIKELY(type->isVectorTy() && type->getVectorNumElements() == 0)) {
-        type = type->getVectorElementType();
+    if (LLVM_LIKELY(type->isVectorTy() && cast<FixedVectorType>(type)->getNumElements() == 0)) {
+        type = cast<FixedVectorType>(type)->getElementType();
         if (LLVM_LIKELY(type->isIntegerTy())) {
             const auto fieldWidth = cast<IntegerType>(type)->getBitWidth();
             type = b->getBitBlockType();
@@ -742,8 +742,8 @@ StructType * resolveExpandableStreamSetType(const std::unique_ptr<kernel::Kernel
     if (LLVM_LIKELY(type->isArrayTy())) {
         type = type->getArrayElementType();
     }
-    if (LLVM_LIKELY(type->isVectorTy() && type->getVectorNumElements() == 0)) {
-        type = type->getVectorElementType();
+    if (LLVM_LIKELY(type->isVectorTy() && cast<FixedVectorType>(type)->getNumElements() == 0)) {
+        type = cast<FixedVectorType>(type)->getElementType();
         if (LLVM_LIKELY(type->isIntegerTy())) {
             const auto fieldWidth = cast<IntegerType>(type)->getBitWidth();
             type = b->getBitBlockType();

@@ -6,6 +6,7 @@
 #include "deletion.h"
 #include <kernels/kernel_builder.h>
 #include <llvm/Support/raw_ostream.h>
+#include <llvm/IR/IntrinsicsX86.h>
 
 using namespace llvm;
 
@@ -268,7 +269,7 @@ Returns:
 */
 std::vector<Value *> SwizzledDeleteByPEXTkernel::apply_PEXT_deletion_with_swizzle(const std::unique_ptr<KernelBuilder> & iBuilder, 
                                                              const std::vector<Value *> & masks, std::vector<Value *> strms) {
-    Value * PEXT_func = nullptr;
+    Function * PEXT_func = nullptr;
     if (mPEXTWidth == 64) {
         PEXT_func = Intrinsic::getDeclaration(iBuilder->getModule(), Intrinsic::x86_bmi_pext_64);
     } else if (mPEXTWidth == 32) {
@@ -287,7 +288,7 @@ std::vector<Value *> SwizzledDeleteByPEXTkernel::apply_PEXT_deletion_with_swizzl
         // Process the stream's block mPEXTWidth bits at a time (a PEXT operation can't do more than 64 bits at a time)
         for (unsigned i = 0; i < iBuilder->getBitBlockWidth()/mPEXTWidth; i++) {
             Value * field = iBuilder->CreateExtractElement(v, i); // Load from block j at index i (load mPEXTWidth bits)
-            Value * PEXTed_field = iBuilder->CreateCall(PEXT_func, {field, masks[i]}); // Apply PEXT deletion to the segment we just loaded
+            Value * PEXTed_field = iBuilder->CreateCall(PEXT_func->getFunctionType(), PEXT_func, {field, masks[i]}); // Apply PEXT deletion to the segment we just loaded
             /*
              We loaded from input at index i within stream j's block. We store result in ouput within stream i's block at position j. This swizzles the output blocks.
              E.g.:
@@ -323,7 +324,7 @@ std::vector<Value *> SwizzledDeleteByPEXTkernel::apply_PEXT_deletion_with_swizzl
 }
 
 Value * SwizzledDeleteByPEXTkernel::apply_PEXT_deletion(const std::unique_ptr<KernelBuilder> & iBuilder, const std::vector<Value *> & masks, Value * strm) {
-    Value * PEXT_func = nullptr;
+    Function * PEXT_func = nullptr;
     if (mPEXTWidth == 64) {
         PEXT_func = Intrinsic::getDeclaration(iBuilder->getModule(), Intrinsic::x86_bmi_pext_64);
     } else if (mPEXTWidth == 32) {
@@ -396,7 +397,7 @@ inline std::vector<Value *> get_PEXT_masks(const std::unique_ptr<KernelBuilder> 
 // Apply PEXT deletion to a collection of blocks and swizzle the result.
 // strms contains the blocks to process
 inline std::vector<Value *> apply_PEXT_deletion_with_swizzle(const std::unique_ptr<KernelBuilder> & iBuilder, const std::vector<Value *> & masks, std::vector<Value *> strms) {
-    Value * PEXT_func = nullptr;
+    Function * PEXT_func = nullptr;
     if (PEXT_width == 64) {
         PEXT_func = Intrinsic::getDeclaration(iBuilder->getModule(), Intrinsic::x86_bmi_pext_64);
     } else if (PEXT_width == 32) {
@@ -439,7 +440,7 @@ inline std::vector<Value *> apply_PEXT_deletion_with_swizzle(const std::unique_p
 }
 
 inline Value * apply_PEXT_deletion(const std::unique_ptr<KernelBuilder> & iBuilder, const std::vector<Value *> & masks, Value * strm) {
-    Value * PEXT_func = nullptr;
+    Function * PEXT_func = nullptr;
     if (PEXT_width == 64) {
         PEXT_func = Intrinsic::getDeclaration(iBuilder->getModule(), Intrinsic::x86_bmi_pext_64);
     } else if (PEXT_width == 32) {

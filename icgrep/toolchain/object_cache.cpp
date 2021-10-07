@@ -155,7 +155,7 @@ void ParabixObjectCache::cleanUpObjectCacheFiles() {
     using namespace boost::filesystem;
     using ObjectFile = std::pair<std::time_t, path>;
 
-    path cachePath(mCachePath.str());
+    path cachePath(mCachePath.str().str());
     if (LLVM_LIKELY(is_directory(cachePath))) {
         std::vector<ObjectFile> files;
         for(const directory_entry & entry : boost::make_iterator_range(directory_iterator(cachePath), {})) {

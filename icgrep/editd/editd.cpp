@@ -40,6 +40,10 @@
 #ifdef CUDA_ENABLED
 #include <editd/EditdCudaDriver.h>
 #endif
+#ifdef ENABLE_PAPI
+#include <util/papi_helper.hpp>
+#endif
+
 
 using namespace llvm;
 
@@ -249,8 +253,13 @@ void editdPipeline(ParabixDriver & pxDriver, const std::vector<std::string> & pa
     const unsigned segmentSize = codegen::SegmentSize;
     const unsigned bufferSegments = codegen::BufferSegments * codegen::ThreadNum;
 
-    Function * const main = cast<Function>(m->getOrInsertFunction("Main", voidTy, inputType, sizeTy));
-    main->setCallingConv(CallingConv::C);
+    FunctionType * mainTy = FunctionType::get(voidTy, { sizeTy }, false);
+    Function * main = m->getFunction("Main");
+    if (main == nullptr) {
+        main = Function::Create(mainTy, Function::InternalLinkage, "Main", m);
+        main->setCallingConv(CallingConv::C);
+    }
+
     auto args = main->arg_begin();
     Value * const inputStream = &*(args++);
     inputStream->setName("input");
@@ -258,16 +267,16 @@ void editdPipeline(ParabixDriver & pxDriver, const std::vector<std::string> & pa
     fileSize->setName("fileSize");
     idb->SetInsertPoint(BasicBlock::Create(m->getContext(), "entry", main,0));
 
-    auto ChStream = pxDriver.addBuffer(make_unique<SourceBuffer>(idb, idb->getStreamSetTy(4)));
-    auto mmapK = pxDriver.addKernelInstance(make_unique<MemorySourceKernel>(idb, inputType, segmentSize));
+    auto ChStream = pxDriver.addBuffer(std::make_unique<SourceBuffer>(idb, idb->getStreamSetTy(4)));
+    auto mmapK = pxDriver.addKernelInstance(std::make_unique<MemorySourceKernel>(idb, inputType, segmentSize));
     mmapK->setInitialArguments({inputStream, fileSize});
     pxDriver.makeKernelCall(mmapK, {}, {ChStream});
 
-    auto MatchResults = pxDriver.addBuffer(make_unique<CircularBuffer>(idb, idb->getStreamSetTy(editDistance + 1), segmentSize * bufferSegments));
-    auto editdk = pxDriver.addKernelInstance(make_unique<PatternKernel>(idb, patterns));
+    auto MatchResults = pxDriver.addBuffer(std::make_unique<CircularBuffer>(idb, idb->getStreamSetTy(editDistance + 1), segmentSize * bufferSegments));
+    auto editdk = pxDriver.addKernelInstance(std::make_unique<PatternKernel>(idb, patterns));
     pxDriver.makeKernelCall(editdk, {ChStream}, {MatchResults});
 
-    auto editdScanK = pxDriver.addKernelInstance(make_unique<editdScanKernel>(idb, editDistance));
+    auto editdScanK = pxDriver.addKernelInstance(std::make_unique<editdScanKernel>(idb, editDistance));
     pxDriver.makeKernelCall(editdScanK, {MatchResults}, {});
 
     pxDriver.generatePipelineIR();
@@ -317,8 +326,13 @@ void preprocessPipeline(ParabixDriver & pxDriver) {
     const unsigned segmentSize = codegen::SegmentSize;
     const unsigned bufferSegments = codegen::BufferSegments * codegen::ThreadNum;
 
-    Function * const main = cast<Function>(m->getOrInsertFunction("Main", voidTy, int32Ty, outputType));
-    main->setCallingConv(CallingConv::C);
+    FunctionType * mainTy = FunctionType::get(voidTy, {  int32Ty, outputType }, false);
+    Function * main = m->getFunction("Main");
+    if (main == nullptr) {
+        main = Function::Create(mainTy, Function::InternalLinkage, "Main", m);
+        main->setCallingConv(CallingConv::C);
+    }
+
     Function::arg_iterator args = main->arg_begin();
 
     Value * const fileDescriptor = &*(args++);
@@ -328,18 +342,18 @@ void preprocessPipeline(ParabixDriver & pxDriver) {
 
     iBuilder->SetInsertPoint(BasicBlock::Create(m->getContext(), "entry", main));
 
-    auto ByteStream = pxDriver.addBuffer(make_unique<SourceBuffer>(iBuilder, iBuilder->getStreamSetTy(1, 8)));
+    auto ByteStream = pxDriver.addBuffer(std::make_unique<SourceBuffer>(iBuilder, iBuilder->getStreamSetTy(1, 8)));
 
-    auto mmapK = pxDriver.addKernelInstance(make_unique<MMapSourceKernel>(iBuilder, segmentSize));
+    auto mmapK = pxDriver.addKernelInstance(std::make_unique<MMapSourceKernel>(iBuilder, segmentSize));
     mmapK->setInitialArguments({fileDescriptor});
     pxDriver.makeKernelCall(mmapK, {}, {ByteStream});
 
-    auto BasisBits = pxDriver.addBuffer(make_unique<CircularBuffer>(iBuilder, iBuilder->getStreamSetTy(8), segmentSize * bufferSegments));
-    auto s2pk = pxDriver.addKernelInstance(make_unique<S2PKernel>(iBuilder));
+    auto BasisBits = pxDriver.addBuffer(std::make_unique<CircularBuffer>(iBuilder, iBuilder->getStreamSetTy(8), segmentSize * bufferSegments));
+    auto s2pk = pxDriver.addKernelInstance(std::make_unique<S2PKernel>(iBuilder));
     pxDriver.makeKernelCall(s2pk, {ByteStream}, {BasisBits});
 
-    auto CCResults = pxDriver.addExternalBuffer(make_unique<ExternalBuffer>(iBuilder, iBuilder->getStreamSetTy(4), outputStream));
-    auto ccck = pxDriver.addKernelInstance(make_unique<PreprocessKernel>(iBuilder));
+    auto CCResults = pxDriver.addExternalBuffer(std::make_unique<ExternalBuffer>(iBuilder, iBuilder->getStreamSetTy(4), outputStream));
+    auto ccck = pxDriver.addKernelInstance(std::make_unique<PreprocessKernel>(iBuilder));
     pxDriver.makeKernelCall(ccck, {BasisBits}, {CCResults});
 
     pxDriver.generatePipelineIR();
@@ -360,8 +374,13 @@ void multiEditdPipeline(ParabixDriver & pxDriver) {
     const unsigned segmentSize = codegen::SegmentSize;
     const unsigned bufferSegments = codegen::BufferSegments * codegen::ThreadNum;
 
-    Function * const main = cast<Function>(m->getOrInsertFunction("Main", voidTy, int32Ty));
-    main->setCallingConv(CallingConv::C);
+    FunctionType * mainTy = FunctionType::get(voidTy, { int32Ty }, false);
+    Function * main = m->getFunction("Main");
+    if (main == nullptr) {
+        main = Function::Create(mainTy, Function::InternalLinkage, "Main", m);
+        main->setCallingConv(CallingConv::C);
+    }
+
     Function::arg_iterator args = main->arg_begin();
 
     Value * const fileDescriptor = &*(args++);
@@ -369,38 +388,38 @@ void multiEditdPipeline(ParabixDriver & pxDriver) {
 
     idb->SetInsertPoint(BasicBlock::Create(m->getContext(), "entry", main,0));
 
-    auto ByteStream = pxDriver.addBuffer(make_unique<SourceBuffer>(idb, idb->getStreamSetTy(1, 8)));
+    auto ByteStream = pxDriver.addBuffer(std::make_unique<SourceBuffer>(idb, idb->getStreamSetTy(1, 8)));
 
-    auto mmapK = pxDriver.addKernelInstance(make_unique<MMapSourceKernel>(idb, segmentSize));
+    auto mmapK = pxDriver.addKernelInstance(std::make_unique<MMapSourceKernel>(idb, segmentSize));
     mmapK->setInitialArguments({fileDescriptor});
     pxDriver.makeKernelCall(mmapK, {}, {ByteStream});
 
-    auto ChStream = pxDriver.addBuffer(make_unique<CircularBuffer>(idb, idb->getStreamSetTy(4), segmentSize * bufferSegments));
-    auto ccck = pxDriver.addKernelInstance(make_unique<kernel::DirectCharacterClassKernelBuilder>(idb, "ccc", 
-        std::vector<re::CC *>{re::makeCC(re::makeCC(0x41), re::makeCC(0x61)),
-                              re::makeCC(re::makeCC(0x43), re::makeCC(0x63)),
-                              re::makeCC(re::makeCC(0x54), re::makeCC(0x74)),
-                              re::makeCC(re::makeCC(0x47), re::makeCC(0x67))}, 1));
-    pxDriver.makeKernelCall(ccck, {ByteStream}, {ChStream});
+    auto BasisBits = pxDriver.addBuffer(std::make_unique<CircularBuffer>(idb, idb->getStreamSetTy(8), segmentSize * bufferSegments));
+    auto s2pk = pxDriver.addKernelInstance(std::make_unique<S2PKernel>(idb));
+    pxDriver.makeKernelCall(s2pk, {ByteStream}, {BasisBits});
+
+    auto ChStream = pxDriver.addBuffer(std::make_unique<CircularBuffer>(idb, idb->getStreamSetTy(4), segmentSize * bufferSegments));
+    auto ccck = pxDriver.addKernelInstance(std::make_unique<PreprocessKernel>(idb));
+    pxDriver.makeKernelCall(ccck, {BasisBits}, {ChStream});
 
     const auto n = pattGroups.size();
     
     std::vector<StreamSetBuffer *> MatchResultsBufs(n);
     
     for(unsigned i = 0; i < n; ++i){
-        auto MatchResults = pxDriver.addBuffer(make_unique<CircularBuffer>(idb, idb->getStreamSetTy(editDistance + 1), segmentSize * bufferSegments));
-        auto editdk = pxDriver.addKernelInstance(make_unique<PatternKernel>(idb, pattGroups[i]));
+        auto MatchResults = pxDriver.addBuffer(std::make_unique<CircularBuffer>(idb, idb->getStreamSetTy(editDistance + 1), segmentSize * bufferSegments));
+        auto editdk = pxDriver.addKernelInstance(std::make_unique<PatternKernel>(idb, pattGroups[i]));
         pxDriver.makeKernelCall(editdk, {ChStream}, {MatchResults});
         MatchResultsBufs[i] = MatchResults;
     }
     StreamSetBuffer * MergedResults = MatchResultsBufs[0];
     if (n > 1) {
-        MergedResults = pxDriver.addBuffer(make_unique<CircularBuffer>(idb, idb->getStreamSetTy(editDistance + 1), segmentSize * bufferSegments));
-        kernel::Kernel * streamsMergeK = pxDriver.addKernelInstance(make_unique<kernel::StreamsMerge>(idb, editDistance + 1, n));
+        MergedResults = pxDriver.addBuffer(std::make_unique<CircularBuffer>(idb, idb->getStreamSetTy(editDistance + 1), segmentSize * bufferSegments));
+        kernel::Kernel * streamsMergeK = pxDriver.addKernelInstance(std::make_unique<kernel::StreamsMerge>(idb, editDistance + 1, n));
         pxDriver.makeKernelCall(streamsMergeK, MatchResultsBufs, {MergedResults});
     }
 
-    auto editdScanK = pxDriver.addKernelInstance(make_unique<editdScanKernel>(idb, editDistance));
+    auto editdScanK = pxDriver.addKernelInstance(std::make_unique<editdScanKernel>(idb, editDistance));
     pxDriver.makeKernelCall(editdScanK, {MergedResults}, {});
 
     pxDriver.generatePipelineIR();
@@ -425,8 +444,13 @@ void editdIndexPatternPipeline(ParabixDriver & pxDriver, unsigned patternLen) {
     const unsigned segmentSize = codegen::SegmentSize;
     const unsigned bufferSegments = codegen::BufferSegments * codegen::ThreadNum;
 
-    Function * const main = cast<Function>(m->getOrInsertFunction("Main", voidTy, inputType, sizeTy, patternPtrTy));
-    main->setCallingConv(CallingConv::C);
+    FunctionType * mainTy = FunctionType::get(voidTy, { inputType, sizeTy, patternPtrTy }, false);
+    Function * main = m->getFunction("Main");
+    if (main == nullptr) {
+        main = Function::Create(mainTy, Function::InternalLinkage, "Main", m);
+        main->setCallingConv(CallingConv::C);
+    }
+
     auto args = main->arg_begin();
     Value * const inputStream = &*(args++);
     inputStream->setName("input");
@@ -436,13 +460,13 @@ void editdIndexPatternPipeline(ParabixDriver & pxDriver, unsigned patternLen) {
     pattStream->setName("pattStream");
     idb->SetInsertPoint(BasicBlock::Create(m->getContext(), "entry", main,0));
 
-    auto ChStream = pxDriver.addBuffer(make_unique<SourceBuffer>(idb, idb->getStreamSetTy(4)));
-    auto mmapK = pxDriver.addKernelInstance(make_unique<MemorySourceKernel>(idb, inputType, segmentSize));
+    auto ChStream = pxDriver.addBuffer(std::make_unique<SourceBuffer>(idb, idb->getStreamSetTy(4)));
+    auto mmapK = pxDriver.addKernelInstance(std::make_unique<MemorySourceKernel>(idb, inputType, segmentSize));
     mmapK->setInitialArguments({inputStream, fileSize});
     pxDriver.makeKernelCall(mmapK, {}, {ChStream});
 
-    auto MatchResults = pxDriver.addBuffer(make_unique<CircularBuffer>(idb, idb->getStreamSetTy(editDistance + 1), segmentSize * bufferSegments));
-    auto editdk = pxDriver.addKernelInstance(make_unique<kernel::editdCPUKernel>(idb, editDistance, patternLen, groupSize));
+    auto MatchResults = pxDriver.addBuffer(std::make_unique<CircularBuffer>(idb, idb->getStreamSetTy(editDistance + 1), segmentSize * bufferSegments));
+    auto editdk = pxDriver.addKernelInstance(std::make_unique<kernel::editdCPUKernel>(idb, editDistance, patternLen, groupSize));
 
     const unsigned numOfCarries = patternLen * (editDistance + 1) * 4 * groupSize;
     Type * strideCarryTy = ArrayType::get(idb->getBitBlockType(), numOfCarries);
@@ -452,7 +476,7 @@ void editdIndexPatternPipeline(ParabixDriver & pxDriver, unsigned patternLen) {
     editdk->setInitialArguments({pattStream, strideCarry});
     pxDriver.makeKernelCall(editdk, {ChStream}, {MatchResults});
 
-    auto editdScanK = pxDriver.addKernelInstance(make_unique<editdScanKernel>(idb, editDistance));
+    auto editdScanK = pxDriver.addKernelInstance(std::make_unique<editdScanKernel>(idb, editDistance));
     pxDriver.makeKernelCall(editdScanK, {MatchResults}, {});
 
     pxDriver.generatePipelineIR();
@@ -530,6 +554,7 @@ void * DoEditd(void *)
 }
 
 void editdGPUCodeGen(unsigned patternLen){
+#if 0
     NVPTXDriver pxDriver("editd");
     auto & iBuilder = pxDriver.getBuilder();
     Module * M = iBuilder->getModule();
@@ -545,8 +570,13 @@ void editdGPUCodeGen(unsigned patternLen){
     Type * const outputTy = PointerType::get(ArrayType::get(mBitBlockType, editDistance+1), 1);
     Type * const stridesTy = PointerType::get(int32ty, 1);
 
-    Function * const main = cast<Function>(M->getOrInsertFunction("Main", voidTy, inputTy, inputSizeTy, patternPtrTy, outputTy, stridesTy));
-    main->setCallingConv(CallingConv::C);
+    FunctionType * mainTy = FunctionType::get(voidTy, { inputTy, inputSizeTy, patternPtrTy, outputTy, stridesTy }, false);
+    Function * main = M->getFunction("Main");
+    if (main == nullptr) {
+        main = Function::Create(mainTy, Function::InternalLinkage, "Main", M);
+        main->setCallingConv(CallingConv::C);
+    }
+
     Function::arg_iterator args = main->arg_begin();
 
     Value * const inputStream = &*(args++);
@@ -573,13 +603,13 @@ void editdGPUCodeGen(unsigned patternLen){
     Value * resultStreamPtr = iBuilder->CreateGEP(resultStream, iBuilder->CreateAdd(iBuilder->CreateMul(bid, outputBlocks), tid));
     Value * inputSize = iBuilder->CreateLoad(inputSizePtr);
 
-    StreamSetBuffer * CCStream = pxDriver.addBuffer(make_unique<SourceBuffer>(iBuilder, iBuilder->getStreamSetTy(4), 1));
-    kernel::Kernel * sourceK = pxDriver.addKernelInstance(make_unique<kernel::MemorySourceKernel>(iBuilder, inputTy, segmentSize));
+    StreamSetBuffer * CCStream = pxDriver.addBuffer(std::make_unique<SourceBuffer>(iBuilder, iBuilder->getStreamSetTy(4), 1));
+    kernel::Kernel * sourceK = pxDriver.addKernelInstance(std::make_unique<kernel::MemorySourceKernel>(iBuilder, inputTy, segmentSize));
     sourceK->setInitialArguments({inputThreadPtr, inputSize});
     pxDriver.makeKernelCall(sourceK, {}, {CCStream});
 
-    ExternalBuffer * ResultStream = pxDriver.addExternalBuffer(make_unique<ExternalBuffer>(iBuilder, iBuilder->getStreamSetTy(editDistance+1), resultStreamPtr, 1));   
-    kernel::Kernel * editdk = pxDriver.addKernelInstance(make_unique<kernel::editdGPUKernel>(iBuilder, editDistance, patternLen, groupSize));
+    ExternalBuffer * ResultStream = pxDriver.addExternalBuffer(std::make_unique<ExternalBuffer>(iBuilder, iBuilder->getStreamSetTy(editDistance+1), resultStreamPtr, 1));
+    kernel::Kernel * editdk = pxDriver.addKernelInstance(std::make_unique<kernel::editdGPUKernel>(iBuilder, editDistance, patternLen, groupSize));
       
     const unsigned numOfCarries = patternLen * (editDistance + 1) * 4 * groupSize;
     Type * strideCarryTy = ArrayType::get(mBitBlockType, numOfCarries);
@@ -594,10 +624,11 @@ void editdGPUCodeGen(unsigned patternLen){
     iBuilder->CreateRetVoid();
 
     pxDriver.finalizeObject();
-
+#endif
 }
 
 void mergeGPUCodeGen(){
+#if 0
     NVPTXDriver pxDriver("merge");
     auto & iBuilder = pxDriver.getBuilder();
     Module * M = iBuilder->getModule();
@@ -656,7 +687,7 @@ void mergeGPUCodeGen(){
     iBuilder->CreateRetVoid();
 
     pxDriver.finalizeObject();
-
+#endif
 }
 
 editdFunctionType editdScanCPUCodeGen(ParabixDriver & pxDriver) {
@@ -672,8 +703,13 @@ editdFunctionType editdScanCPUCodeGen(ParabixDriver & pxDriver) {
     Type * const voidTy = Type::getVoidTy(M->getContext());
     Type * const inputType = PointerType::get(ArrayType::get(mBitBlockType, editDistance+1), 0);
 
-    Function * const main = cast<Function>(M->getOrInsertFunction("Main", voidTy, inputType, size_ty));
-    main->setCallingConv(CallingConv::C);
+    FunctionType * mainTy = FunctionType::get(voidTy, { inputType, size_ty }, false);
+    Function * main = M->getFunction("Main");
+    if (main == nullptr) {
+        main = Function::Create(mainTy, Function::InternalLinkage, "Main", M);
+        main->setCallingConv(CallingConv::C);
+    }
+
     iBuilder->SetInsertPoint(BasicBlock::Create(M->getContext(), "entry", main, 0));
     Function::arg_iterator args = main->arg_begin();
     Value * const inputStream = &*(args++);
@@ -681,12 +717,12 @@ editdFunctionType editdScanCPUCodeGen(ParabixDriver & pxDriver) {
     Value * const fileSize = &*(args++);
     fileSize->setName("fileSize");
 
-    StreamSetBuffer * MatchResults = pxDriver.addBuffer(make_unique<SourceBuffer>(iBuilder, iBuilder->getStreamSetTy(editDistance+1)));
-    kernel::Kernel * sourceK = pxDriver.addKernelInstance(make_unique<kernel::MemorySourceKernel>(iBuilder, inputType, segmentSize * bufferSegments));
+    StreamSetBuffer * MatchResults = pxDriver.addBuffer(std::make_unique<SourceBuffer>(iBuilder, iBuilder->getStreamSetTy(editDistance+1)));
+    kernel::Kernel * sourceK = pxDriver.addKernelInstance(std::make_unique<kernel::MemorySourceKernel>(iBuilder, inputType, segmentSize * bufferSegments));
     sourceK->setInitialArguments({inputStream, fileSize});
     pxDriver.makeKernelCall(sourceK, {}, {MatchResults});
 
-    auto editdScanK = pxDriver.addKernelInstance(make_unique<editdScanKernel>(iBuilder, editDistance));
+    auto editdScanK = pxDriver.addKernelInstance(std::make_unique<editdScanKernel>(iBuilder, editDistance));
     pxDriver.makeKernelCall(editdScanK, {MatchResults}, {});
         
     pxDriver.generatePipelineIR();
@@ -717,10 +753,18 @@ int main(int argc, char *argv[]) {
         if (LLVM_UNLIKELY(fd == -1)) {
             std::cerr << "Error: cannot open " << fileName << " for processing. Skipped.\n";
             exit(-1);
-        }
+        }  
+        #ifdef ENABLE_PAPI
+        papi::PapiCounter<4> jitExecution{{PAPI_L3_TCM, PAPI_L3_TCA, PAPI_TOT_INS, PAPI_TOT_CYC}};
+        jitExecution.start();
+        #endif
         editd_ptr(fd);
+        #ifdef ENABLE_PAPI
+        jitExecution.stop();
+        jitExecution.write(std::cerr);
+        #endif
         close(fd);
-        run_second_filter(pattern_segs, total_len, 0.15);
+      //  run_second_filter(pattern_segs, total_len, 0.15);
         return 0;
     }
 

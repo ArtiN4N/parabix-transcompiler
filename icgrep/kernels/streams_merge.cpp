@@ -11,7 +11,7 @@ using namespace llvm;
 namespace kernel {
 
 StreamsMerge::StreamsMerge(const std::unique_ptr<kernel::KernelBuilder> & iBuilder, unsigned streamsPerSet, unsigned inputSets)
-: BlockOrientedKernel("streamsMerge", {}, {}, {}, {}, {})
+    : BlockOrientedKernel("streamsMerge" + std::to_string(streamsPerSet) + ":" + std::to_string(inputSets), {}, {}, {}, {}, {})
 , mStreamsPerSet(streamsPerSet)
 , mInputSets(inputSets) {
     for (unsigned i = 0; i < mInputSets; i++) {

@@ -781,7 +781,7 @@ Value * CarryManager::getCarryIn(const std::unique_ptr<kernel::KernelBuilder> & 
     const auto width = std::max<unsigned>(gcd(std::min<unsigned>(op->getCarryWidth(), mElementWidth), group.packedSize), 8);
     const auto n = udiv(iBuilder->getBitBlockWidth(), width);
 
-    VectorType * packTy = VectorType::get(iBuilder->getIntNTy(width), n);
+    VectorType * packTy = FixedVectorType::get(iBuilder->getIntNTy(width), n);
 
     Constant * const zero = Constant::getNullValue(packTy);
 
@@ -846,7 +846,7 @@ void CarryManager::setCarryOut(const std::unique_ptr<kernel::KernelBuilder> & iB
 
     const auto width = std::max<unsigned>(gcd(op->getCarryWidth(), group.packedSize), 8);
     const auto count = udiv(iBuilder->getBitBlockWidth(), width);
-    VectorType * packTy = VectorType::get(iBuilder->getIntNTy(width), count);
+    VectorType * packTy = FixedVectorType::get(iBuilder->getIntNTy(width), count);
 
     carryOut = iBuilder->CreateBitCast(carryOut, packTy);
 

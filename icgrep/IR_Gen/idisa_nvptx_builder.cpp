@@ -19,12 +19,15 @@ unsigned IDISA_NVPTX20_Builder::getGroupThreads() const{
 }
 
 Value * IDISA_NVPTX20_Builder::bitblock_any(Value * val) {
+#if 0
     Type * const int32ty = getInt32Ty();
     Function * barrierOrFunc = cast<Function>(getModule()->getOrInsertFunction("llvm.nvvm.barrier0.or", int32ty, int32ty, nullptr));
     Value * nonZero_i1 = CreateICmpUGT(val, ConstantInt::getNullValue(mBitBlockType));
     Value * nonZero_i32 = CreateZExt(CreateBitCast(nonZero_i1, getInt1Ty()), int32ty);
     Value * anyNonZero = CreateCall(barrierOrFunc, nonZero_i32);
     return CreateICmpNE(anyNonZero,  ConstantInt::getNullValue(int32ty));
+#endif
+    return nullptr;
 }
 
 Value * IDISA_NVPTX20_Builder::bitblock_mask_from(Value * pos){
@@ -101,14 +104,17 @@ void IDISA_NVPTX20_Builder::CreateGlobals(){
 }
 
 void IDISA_NVPTX20_Builder::CreateBuiltinFunctions(){
+#if 0
     Type * const voidTy = getVoidTy();
     Type * const int32ty = getInt32Ty();
     Module * const m = getModule();
     barrierFunc = cast<Function>(m->getOrInsertFunction("llvm.nvvm.barrier0", voidTy, nullptr));
     tidFunc = cast<Function>(m->getOrInsertFunction("llvm.nvvm.read.ptx.sreg.tid.x", int32ty, nullptr));
+#endif
 }
 
 void IDISA_NVPTX20_Builder::CreateLongAdvanceFunc(){
+#if 0
     Type * const int32ty = getInt32Ty();
     Module * const m = getModule();
     Type * returnType = StructType::get(m->getContext(), {mBitBlockType, mBitBlockType});
@@ -150,12 +156,13 @@ void IDISA_NVPTX20_Builder::CreateLongAdvanceFunc(){
     retVal = CreateInsertValue(retVal, adv1, 0);
     retVal = CreateInsertValue(retVal, blockCarryOut, 1);
     CreateRet(retVal);
-
+#endif
 }
 
                                            
                                            
 void IDISA_NVPTX20_Builder::CreateLongAddFunc(){
+#if 0
   Type * const int64ty = getInt64Ty();
   Type * const int32ty = getInt32Ty();
   Module * const m = getModule();
@@ -240,10 +247,11 @@ void IDISA_NVPTX20_Builder::CreateLongAddFunc(){
   retVal = CreateInsertValue(retVal, rslt, 0);
   retVal = CreateInsertValue(retVal, blockCarryOut, 1);
   CreateRet(retVal);
-
+#endif
 }
 
 void IDISA_NVPTX20_Builder::CreateBallotFunc(){
+#if 0
     Type * const int32ty = getInt32Ty();
     Type * const int1ty = getInt1Ty();
     Module * const m = getModule();
@@ -267,6 +275,7 @@ void IDISA_NVPTX20_Builder::CreateBallotFunc(){
 //    result->addAttribute(AttributeSet::FunctionIndex, Attribute::NoUnwind);
 
     CreateRet(result);
+#endif
 }
 
 LoadInst * IDISA_NVPTX20_Builder::CreateAtomicLoadAcquire(Value * ptr) {

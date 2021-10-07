@@ -8,60 +8,64 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Intrinsics.h>
+#include <llvm/IR/IntrinsicsX86.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Support/raw_ostream.h>
 #include "TypeBuilder.h"
 #include <toolchain/toolchain.h>
+#include  <unistd.h>
 
 using namespace llvm;
 
 namespace IDISA {
 
-VectorType * IDISA_Builder::fwVectorType(const unsigned fw) {
-    return VectorType::get(getIntNTy(fw), mBitBlockWidth / fw);
+FixedVectorType * IDISA_Builder::fwVectorType(const unsigned fw) {
+    return FixedVectorType::get(getIntNTy(fw), mBitBlockWidth / fw);
 }
 
 Value * IDISA_Builder::fwCast(const unsigned fw, Value * const a) {
-    VectorType * const ty = fwVectorType(fw);
+    FixedVectorType * const ty = fwVectorType(fw);
     assert (a->getType()->getPrimitiveSizeInBits() == ty->getPrimitiveSizeInBits());
     return CreateBitCast(a, ty);
 }
 
-void IDISA_Builder::CallPrintRegister(const std::string & name, Value * const value) {
+void IDISA_Builder::CallPrintRegister(const std::string & name, llvm::Value * const value) {
     Module * const m = getModule();
-    Constant * printRegister = m->getFunction("PrintRegister");
+    Function * printRegister = m->getFunction("print_register");
     if (LLVM_UNLIKELY(printRegister == nullptr)) {
-        FunctionType *FT = FunctionType::get(getVoidTy(), { PointerType::get(getInt8Ty(), 0), getBitBlockType() }, false);
-        Function * function = Function::Create(FT, Function::InternalLinkage, "PrintRegister", m);
+        FunctionType *FT = FunctionType::get(getVoidTy(), { getInt32Ty(), getInt8PtrTy(0), getBitBlockType() }, false);
+        Function * function = Function::Create(FT, Function::InternalLinkage, "print_register", m);
         auto arg = function->arg_begin();
         std::string tmp;
         raw_string_ostream out(tmp);
         out << "%-40s =";
-        for(unsigned i = 0; i < (mBitBlockWidth / 8); ++i) {
-            out << " %02x";
+        for(unsigned i = 0; i < (getBitBlockWidth() / 8); ++i) {
+            out << " %02" PRIx32;
         }
         out << '\n';
         BasicBlock * entry = BasicBlock::Create(m->getContext(), "entry", function);
         IRBuilder<> builder(entry);
-        std::vector<Value *> args;
-        args.push_back(GetString(out.str().c_str()));
+        Value * const fdInt = &*(arg++);
         Value * const name = &*(arg++);
         name->setName("name");
-        args.push_back(name);
         Value * value = &*arg;
         value->setName("value");
-        Type * const byteVectorType = VectorType::get(getInt8Ty(), (mBitBlockWidth / 8));
-        value = builder.CreateBitCast(value, byteVectorType);
-        for(unsigned i = (mBitBlockWidth / 8); i != 0; --i) {
-            args.push_back(builder.CreateExtractElement(value, builder.getInt32(i - 1)));
-        }
-        builder.CreateCall(GetPrintf(), args);
-        builder.CreateRetVoid();
+        Type * const byteFixedVectorType = FixedVectorType::get(getInt8Ty(), (mBitBlockWidth / 8));
+        value = builder.CreateBitCast(value, byteFixedVectorType);
 
+        std::vector<Value *> args;
+        args.push_back(fdInt);
+        args.push_back(GetString(out.str()));
+        args.push_back(name);
+        for(unsigned i = (getBitBlockWidth() / 8); i != 0; --i) {
+            args.push_back(builder.CreateZExt(builder.CreateExtractElement(value, builder.getInt32(i - 1)), builder.getInt32Ty()));
+        }
+        builder.CreateCall(GetDprintf(), args);
+        builder.CreateRetVoid();
         printRegister = function;
     }
-    CreateCall(printRegister, {GetString(name.c_str()), CreateBitCast(value, mBitBlockType)});
+    CreateCall(printRegister, {getInt32(static_cast<uint32_t>(STDERR_FILENO)), GetString(name), CreateBitCast(value, getBitBlockType())});
 }
 
 Constant * IDISA_Builder::simd_himask(unsigned fw) {
@@ -74,9 +78,9 @@ Constant * IDISA_Builder::simd_lomask(unsigned fw) {
 
 Value * IDISA_Builder::simd_fill(unsigned fw, Value * a) {
     unsigned field_count = mBitBlockWidth/fw;
-    Type * singleFieldVecTy = VectorType::get(getIntNTy(fw), 1);
+    Type * singleFieldVecTy = FixedVectorType::get(getIntNTy(fw), 1);
     Value * aVec = CreateBitCast(a, singleFieldVecTy);
-    return CreateShuffleVector(aVec, UndefValue::get(singleFieldVecTy), Constant::getNullValue(VectorType::get(getInt32Ty(), field_count)));
+    return CreateShuffleVector(aVec, UndefValue::get(singleFieldVecTy), Constant::getNullValue(FixedVectorType::get(getInt32Ty(), field_count)));
 }
 
 Value * IDISA_Builder::simd_add(unsigned fw, Value * a, Value * b) {
@@ -148,12 +152,12 @@ Value * IDISA_Builder::simd_srai(unsigned fw, Value * a, unsigned shift) {
 }
 
 Value * IDISA_Builder::simd_cttz(unsigned fw, Value * a) {
-    Value * cttzFunc = Intrinsic::getDeclaration(getModule(), Intrinsic::cttz, fwVectorType(fw));
+    Function * cttzFunc = Intrinsic::getDeclaration(getModule(), Intrinsic::cttz, fwVectorType(fw));
     return CreateCall(cttzFunc, {fwCast(fw, a), ConstantInt::get(getInt1Ty(), 0)});
 }
 
 Value * IDISA_Builder::simd_popcount(unsigned fw, Value * a) {
-    Value * ctpopFunc = Intrinsic::getDeclaration(getModule(), Intrinsic::ctpop, fwVectorType(fw));
+    Function * ctpopFunc = Intrinsic::getDeclaration(getModule(), Intrinsic::ctpop, fwVectorType(fw));
     return CreateCall(ctpopFunc, fwCast(fw, a));
 }
 
@@ -219,9 +223,9 @@ Value * IDISA_Builder::esimd_mergel(unsigned fw, Value * a, Value * b) {
 Value * IDISA_Builder::esimd_bitspread(unsigned fw, Value * bitmask) {
     const auto field_count = mBitBlockWidth / fw;
     Type * field_type = getIntNTy(fw);
-    Value * spread_field = CreateBitCast(CreateZExtOrTrunc(bitmask, field_type), VectorType::get(getIntNTy(fw), 1));
-    Value * undefVec = UndefValue::get(VectorType::get(getIntNTy(fw), 1));
-    Value * broadcast = CreateShuffleVector(spread_field, undefVec, Constant::getNullValue(VectorType::get(getInt32Ty(), field_count)));
+    Value * spread_field = CreateBitCast(CreateZExtOrTrunc(bitmask, field_type), FixedVectorType::get(getIntNTy(fw), 1));
+    Value * undefVec = UndefValue::get(FixedVectorType::get(getIntNTy(fw), 1));
+    Value * broadcast = CreateShuffleVector(spread_field, undefVec, Constant::getNullValue(FixedVectorType::get(getInt32Ty(), field_count)));
     Constant * bitSel[field_count];
     Constant * bitShift[field_count];
     for (unsigned i = 0; i < field_count; i++) {
@@ -375,7 +379,7 @@ IDISA_Builder::IDISA_Builder(llvm::LLVMContext & C, unsigned vectorWidth, unsign
 : CBuilder(C)
 , mBitBlockWidth(vectorWidth)
 , mStride(stride)
-, mBitBlockType(VectorType::get(IntegerType::get(C, 64), vectorWidth / 64))
+, mBitBlockType(FixedVectorType::get(IntegerType::get(C, 64), vectorWidth / 64))
 , mZeroInitializer(Constant::getNullValue(mBitBlockType))
 , mOneInitializer(Constant::getAllOnesValue(mBitBlockType))
 , mPrintRegisterFunction(nullptr) {

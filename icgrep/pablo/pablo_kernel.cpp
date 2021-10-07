@@ -23,7 +23,7 @@ inline bool isStreamType(const Type * ty) {
         ty = ty->getArrayElementType();
     }
     if (ty->isVectorTy()) {
-        return (ty->getVectorNumElements() == 0);
+        return (cast<FixedVectorType>(ty)->getNumElements() == 0);
     }
     return false;
 }

@@ -124,8 +124,6 @@ void P2S16KernelWithCompressedOutput::generateDoBlockMethod(const std::unique_pt
 
     Value * delCountBlock_ptr = iBuilder->getInputStreamBlockPtr("deletionCounts", iBuilder->getInt32(0));
     Value * unit_counts = iBuilder->fwCast(iBuilder->getBitBlockWidth() / 16, iBuilder->CreateBlockAlignedLoad(delCountBlock_ptr));
-
-
     Value * u16_output_ptr = iBuilder->getOutputStreamBlockPtr("i16Stream", iBuilder->getInt32(0));
     u16_output_ptr = iBuilder->CreatePointerCast(u16_output_ptr, int16PtrTy);
     Value * i16UnitsGenerated = iBuilder->getProducedItemCount("i16Stream"); // units generated to buffer

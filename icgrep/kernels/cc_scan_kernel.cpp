@@ -7,7 +7,7 @@
 #include "cc_scan_kernel.h"
 #include <llvm/IR/Module.h>
 #include <kernels/kernel_builder.h>
-
+#include <llvm/IR/IntrinsicsX86.h>
 
 using namespace llvm;
 
@@ -20,7 +20,7 @@ void CCScanKernel::generateDoBlockMethod(const std::unique_ptr<KernelBuilder> & 
 
     const unsigned fieldCount = iBuilder->getBitBlockWidth() / mScanwordBitWidth;
     Type * T = iBuilder->getIntNTy(mScanwordBitWidth);
-    VectorType * scanwordVectorType =  VectorType::get(T, fieldCount);    
+    VectorType * scanwordVectorType =  FixedVectorType::get(T, fieldCount);
     Value * blockNo = iBuilder->getScalarField("BlockNo");
     Value * scanwordPos = iBuilder->CreateMul(blockNo, ConstantInt::get(blockNo->getType(), iBuilder->getBitBlockWidth()));
     
@@ -46,8 +46,13 @@ Function * CCScanKernel::generateScanWordRoutine(const std::unique_ptr<KernelBui
 
     Module * const m = iBuilder->getModule();
 
-    Function * scanFunc = cast<Function>(m->getOrInsertFunction("scan_word", iBuilder->getVoidTy(), T, iBuilder->getInt32Ty(), T, nullptr));
-    scanFunc->setCallingConv(CallingConv::C);
+    FunctionType * scanWordTy = FunctionType::get(iBuilder->getVoidTy(), {T, iBuilder->getInt32Ty(), T}, false);
+    Function * scanFunc = m->getFunction("scan_word");
+    if (scanFunc == nullptr) {
+        scanFunc = Function::Create(scanWordTy, Function::InternalLinkage, "scan_word", m);
+        scanFunc->setCallingConv(CallingConv::C);
+    }
+
     Function::arg_iterator args = scanFunc->arg_begin();
 
     Value * matchWord = &*(args++);
@@ -57,13 +62,18 @@ Function * CCScanKernel::generateScanWordRoutine(const std::unique_ptr<KernelBui
     Value * basePos = &*(args++);
     basePos->setName("basePos");
 
-    Constant * matchProcessor = m->getOrInsertFunction("wrapped_report_pos", iBuilder->getVoidTy(), T, iBuilder->getInt32Ty(), nullptr);
+    FunctionType * matchProcessorTy = FunctionType::get(iBuilder->getVoidTy(), {T, iBuilder->getInt32Ty()}, false);
+    Function * matchProcessor = m->getFunction("scan_word");
+    if (matchProcessor == nullptr) {
+        matchProcessor = Function::Create(matchProcessorTy, Function::InternalLinkage, "scan_word", m);
+        matchProcessor->setCallingConv(CallingConv::C);
+    }
 
-    BasicBlock * entryBlock = BasicBlock::Create(m->getContext(), "entry", scanFunc, 0);
+    BasicBlock * entryBlock = BasicBlock::Create(m->getContext(), "entry", scanFunc);
 
-    BasicBlock * matchesCondBlock = BasicBlock::Create(m->getContext(), "matchesCond", scanFunc, 0);
-    BasicBlock * matchesLoopBlock = BasicBlock::Create(m->getContext(), "matchesLoop", scanFunc, 0);
-    BasicBlock * matchesDoneBlock = BasicBlock::Create(m->getContext(), "matchesDone", scanFunc, 0);
+    BasicBlock * matchesCondBlock = BasicBlock::Create(m->getContext(), "matchesCond", scanFunc);
+    BasicBlock * matchesLoopBlock = BasicBlock::Create(m->getContext(), "matchesLoop", scanFunc);
+    BasicBlock * matchesDoneBlock = BasicBlock::Create(m->getContext(), "matchesDone", scanFunc);
 
     iBuilder->SetInsertPoint(entryBlock);
     iBuilder->CreateBr(matchesCondBlock);
@@ -76,7 +86,7 @@ Function * CCScanKernel::generateScanWordRoutine(const std::unique_ptr<KernelBui
 
     iBuilder->SetInsertPoint(matchesLoopBlock);
 
-    Value * cttzFunc = Intrinsic::getDeclaration(iBuilder->getModule(), Intrinsic::cttz, matches_phi->getType());
+    Function * cttzFunc = Intrinsic::getDeclaration(iBuilder->getModule(), Intrinsic::cttz, matches_phi->getType());
     Value * tz = iBuilder->CreateCall(cttzFunc, std::vector<Value *>({matches_phi, ConstantInt::get(iBuilder->getInt1Ty(), 0)}));
 
     Value * match_pos = iBuilder->CreateAdd(tz, basePos);

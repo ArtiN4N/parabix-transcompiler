@@ -48,14 +48,14 @@ void FileSink::generateInitializeMethod(const std::unique_ptr<kernel::KernelBuil
     Constant * suffixPlusNullLength = iBuilder->getSize(7);
     Value * tmpFileNamePtr = iBuilder->CreatePointerCast(iBuilder->CreateMalloc(iBuilder->CreateAdd(fileNameLength, suffixPlusNullLength)), iBuilder->getInt8PtrTy());
     iBuilder->setScalarField("tmpFileName", tmpFileNamePtr);
-    iBuilder->CreateMemCpy(tmpFileNamePtr, 1, fileName, 1, fileNameLength);
+    iBuilder->CreateMemCpy(tmpFileNamePtr, fileName, fileNameLength, 1);
 #ifdef BACKUP_OLDFILE
     iBuilder->CreateMemCpy(iBuilder->CreateGEP(tmpFileNamePtr, fileNameLength), iBuilder->GetString(".saved"), suffixPlusNullLength, 1);
     iBuilder->CreateRenameCall(fileName, tmpFileNamePtr);
 #else
     iBuilder->CreateUnlinkCall(fileName);
 #endif
-    iBuilder->CreateMemCpy(iBuilder->CreateGEP(tmpFileNamePtr, fileNameLength), 1, iBuilder->GetString("XXXXXX"), 1, suffixPlusNullLength);
+    iBuilder->CreateMemCpy(iBuilder->CreateGEP(tmpFileNamePtr, fileNameLength), iBuilder->GetString("XXXXXX"), suffixPlusNullLength, 1);
     Value * fileDes = iBuilder->CreateMkstempCall(tmpFileNamePtr);
     iBuilder->setScalarField("fileDes", fileDes);
     Value * failure = iBuilder->CreateICmpEQ(fileDes, iBuilder->getInt32(-1));

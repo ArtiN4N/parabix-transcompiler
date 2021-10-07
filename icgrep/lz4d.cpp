@@ -54,8 +54,13 @@ void generatePipeline(ParabixDriver & pxDriver) {
     Type * const voidTy = iBuilder->getVoidTy();
     Type * const inputType = iBuilder->getInt8PtrTy();
     
-    Function * const main = cast<Function>(M->getOrInsertFunction("Main", voidTy, inputType, sizeTy, boolTy, nullptr));
-    main->setCallingConv(CallingConv::C);
+    FunctionType * mainTy = FunctionType::get(voidTy, { inputType, sizeTy, boolTy }, false);
+    Function * main = M->getFunction("Main");
+    if (main == nullptr) {
+        main = Function::Create(mainTy, Function::InternalLinkage, "Main", M);
+        main->setCallingConv(CallingConv::C);
+    }
+
     Function::arg_iterator args = main->arg_begin();
     Value * const inputStream = &*(args++);
     inputStream->setName("input");
@@ -72,33 +77,33 @@ void generatePipeline(ParabixDriver & pxDriver) {
 
     iBuilder->SetInsertPoint(BasicBlock::Create(M->getContext(), "entry", main, 0));
 
-    StreamSetBuffer * const ByteStream = pxDriver.addBuffer(make_unique<SourceBuffer>(iBuilder, iBuilder->getStreamSetTy(1, 8), segmentSize * bufferSegments));
-    StreamSetBuffer * const BasisBits = pxDriver.addBuffer(make_unique<CircularBuffer>(iBuilder, iBuilder->getStreamSetTy(8, 1), segmentSize * bufferSegments));
-    StreamSetBuffer * const Extenders = pxDriver.addBuffer(make_unique<CircularBuffer>(iBuilder, iBuilder->getStreamSetTy(1, 1), segmentSize * bufferSegments));
-    StreamSetBuffer * const LiteralIndexes = pxDriver.addBuffer(make_unique<CircularBuffer>(iBuilder, iBuilder->getStreamSetTy(2, 32), segmentSize * bufferSegments));
-    StreamSetBuffer * const MatchIndexes = pxDriver.addBuffer(make_unique<CircularBuffer>(iBuilder, iBuilder->getStreamSetTy(2, 32), segmentSize * bufferSegments));
-    StreamSetBuffer * const DecompressedByteStream = pxDriver.addBuffer(make_unique<CircularBuffer>(iBuilder, iBuilder->getStreamSetTy(1, 8), decompressBufBlocks));
+    StreamSetBuffer * const ByteStream = pxDriver.addBuffer(std::make_unique<SourceBuffer>(iBuilder, iBuilder->getStreamSetTy(1, 8), segmentSize * bufferSegments));
+    StreamSetBuffer * const BasisBits = pxDriver.addBuffer(std::make_unique<CircularBuffer>(iBuilder, iBuilder->getStreamSetTy(8, 1), segmentSize * bufferSegments));
+    StreamSetBuffer * const Extenders = pxDriver.addBuffer(std::make_unique<CircularBuffer>(iBuilder, iBuilder->getStreamSetTy(1, 1), segmentSize * bufferSegments));
+    StreamSetBuffer * const LiteralIndexes = pxDriver.addBuffer(std::make_unique<CircularBuffer>(iBuilder, iBuilder->getStreamSetTy(2, 32), segmentSize * bufferSegments));
+    StreamSetBuffer * const MatchIndexes = pxDriver.addBuffer(std::make_unique<CircularBuffer>(iBuilder, iBuilder->getStreamSetTy(2, 32), segmentSize * bufferSegments));
+    StreamSetBuffer * const DecompressedByteStream = pxDriver.addBuffer(std::make_unique<CircularBuffer>(iBuilder, iBuilder->getStreamSetTy(1, 8), decompressBufBlocks));
 
     
-    kernel::Kernel * sourceK = pxDriver.addKernelInstance(make_unique<MemorySourceKernel>(iBuilder, iBuilder->getInt8PtrTy(), segmentSize));
+    kernel::Kernel * sourceK = pxDriver.addKernelInstance(std::make_unique<MemorySourceKernel>(iBuilder, iBuilder->getInt8PtrTy(), segmentSize));
     sourceK->setInitialArguments({inputStream, fileSize});
     pxDriver.makeKernelCall(sourceK, {}, {ByteStream});
 
     // Input stream is not aligned due to the offset.
-    Kernel * s2pk = pxDriver.addKernelInstance(make_unique<S2PKernel>(iBuilder, /*aligned = */ false));
+    Kernel * s2pk = pxDriver.addKernelInstance(std::make_unique<S2PKernel>(iBuilder, /*aligned = */ false));
     pxDriver.makeKernelCall(s2pk, {ByteStream}, {BasisBits});
     
-    Kernel * extenderK = pxDriver.addKernelInstance(make_unique<ParabixCharacterClassKernelBuilder>(iBuilder, "extenders", std::vector<re::CC *>{re::makeCC(0xFF)}, 8));
+    Kernel * extenderK = pxDriver.addKernelInstance(std::make_unique<ParabixCharacterClassKernelBuilder>(iBuilder, "extenders", std::vector<re::CC *>{re::makeCC(0xFF)}, 8));
     pxDriver.makeKernelCall(extenderK, {BasisBits}, {Extenders});
 
-    Kernel * lz4iK = pxDriver.addKernelInstance(make_unique<LZ4IndexDecoderKernel>(iBuilder));
+    Kernel * lz4iK = pxDriver.addKernelInstance(std::make_unique<LZ4IndexDecoderKernel>(iBuilder));
     lz4iK->setInitialArguments({iBuilder->CreateTrunc(hasBlockChecksum, iBuilder->getInt1Ty())});
     pxDriver.makeKernelCall(lz4iK, {ByteStream, Extenders}, {LiteralIndexes, MatchIndexes});
 
-    Kernel * lz4bK = pxDriver.addKernelInstance(make_unique<LZ4ByteStreamDecoderKernel>(iBuilder, decompressBufBlocks * codegen::BlockSize));
+    Kernel * lz4bK = pxDriver.addKernelInstance(std::make_unique<LZ4ByteStreamDecoderKernel>(iBuilder, decompressBufBlocks * codegen::BlockSize));
     pxDriver.makeKernelCall(lz4bK, {LiteralIndexes, MatchIndexes, ByteStream}, {DecompressedByteStream});
 
-    Kernel * outK = pxDriver.addKernelInstance(make_unique<FileSink>(iBuilder, 8));
+    Kernel * outK = pxDriver.addKernelInstance(std::make_unique<FileSink>(iBuilder, 8));
     outK->setInitialArguments({iBuilder->GetString(outputFile)});
     pxDriver.makeKernelCall(outK, {DecompressedByteStream}, {});
  
