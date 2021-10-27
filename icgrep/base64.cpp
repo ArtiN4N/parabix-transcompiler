@@ -27,9 +27,9 @@
 #include <util/papi_helper.hpp>
 #endif
 
-// #define BUFFER_TYPE CircularBuffer
+#define BUFFER_TYPE CircularBuffer
 
-#define BUFFER_TYPE DynamicBuffer
+// #define BUFFER_TYPE DynamicBuffer
 
 using namespace llvm;
 
