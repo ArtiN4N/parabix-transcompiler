@@ -23,6 +23,7 @@
 #include <re/analysis/cc_sequence_search.h>
 #include <re/toolchain/toolchain.h>
 
+
 namespace pablo { class PabloAST; }
 namespace pablo { class Var; }
 namespace pablo { class PabloKernel; }
@@ -50,6 +51,7 @@ private:
 
     Marker compileName(Name * name, Marker marker);
     Marker compileAny(Marker marker);
+    Marker compileExternalPropertyName(ExternalPropertyName * const af, Marker marker);
     Marker compileCC(CC * cc, Marker marker);
     Marker compileSeq(Seq * seq, Marker marker);
     Marker compileSeqTail(Seq::const_iterator current, const Seq::const_iterator end, int matchLenSoFar, Marker marker);
@@ -110,6 +112,7 @@ std::pair<int, int> RE_Block_Compiler::lengthRange(RE * regexp) {
 }
 
 Marker RE_Block_Compiler::process(RE * const re, Marker marker) {
+    assert (re);
     if (isa<Name>(re)) {
         return compileName(cast<Name>(re), marker);
     } else if (Capture * c = dyn_cast<Capture>(re)) {
@@ -138,6 +141,8 @@ Marker RE_Block_Compiler::process(RE * const re, Marker marker) {
     } else if (isa<Any>(re)) {
         // CCs may be passed through the toolchain directly to the compiler.
         return compileAny(marker);
+    } else if (isa<ExternalPropertyName>(re)) {
+        return compileExternalPropertyName(cast<ExternalPropertyName>(re), marker);
     } else {
         RE_Compiler::UnsupportedRE("RE Compiler failed to process " + Printer_RE::PrintRE(re));
     }
@@ -148,6 +153,19 @@ Marker RE_Block_Compiler::compileAny(Marker marker) {
     if (marker.offset() == 0) {
         nextPos = mPB.createIndexedAdvance(nextPos, mMain.mIndexStream, 1);
     }
+    return Marker(mPB.createAnd(nextPos, mMain.mMatchable));
+}
+
+Marker RE_Block_Compiler::compileExternalPropertyName(ExternalPropertyName * const af, Marker marker) {
+    PabloAST * nextPos = marker.stream();
+    if (marker.offset() == 0) {
+        nextPos = mPB.createIndexedAdvance(nextPos, mMain.mIndexStream, 1);
+    }
+    auto f = mMain.mExternalNameMap.find(af->getPrecompiledName());
+    if (LLVM_UNLIKELY(f == mMain.mExternalNameMap.end())) {
+        report_fatal_error("Cannot find external " + std::string{af->getPrecompiledName()});
+    }
+
     return Marker(mPB.createAnd(nextPos, mMain.mMatchable));
 }
 

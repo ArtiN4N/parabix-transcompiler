@@ -240,9 +240,17 @@ void ScanMatchKernel::generateMultiBlockLogic(BuilderRef b, Value * const numOfS
     Value * const endPtr = b->getRawInputPointer("InputStream", matchEndPos);
 
     auto argi = dispatcher->arg_begin();
-    const auto matchRecNumArg = &*(argi++);
-    Value * const matchRecNum = b->CreateZExtOrTrunc(matchRecordNum, matchRecNumArg->getType());
-    b->CreateCall(dispatcher->getFunctionType(), dispatcher, {accumulator, matchRecNum, startPtr, endPtr});
+    FixedArray<Value *, 4> args;
+    args[0] = b->CreatePointerCast(accumulator, argi->getType());
+    if (mLineNumbering) {
+        args[1] = b->CreateZExtOrTrunc(matchRecordNum, (++argi)->getType());
+    } else {
+        args[1] = ConstantInt::getNullValue((++argi)->getType());
+    }
+    args[2] = startPtr;
+    args[3] = endPtr;
+
+    b->CreateCall(dispatcher->getFunctionType(), dispatcher, args);
 
     //  We've dealt with the match, now prepare for the next one, if any.
     // There may be more matches in the current word.

@@ -74,7 +74,7 @@ RE * remove_nullable_ends(RE * re) {
 
 RE * regular_expression_passes(RE * re) {
     //Optimization passes to simplify the AST.
-    RE * r = re;
+    RE * r = re; assert (r);
     r = convertToStarNormalForm(r);
     if (codegen::OptLevel > 1) {
         r = minimizeRE(r);

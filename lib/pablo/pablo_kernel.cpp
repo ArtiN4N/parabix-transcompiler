@@ -93,6 +93,7 @@ Extract * PabloKernel::makeExtract(Var * const array, PabloAST * const index) {
     Type * type = array->getType(); assert (type);
     if (LLVM_LIKELY(isa<ArrayType>(type))) {
         type = cast<ArrayType>(type)->getArrayElementType();
+        assert (type == getStreamTy());
     } else {
         std::string tmp;
         raw_string_ostream out(tmp);

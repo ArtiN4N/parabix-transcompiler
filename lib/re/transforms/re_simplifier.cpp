@@ -25,7 +25,9 @@ struct RE_Simplifier final : public RE_MemoizingTransformer {
         Set set;
         set.reserve(alt->size());
         for (RE * item : *alt) {
+            assert (item);
             item = transform(item);
+            assert (item);
             if (LLVM_UNLIKELY(isa<Alt>(item))) {
                 const Alt & alt = *cast<Alt>(item);
                 set.reserve(set.capacity() + alt.size());
@@ -41,7 +43,9 @@ struct RE_Simplifier final : public RE_MemoizingTransformer {
         List list;
         list.reserve(seq->size());
         for (RE * item : *seq) {
+            assert (item);
             item = transform(item);
+            assert (item);
             if (LLVM_UNLIKELY(isa<Seq>(item) && cast<Seq>(item)->empty())) {
                 continue;
             }
@@ -51,7 +55,9 @@ struct RE_Simplifier final : public RE_MemoizingTransformer {
     }
 
     RE * transformName(Name * nm) override {
-        nm->setDefinition(transform(nm->getDefinition()));
+        if (nm->getDefinition()) {
+            nm->setDefinition(transform(nm->getDefinition()));
+        }
         return nm;
     }
 

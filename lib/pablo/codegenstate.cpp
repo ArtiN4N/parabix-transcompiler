@@ -40,6 +40,14 @@ namespace pablo {
 
 #ifndef NDEBUG
 inline void __checkSameType(const Type * const A, const Type * const B) {
+    if (A != B) {
+        errs() << "Type ";
+        A->print(errs());
+        errs() << " does not match ";
+        B->print(errs());
+        errs() << "\n";
+    }
+
     assert ("DIFFERING CONTEXTS" && (&(A->getContext()) == &(B->getContext())));
     assert ("DIFFERING TYPES" && (A == B));
 }
@@ -65,6 +73,7 @@ EveryNth * PabloBlock::createEveryNth(PabloAST * const expr, Integer * n, const 
 
 Not * PabloBlock::createNot(PabloAST * expr, const String * const name) {
     assert (expr);
+    assert (expr->getType() == getParent()->getStreamTy());
     return insertAtInsertionPoint(new (mAllocator) Not(expr, name, mAllocator));
 }
 

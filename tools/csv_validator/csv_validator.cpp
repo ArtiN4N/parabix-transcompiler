@@ -27,12 +27,20 @@
 #include <kernel/pipeline/driver/cpudriver.h>
 #include <toolchain/toolchain.h>
 #include <fileselect/file_select.h>
+#include "../csv/csv_util.hpp"
 #include <fcntl.h>
 #include <iomanip>
 #include <iostream>
 #include <string>
 #include <sys/stat.h>
 #include <vector>
+#include <fstream>
+#include <kernel/scan/scanmatchgen.h>
+#include <re/parse/parser.h>
+#include <re/adt/re_name.h>
+#include <re/compile/re_compiler.h>
+#include <grep/grep_kernel.h>
+#include <grep/regex_passes.h>
 #ifdef ENABLE_PAPI
 #include <util/papi_helper.hpp>
 #endif
@@ -44,7 +52,13 @@ using namespace codegen;
 
 static cl::OptionCategory wcFlags("Command Flags", "csv validator options");
 
+
+static cl::opt<std::string> inputSchema(cl::Positional, cl::desc("<input schema filename>"), cl::Required, cl::cat(wcFlags));
+
 static cl::list<std::string> inputFiles(cl::Positional, cl::desc("<input file ...>"), cl::OneOrMore, cl::cat(wcFlags));
+
+
+constexpr int ScanMatchBlocks = 4;
 
 bool strictRFC4180 = false;
 
@@ -58,7 +72,96 @@ using namespace kernel;
 using namespace cc;
 using namespace re;
 
+#if 0
+class CSVDataLexer : public PabloKernel {
+public:
+    CSVDataLexer(BuilderRef kb, StreamSet * Source, StreamSet * CSVlexical)
+        : PabloKernel(kb, "CSVDataLexer",
+                      {Binding{"Source", Source}},
+                      {Binding{"CSVlexical", CSVlexical, FixedRate(), Add1()}}) {}
+protected:
+    void generatePabloMethod() override;
+};
 
+enum {markLF = 0, markCR = 1, markDQ = 2, markComma = 3, markEOF = 4};
+
+void CSVDataLexer::generatePabloMethod() {
+    pablo::PabloBuilder pb(getEntryScope());
+    std::unique_ptr<cc::CC_Compiler> ccc;
+    ccc = std::make_unique<cc::Parabix_CC_Compiler_Builder>(getEntryScope(), getInputStreamSet("Source"));
+    PabloAST * LF = ccc->compileCC(re::makeCC(charLF, &cc::UTF8));
+    PabloAST * CR = ccc->compileCC(re::makeCC(charCR, &cc::UTF8));
+    PabloAST * DQ = ccc->compileCC(re::makeCC(charDQ, &cc::UTF8));
+    PabloAST * Comma = ccc->compileCC(re::makeCC(charComma, &cc::UTF8));
+    PabloAST * EOFbit = pb.createAtEOF(pb.createAdvance(pb.createOnes(), 1));
+    Var * lexOut = getOutputStreamVar("CSVlexical");
+    pb.createAssign(pb.createExtract(lexOut, pb.getInteger(markLF)), LF);
+    pb.createAssign(pb.createExtract(lexOut, pb.getInteger(markCR)), CR);
+    pb.createAssign(pb.createExtract(lexOut, pb.getInteger(markDQ)), DQ);
+    pb.createAssign(pb.createExtract(lexOut, pb.getInteger(markComma)), Comma);
+    pb.createAssign(pb.createExtract(lexOut, pb.getInteger(markEOF)), EOFbit);
+}
+
+#endif
+
+enum CSVDataFieldMarkers {
+    FieldDataMask = 0
+    , FieldSeperator = 1
+};
+
+
+
+class CSVDataParser : public PabloKernel {
+public:
+    CSVDataParser(BuilderRef kb, StreamSet * UTFindex, StreamSet * csvMarks, StreamSet * recordSeperators, StreamSet * fieldMarkers)
+        : PabloKernel(kb, "CSVDataParser",
+                      {Binding{"UTFindex", UTFindex}, Binding{"csvMarks", csvMarks, FixedRate(), LookAhead(1)}},
+                      {Binding{"fieldMarkers", fieldMarkers}, Binding{"recordSeperators", recordSeperators}}) {
+        addAttribute(SideEffecting());
+        assert (UTFindex->getNumElements() == 1);
+        assert (csvMarks->getNumElements() == 5);
+    }
+protected:
+    void generatePabloMethod() override;
+};
+
+void CSVDataParser::generatePabloMethod() {
+    pablo::PabloBuilder pb(getEntryScope());
+    std::vector<PabloAST *> csvMarks = getInputStreamSet("csvMarks");
+    PabloAST * dquote = csvMarks[markDQ];
+    PabloAST * dquote_odd = pb.createEveryNth(dquote, pb.getInteger(2));
+    PabloAST * dquote_even = pb.createXor(dquote, dquote_odd);
+    PabloAST * quote_escape = pb.createAnd(dquote_even, pb.createLookahead(dquote, 1));
+    PabloAST * escaped_quote = pb.createAdvance(quote_escape, 1);
+    PabloAST * start_dquote = pb.createXor(dquote_odd, escaped_quote);
+    PabloAST * end_dquote = pb.createXor(dquote_even, quote_escape);
+    PabloAST * quoted_data = pb.createIntrinsicCall(pablo::Intrinsic::InclusiveSpan, {start_dquote, end_dquote});
+    PabloAST * unquoted = pb.createNot(quoted_data);
+    PabloAST * recordMarks = pb.createOr(pb.createAnd(csvMarks[markLF], unquoted), csvMarks[markEOF]);
+    PabloAST * fieldMarks = pb.createOr(pb.createAnd(csvMarks[markComma], unquoted), recordMarks);
+
+    // should field / record marks be part of the data? they'd indicate a different sort of RE marker
+//    PabloAST * marks = pb.createOr(dquote, pb.createOr(fieldMarks, recordMarks));
+
+
+
+    PabloAST * fieldData = pb.createOr(pb.createNot(dquote), escaped_quote);
+    // TODO: is this UTF indexing needed?
+    PabloAST * utfIndex = pb.createExtract(getInputStreamVar("UTFindex"), pb.getInteger(0));
+    fieldData = pb.createAnd(fieldData, utfIndex, "fdata");
+
+    Var * fieldMarkers = getOutputStreamVar("fieldMarkers");
+
+    pb.createAssign(pb.createExtract(fieldMarkers, pb.getInteger(FieldDataMask)), fieldData);
+    pb.createAssign(pb.createExtract(fieldMarkers, pb.getInteger(FieldSeperator)), fieldMarks);
+
+    Var * recordSeperators = getOutputStreamVar("recordSeperators");
+
+    pb.createAssign(pb.createExtract(recordSeperators, pb.getInteger(0)), recordMarks);
+
+}
+
+#if 0
 
 class StructureIdentifier final: public pablo::PabloKernel {
 public:
@@ -69,7 +172,7 @@ private:
     std::vector<char> Quotes = {'"', '\''};
     std::vector<char> FieldBreak = {','};
     std::vector<char> RecordBreak = {'\n'};
-    char Escape = '\\';
+    std::vector<char> Escape = {'\\'};
 };
 
 StructureIdentifier::StructureIdentifier (BuilderRef b, StreamSet * const text, StreamSet * const breaks, StreamSet * const deletionFollowsMask)
@@ -95,7 +198,7 @@ void StructureIdentifier::generatePabloMethod() {
         quoteMark[i] = pb.createVar("q", ccc.compileCC(re::makeByte(Quotes[i])));
     }
 
-    PabloAST * alternatingZeroOne = pb.createRepeat(2, 0b10);
+    PabloAST * alternatingZeroOne = pb.createRepeat(1, pb.getInteger(0b10101010, 8));
     PabloAST * alternatingOneZero = pb.createNot(alternatingZeroOne);
 
     PabloAST * zeroes = pb.createZeroes();
@@ -142,8 +245,17 @@ void StructureIdentifier::generatePabloMethod() {
         return it.createOr(markAfterOddLengthNegRun, markAfterOddLengthPosRun);
     };
 
-    if (!strictRFC4180) {
-        PabloAST * escapeMark = ccc.compileCC(re::makeByte(Escape));
+    auto compileCC =[&](const std::vector<char> & CCs) -> PabloAST * {
+        assert (!CCs.empty());
+        CC * cc = re::makeByte(CCs[0]);
+        for (unsigned i = 1; i < n; ++i) {
+            cc->insert(CCs[i]);
+        }
+        return ccc.compileCC(cc);
+    };
+
+    if (!Escape.empty()) {
+        PabloAST * escapeMark = compileCC(Escape);
 
         auto it = pb.createScope();
         pb.createIf(escapeMark, it);
@@ -191,12 +303,8 @@ void StructureIdentifier::generatePabloMethod() {
 
         PabloAST * first = quoteScope.createAnd(quoteScope.createNot(advQ), q);
         quoteScope.createAssign(followsQuote[i], identifyMarkAfterOddLengthRuns(quoteScope, first, q, i));
-        if (n > 1) {
-            quoteScope.createAssign(allQuoteFollows, quoteScope.createOr(first, followsQuote[i]));
-        }
+        quoteScope.createAssign(allQuoteFollows, quoteScope.createOr(first, followsQuote[i]));
     }
-
-
 
     // Although not permited by RFC 4180, suppose both ' and " are valid quote characters. We may have
     // TEXT pattern such as '"""' , which should be considered a field of three double quotes. A more
@@ -209,8 +317,6 @@ void StructureIdentifier::generatePabloMethod() {
     // TODO: check if we have any mixed types. even if the validator supports multiple quote mark types
     // its unlikely that a document mixes them this pathelogical fashion.
 
-
-
     // ----------------------------------------------------------------------------------------------
 
     std::vector<Var *> followStarts(n);
@@ -220,12 +326,13 @@ void StructureIdentifier::generatePabloMethod() {
         followEnds[i] = pb.createVar("ends", zeroes);
     }
 
-
     // get the first unprocessed follows? better than doing the insert first trick and scanning through to "here"?
     PabloAST * start = pb.createNot(pb.createAdvance(pb.createNot(zeroes), 1));
     PabloAST * first = pb.createScanTo(start, allQuoteFollows);
 
     Var * anyOpener = pb.createVar("anyOpener", first);
+
+    // TODO: once identified, we probably no longer need to distinguish between quote type
 
     auto filterScope = pb.createScope();
     pb.createWhile(anyOpener, filterScope);
@@ -236,12 +343,17 @@ void StructureIdentifier::generatePabloMethod() {
         PabloAST * s = filterScope.createAnd(first, followsQuote[i]);
         pb.createIf(s, check);
         // ----------------------------------------------------------------------------------------------
+
+        // NOTE: to avoid the potential clean up problem of "'","'" we only store the start and end
+        // positions rather than the full span mask here. We later clean those out without worrying
+        // about them crossing over multiple fields.
+
         PabloAST * t = check.createAdvanceThenScanTo(s, followsQuote[i]);
         check.createAssign(followStarts[i], check.createOr(followStarts[i], s));
         check.createAssign(followEnds[i], check.createOr(followEnds[i], t));
-        // ----------------------------------------------------------------------------------------------
 
         check.createAssign(next, t);
+        // ----------------------------------------------------------------------------------------------
     }
     PabloAST * nextOpener = filterScope.createAdvanceThenScanTo(next, allQuoteFollows);
     filterScope.createAssign(anyOpener, nextOpener);
@@ -255,8 +367,6 @@ void StructureIdentifier::generatePabloMethod() {
         // ----------------------------------------------------------------------------------------------
         PabloAST * spans = check.createIntrinsicCall(pablo::Intrinsic::SpanUpTo, {followStarts[i], followEnds[i]});
         PabloAST * unfiltered = check.createNot(spans);
-
-
         // remove any deletion follows from streams that are enclosed by a different type of quotes
         for (unsigned j = 0; j < i; ++j) {
             Var * f = followsFilteredChar[j];
@@ -266,36 +376,25 @@ void StructureIdentifier::generatePabloMethod() {
             Var * f = followsFilteredChar[j];
             check.createAssign(f, check.createAnd(f, unfiltered));
         }
-        check.createAssign(unquoted, check.createOr(unquoted, unfiltered));
+        check.createAssign(unquoted, check.createAnd(unquoted, unfiltered));
         // ----------------------------------------------------------------------------------------------
     }
 
+    Var * breaks = getOutput(0);
+    PabloAST * fieldBreakChars = compileCC(FieldBreak);
+    pb.createAssign(pb.createExtract(breaks, 0), pb.createAnd(fieldBreakChars, unquoted));
+
+    PabloAST * recordBreakChars = compileCC(RecordBreak);
+    pb.createAssign(pb.createExtract(breaks, 1), pb.createAnd(recordBreakChars, unquoted));
+
+    Var * f = followsFilteredChar[0];
+
     for (unsigned i = 1; i < followsFilteredChar.size(); ++i) {
-        pb.createAssign(followsFilteredChar[0], pb.createOr(followsFilteredChar[0], followsFilteredChar[i]));
+        pb.createAssign(f, pb.createOr(f, followsFilteredChar[i]));
     }
 
     Var * deletion = getOutput(1);
-    pb.createAssign(pb.createExtract(deletion, 0), followsFilteredChar[0]);
-
-
-    Var * breaks = getOutput(0);
-
-    CC * fieldBreakCC = re::makeByte(FieldBreak[0]);
-    for (unsigned i = 1; i < n; ++i) {
-        fieldBreakCC->insert(FieldBreak[i]);
-    }
-
-    PabloAST * fieldBreakChars = ccc.compileCC(fieldBreakCC);
-    pb.createAssign(pb.createExtract(breaks, 0), pb.createAnd(fieldBreakChars, unquoted));
-
-    CC * recordBreakCC = re::makeByte(RecordBreak[0]);
-    for (unsigned i = 1; i < n; ++i) {
-        recordBreakCC->insert(RecordBreak[i]);
-    }
-
-    PabloAST * recordBreakChars = ccc.compileCC(recordBreakCC);
-    pb.createAssign(pb.createExtract(breaks, 1), pb.createAnd(recordBreakChars, unquoted));
-
+    pb.createAssign(pb.createExtract(deletion, 0), f);
 }
 
 class PullBackOne final: public pablo::PabloKernel {
@@ -313,6 +412,7 @@ PullBackOne::PullBackOne (BuilderRef b, StreamSet * const input, StreamSet * con
     {}) {
     assert (input->getNumElements() == 1);
     assert (output->getNumElements() == 1);
+    addAttribute(SideEffecting());
 }
 
 void PullBackOne::generatePabloMethod() {
@@ -320,8 +420,11 @@ void PullBackOne::generatePabloMethod() {
     pb.createAssign(pb.createExtract(getOutput(0), 0), pb.createLookahead(getInput(0), 1));
 }
 
+#endif
 
-typedef void (*WordCountFunctionType)(uint32_t fd, uint32_t fileIdx);
+typedef void (*CSVValidatorFunctionType)(uint32_t fd, const char * fileName);
+
+#if 0
 
 WordCountFunctionType wcPipelineGen(CPUDriver & pxDriver) {
 
@@ -329,25 +432,27 @@ WordCountFunctionType wcPipelineGen(CPUDriver & pxDriver) {
 
     Type * const int32Ty = iBuilder->getInt32Ty();
 
-    auto P = pxDriver.makePipeline({Binding{int32Ty, "fd"}, Binding{int32Ty, "fileIdx"}});
+    auto P = pxDriver.makePipeline({Binding{int32Ty, "fd"}});
 
     Scalar * const fileDescriptor = P->getInputScalar("fd");
-    Scalar * const fileIdx = P->getInputScalar("fileIdx");
 
     StreamSet * const ByteStream = P->CreateStreamSet(1, 8);
 
-    Kernel * mmapK = P->CreateKernelCall<ReadSourceKernel>(fileDescriptor, ByteStream);
+    P->CreateKernelCall<ReadSourceKernel>(fileDescriptor, ByteStream);
 
     auto BasisBits = P->CreateStreamSet(8, 1);
     P->CreateKernelCall<S2PKernel>(ByteStream, BasisBits);
+
+
 
     auto breaks = P->CreateStreamSet(2, 1);
     auto delFollows = P->CreateStreamSet(1, 1);
 
     P->CreateKernelCall<StructureIdentifier>(BasisBits, breaks, delFollows);
 
+
     auto deletions = P->CreateStreamSet(1, 1);
-    P->CreateKernelCall<PullBackOne>(BasisBits, delFollows, deletions);
+    P->CreateKernelCall<PullBackOne>(delFollows, deletions);
 
     // Do we need to delete all the data from the basis bits and derived streams? It might be better
     // if we can treat them as skippable characters in the RE matchers. It would be easy to have optional
@@ -359,28 +464,192 @@ WordCountFunctionType wcPipelineGen(CPUDriver & pxDriver) {
     return reinterpret_cast<WordCountFunctionType>(P->compile());
 }
 
-void wc(WordCountFunctionType fn_ptr, const uint32_t fileIdx) {
-    std::string fileName = allFiles[fileIdx].string();
+#endif
+
+class CSVSchemaValidatorKernel : public pablo::PabloKernel {
+public:
+    CSVSchemaValidatorKernel(BuilderRef b, RE * schema, StreamSet * basisBits, StreamSet * recordSeperators, StreamSet * fieldMarkers, StreamSet * invalid);
+    llvm::StringRef getSignature() const override;
+    bool hasSignature() const override { return true; }
+
+protected:
+    CSVSchemaValidatorKernel(BuilderRef b, RE * schema, std::string signature, StreamSet * basisBits, StreamSet * recordSeperators, StreamSet * fieldMarkers, StreamSet * invalid);
+    void generatePabloMethod() override;
+private:
+    static std::string makeSignature(const std::vector<RE *> & fields);
+private:
+    RE * const                          mSchema;
+    std::string                         mSignature;
+
+};
+
+const static std::string FieldSepName = ":";
+
+RE * parseSchemaFile() {
+    RE * parsedSchema = nullptr;
+    std::vector<RE *> fields;
+    std::ifstream schemaFile(inputSchema);
+    if (LLVM_LIKELY(schemaFile.is_open())) {
+        std::string line;
+        Name * fs = nullptr;
+        while(std::getline(schemaFile, line)) {
+            RE_Parser::parse(line);
+            RE * delim = nullptr;
+            if (fs == nullptr) {
+                fs = makeName(FieldSepName);
+                fs->setDefinition(makeAny()); // ExternalPropertyName::Create(FieldSepName.c_str()));
+                delim = makeStart();
+            } else {
+                delim = fs;
+            }
+            assert (delim);
+            fields.push_back(delim);
+            RE * const field = RE_Parser::parse(line);
+            assert (field);
+            fields.push_back(field);
+        }
+        schemaFile.close();
+        fields.push_back(makeEnd());
+        for (auto r : fields) {
+            assert (r);
+        }
+        parsedSchema = makeSeq(fields.begin(), fields.end());
+        // TODO: ideally we want to "reuse" the equations for fields with the same validation RE. Instead of making
+        // a single big RE here, make separate ones. Can we automatically contract a sequence of the same RE into a range?
+        assert (parsedSchema);
+        parsedSchema = regular_expression_passes(parsedSchema);
+    } else {
+        report_fatal_error("Cannot open schema: " + inputSchema);
+    }
+    return parsedSchema;
+}
+
+
+CSVSchemaValidatorKernel::CSVSchemaValidatorKernel(BuilderRef b, RE * schema, StreamSet * basisBits, StreamSet * recordSeperators, StreamSet * fieldMarkers, StreamSet * invalid)
+: CSVSchemaValidatorKernel(b, schema, Printer_RE::PrintRE(schema), basisBits, recordSeperators, fieldMarkers, invalid) {
+
+}
+
+CSVSchemaValidatorKernel::CSVSchemaValidatorKernel(BuilderRef b, RE * schema, std::string signature, StreamSet * basisBits, StreamSet * recordSeperators, StreamSet * fieldMarkers, StreamSet * invalid)
+: PabloKernel(b, "csvv" + getStringHash(signature),
+    {Binding{"basisBits", basisBits}, Binding{"recordSeperators", recordSeperators}, Binding{"fieldMarkers", fieldMarkers}},
+    {Binding{"invalid", invalid}})
+, mSchema(schema)
+, mSignature(std::move(signature)) {
+    addAttribute(InfrequentlyUsed());
+    assert (mSchema);
+}
+
+
+StringRef CSVSchemaValidatorKernel::getSignature() const {
+    return mSignature;
+}
+
+void CSVSchemaValidatorKernel::generatePabloMethod() {
+    PabloBuilder pb(getEntryScope());
+
+    Var * recordSeperators = pb.createExtract(getInputStreamVar("recordSeperators"), pb.getInteger(0));
+
+    RE_Compiler re_compiler(getEntryScope(), recordSeperators, &cc::UTF8);
+
+    re_compiler.addAlphabet(&cc::UTF8, getInputStreamSet("basisBits"));
+
+    Var * const fieldMarkers = getInputStreamVar("fieldMarkers");
+
+    re_compiler.setIndexing(&cc::UTF8, pb.createExtract(fieldMarkers, pb.getInteger(FieldDataMask)));
+
+    Var * const fieldSeps = pb.createExtract(fieldMarkers, pb.getInteger(FieldSeperator));
+    assert (fieldSeps->getType() == getStreamTy());
+
+    re_compiler.addPrecompiled(FieldSepName, RE_Compiler::ExternalStream(RE_Compiler::Marker(fieldSeps, 0), std::make_pair<int,int>(1, 1)));
+
+    RE_Compiler::Marker matches = re_compiler.compileRE(mSchema);
+    errs() << "matches.offset=" << matches.offset() << "\n";
+    Var * const output = pb.createExtract(getOutputStreamVar("invalid"), pb.getInteger(0));
+    PabloAST * result = pb.createXor(matches.stream(), recordSeperators, "result");
+    pb.createAssign(output, result);
+
+}
+
+extern "C" void accumulate_match_wrapper(char * fileName, const size_t lineNum, char * line_start, char * line_end) {
+    std::string tmp;
+    tmp.reserve(256);
+    raw_string_ostream out(tmp);
+    out << "Error found in " << fileName << ':' << lineNum;
+    // TODO: this needs to report more information as to what field/rule was invalid
+    throw std::runtime_error(out.str());
+}
+
+extern "C" void finalize_match_wrapper(char * fileName, char * buffer_end) {
+    errs() << "No errors found in " << fileName << "\n";
+}
+
+CSVValidatorFunctionType wcPipelineGen(CPUDriver & pxDriver) {
+
+    auto & b = pxDriver.getBuilder();
+
+    Type * const int32Ty = b->getInt32Ty();
+
+    auto P = pxDriver.makePipeline({Binding{int32Ty, "fd"}, Binding{b->getInt8PtrTy(), "fileName"}});
+
+    P->setUniqueName("csv_validator");
+
+    Scalar * const fileDescriptor = P->getInputScalar("fd");
+
+    StreamSet * const ByteStream = P->CreateStreamSet(1, 8);
+
+    P->CreateKernelCall<MMapSourceKernel>(fileDescriptor, ByteStream);
+
+    auto BasisBits = P->CreateStreamSet(8, 1);
+    P->CreateKernelCall<S2PKernel>(ByteStream, BasisBits);
+
+    StreamSet * csvCCs = P->CreateStreamSet(5);
+    P->CreateKernelCall<CSVlexer>(BasisBits, csvCCs);
+    StreamSet * recordSeperators = P->CreateStreamSet(1);
+    StreamSet * fieldMarkers = P->CreateStreamSet(2);
+
+    StreamSet * u8index = P->CreateStreamSet();
+    P->CreateKernelCall<UTF8_index>(BasisBits, u8index);
+
+    P->CreateKernelCall<CSVDataParser>(u8index, csvCCs, recordSeperators, fieldMarkers);
+
+    StreamSet * invalid = P->CreateStreamSet(1);
+
+    P->CreateKernelFamilyCall<CSVSchemaValidatorKernel>(parseSchemaFile(), BasisBits, recordSeperators, fieldMarkers, invalid);
+
+    Scalar * const fileName = P->getInputScalar("fileName");
+
+    // TODO: using the scan match here like this won't really let us determine what field is wrong in the case an error occurs
+    // since the only information we get is whether a match fails.
+
+    Kernel * const scanMatchK = P->CreateKernelCall<ScanMatchKernel>(invalid, recordSeperators, ByteStream, fileName, ScanMatchBlocks);
+    scanMatchK->link("accumulate_match_wrapper", accumulate_match_wrapper);
+    scanMatchK->link("finalize_match_wrapper", finalize_match_wrapper);
+
+    return reinterpret_cast<CSVValidatorFunctionType>(P->compile());
+}
+
+void wc(CSVValidatorFunctionType fn_ptr, const fs::path & fileName) {
     struct stat sb;
-    const int fd = open(fileName.c_str(), O_RDONLY);
+    const auto fn = fileName.c_str();
+    const int fd = open(fn, O_RDONLY);
     if (LLVM_UNLIKELY(fd == -1)) {
         if (errno == EACCES) {
-            std::cerr << "wc: " << fileName << ": Permission denied.\n";
+            std::cerr << "csv_validator: " << fileName << ": Permission denied.\n";
         }
         else if (errno == ENOENT) {
-            std::cerr << "wc: " << fileName << ": No such file.\n";
+            std::cerr << "csv_validator: " << fileName << ": No such file.\n";
         }
         else {
-            std::cerr << "wc: " << fileName << ": Failed.\n";
+            std::cerr << "csv_validator: " << fileName << ": Failed.\n";
         }
         return;
     }
     if (stat(fileName.c_str(), &sb) == 0 && S_ISDIR(sb.st_mode)) {
-        std::cerr << "wc: " << fileName << ": Is a directory.\n";
-        close(fd);
-        return;
+        std::cerr << "csv_validator: " << fileName << ": Is a directory.\n";
+    } else {
+        fn_ptr(fd, fn);
     }
-    fn_ptr(fd, fileIdx);
     close(fd);
 }
 
@@ -401,10 +670,9 @@ int main(int argc, char *argv[]) {
     jitExecution.start();
     #endif
 
-    for (unsigned i = 0; i < fileCount; ++i) {
-        wc(wordCountFunctionPtr, i);
+    for (auto & file : allFiles) {
+        wc(wordCountFunctionPtr, file);
     }
-
 
     #ifdef REPORT_PAPI_TESTS
     jitExecution.stop();

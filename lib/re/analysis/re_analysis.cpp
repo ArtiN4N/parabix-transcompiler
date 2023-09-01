@@ -51,7 +51,6 @@ bool isUnicodeUnitLength(const RE * re) {
     } else if (const Name * n = dyn_cast<Name>(re)) {
         RE * defn = n->getDefinition();
         if (defn) return isUnicodeUnitLength(defn);
-        return false;
     } else if (const Capture * c = dyn_cast<Capture>(re)) {
         return isUnicodeUnitLength(c->getCapturedRE());
     } else if (const Reference * r = dyn_cast<Reference>(re)) {
@@ -163,7 +162,7 @@ CC * resolveToCC(RE * r) {
     } else if (PropertyExpression * pe = dyn_cast<PropertyExpression>(r)) {
         return resolveToCC(pe->getResolvedRE());
     } else if (Name * n = dyn_cast<Name>(r)) {
-        return resolveToCC(n->getDefinition());
+        if (LLVM_LIKELY(n->getDefinition())) return resolveToCC(n->getDefinition());
     } else if (Capture * c = dyn_cast<Capture>(r)) {
         return resolveToCC(c->getCapturedRE());
     } else if (Reference * ref = dyn_cast<Reference>(r)) {
@@ -239,7 +238,7 @@ bool isFixedLength(const RE * re) {
     } else if (const Group * g = dyn_cast<Group>(re)) {
         return isFixedLength(g->getRE());
     } else if (const Name * n = dyn_cast<Name>(re)) {
-        return isFixedLength(n->getDefinition());
+        if (n->getDefinition()) return isFixedLength(n->getDefinition());
     } else if (const Capture * c = dyn_cast<Capture>(re)) {
         return isFixedLength(c->getCapturedRE());
     } else if (const Reference * r = dyn_cast<Reference>(re)) {
@@ -289,7 +288,7 @@ int minMatchLength(const RE * re) {
 //Cases that not include bounded repetition, assertion, start and end type can suit for local language compile pipeline.
 bool isTypeForLocal(const RE * re) {
     if (const Name * n = dyn_cast<Name>(re)) {
-        return isTypeForLocal(n->getDefinition());
+        if (LLVM_LIKELY(n->getDefinition())) return isTypeForLocal(n->getDefinition());
     } else if (const Alt * alt = dyn_cast<Alt>(re)) {
         for (const RE * re : *alt) {
             if (!isTypeForLocal(re)) {
@@ -360,7 +359,11 @@ bool hasAssertion(const RE * re) {
     if (isa<CC>(re) || isa<Any>(re)) {
         return false;
     } else if (const Name * n = dyn_cast<Name>(re)) {
-        return hasAssertion(n->getDefinition());
+        if (LLVM_LIKELY(n->getDefinition())) {
+            return hasAssertion(n->getDefinition());
+        } else {
+            return false;
+        }
     } else if (const Alt * alt = dyn_cast<Alt>(re)) {
         for (const RE * re : *alt) {
             if (hasAssertion(re)) return true;
@@ -427,7 +430,7 @@ void ByteTestComplexity::gatherTests(RE * re) {
             if (testCount > testLimit) return;
         }
     } else if (const Name * n = dyn_cast<Name>(re)) {
-        gatherTests(n->getDefinition());
+        if (LLVM_LIKELY(n->getDefinition())) gatherTests(n->getDefinition());
     } else if (const Alt * alt = dyn_cast<Alt>(re)) {
         for (RE * item : *alt) {
             gatherTests(item);
@@ -578,7 +581,9 @@ bool DefiniteLengthBackReferencesOnly(const RE * re) {
     } else if (const Group * g = dyn_cast<Group>(re)) {
         return DefiniteLengthBackReferencesOnly(g->getRE());
     } else if (const Name * n = dyn_cast<Name>(re)) {
-        return DefiniteLengthBackReferencesOnly(n->getDefinition());
+        if (n->getDefinition()) {
+            return DefiniteLengthBackReferencesOnly(n->getDefinition());
+        }
     } else if (const Capture * c = dyn_cast<Capture>(re)) {
         return DefiniteLengthBackReferencesOnly(c->getCapturedRE());
     } else if (const Reference * r = dyn_cast<Reference>(re)) {
@@ -622,7 +627,7 @@ unsigned grepOffset(const RE * re) {
     } else if (const Group * g = dyn_cast<Group>(re)) {
         return grepOffset(g->getRE());
     } else if (const Name * n = dyn_cast<Name>(re)) {
-        return grepOffset(n->getDefinition());
+        if (LLVM_LIKELY(n->getDefinition())) return grepOffset(n->getDefinition());
     } else if (const Capture * c = dyn_cast<Capture>(re)) {
         return grepOffset(c->getCapturedRE());
     }

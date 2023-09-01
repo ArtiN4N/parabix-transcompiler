@@ -387,6 +387,7 @@ if (GENERATE_TOOLS)
     add_subdirectory(tools/ztf8)
     add_subdirectory(tools/util)
     add_subdirectory(tools/csv)
+    add_subdirectory(tools/csv_validator)
 endif()
 
 # Kernel Tests

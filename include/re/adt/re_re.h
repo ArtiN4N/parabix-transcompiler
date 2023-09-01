@@ -30,6 +30,7 @@ public:
         , Range
         , Diff
         , End
+        , ExternalPropertyName
         , Intersect
         , Name
         , PropertyExpression

@@ -503,6 +503,11 @@ void PipelineCompiler::buildKernelCallArgumentList(BuilderRef b, ArgVec & args) 
 
     }
 
+    if (args.size() != mKernelDoSegmentFunctionType->getNumParams()) {
+        errs() << mKernel->getName() << " expected " << mKernelDoSegmentFunctionType->getNumParams()
+               << " arguments but only got " << args.size() << "\n";
+    }
+
     assert (args.size() == mKernelDoSegmentFunctionType->getNumParams());
 }
 
