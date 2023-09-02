@@ -40,6 +40,7 @@
 #include <re/adt/re_name.h>
 #include <re/compile/re_compiler.h>
 #include <grep/grep_kernel.h>
+#include <re/transforms/re_memoizing_transformer.h>
 #include <grep/regex_passes.h>
 #ifdef ENABLE_PAPI
 #include <util/papi_helper.hpp>
@@ -140,11 +141,6 @@ void CSVDataParser::generatePabloMethod() {
     PabloAST * recordMarks = pb.createOr(pb.createAnd(csvMarks[markLF], unquoted), csvMarks[markEOF]);
     PabloAST * fieldMarks = pb.createOr(pb.createAnd(csvMarks[markComma], unquoted), recordMarks);
 
-    // should field / record marks be part of the data? they'd indicate a different sort of RE marker
-//    PabloAST * marks = pb.createOr(dquote, pb.createOr(fieldMarks, recordMarks));
-
-
-
     PabloAST * fieldData = pb.createOr(pb.createNot(dquote), escaped_quote);
     // TODO: is this UTF indexing needed?
     PabloAST * utfIndex = pb.createExtract(getInputStreamVar("UTFindex"), pb.getInteger(0));
@@ -161,383 +157,98 @@ void CSVDataParser::generatePabloMethod() {
 
 }
 
-#if 0
-
-class StructureIdentifier final: public pablo::PabloKernel {
-public:
-    StructureIdentifier(BuilderRef b, StreamSet * const text, StreamSet * const breaks, StreamSet * const deletionFollowsMask);
-protected:
-    void generatePabloMethod() override;
-private:
-    std::vector<char> Quotes = {'"', '\''};
-    std::vector<char> FieldBreak = {','};
-    std::vector<char> RecordBreak = {'\n'};
-    std::vector<char> Escape = {'\\'};
-};
-
-StructureIdentifier::StructureIdentifier (BuilderRef b, StreamSet * const text, StreamSet * const breaks, StreamSet * const deletionFollowsMask)
-: PabloKernel(b, "csv_structure", // make name depend on options
-    {Bind("text", text)},
-    {Bind("breaks", breaks), Bind("deletionFollows", deletionFollowsMask)},
-    {},
-    {}) {
-    assert (breaks->getNumElements() == 2);
-    assert (deletionFollowsMask->getNumElements() == 1);
-}
-
-void StructureIdentifier::generatePabloMethod() {
-    PabloBuilder pb(getEntryScope());
-    Parabix_CC_Compiler_Builder ccc(getEntryScope(), getInputStreamSet("text"));
-
-
-    const auto n = Quotes.size();
-
-    std::vector<Var *> quoteMark(n);
-
-    for (unsigned i = 0; i < n; ++i) {
-        quoteMark[i] = pb.createVar("q", ccc.compileCC(re::makeByte(Quotes[i])));
-    }
-
-    PabloAST * alternatingZeroOne = pb.createRepeat(1, pb.getInteger(0b10101010, 8));
-    PabloAST * alternatingOneZero = pb.createNot(alternatingZeroOne);
-
-    PabloAST * zeroes = pb.createZeroes();
-
-    bool hasEscapeChar = !strictRFC4180;
-
-
-    std::vector<Var *> followsFilteredChar(n + (hasEscapeChar ? 1 : 0));
-
-    auto identifyMarkAfterOddLengthRuns = [&](PabloBuilder & it, PabloAST * first, PabloAST * span, const unsigned index) -> PabloAST * {
-        PabloAST * negFirst = it.createAnd(first, alternatingZeroOne);
-        PabloAST * markAfterNegRun = it.createScanThru(negFirst, span);        
-        PabloAST * markAfterOddLengthNegRun = it.createAnd(markAfterNegRun, alternatingOneZero);
-
-        PabloAST * negMarked = it.createIntrinsicCall(pablo::Intrinsic::SpanUpTo, {negFirst, it.createNot(span)});
-        negMarked = it.createAnd(negMarked, alternatingOneZero);
-
-        PabloAST * posFirst = it.createAnd(first, alternatingOneZero);
-        PabloAST * markAfterPosRun = it.createScanThru(posFirst, span);
-        PabloAST * markAfterOddLengthPosRun = it.createAnd(markAfterPosRun, alternatingZeroOne);
-
-        PabloAST * posMarked = it.createIntrinsicCall(pablo::Intrinsic::SpanUpTo, {posFirst, it.createNot(span)});
-        posMarked = it.createAnd(posMarked, alternatingZeroOne);
-
-        // Although not permited by RFC 4180, suppose both ' and " are valid quote characters.  If we mark
-        // all of the open/close quotes and escape characters for deletion, we run into a problem. Ideally,
-        // we want:
-
-        //     TEXT = ''''     TEXT='"'''     TEXT=' "'' '      TEXT='""',"''"
-        //            ^ ^           ^ ^ ^          ^  ^  ^           ^  ^ ^  ^
-
-        // But we don't have enough information to decide that here. The best we can do is try and decide
-        // which characters we may want to keep, filter out the false matches, and do a lookahead later.
-        // Thus we end up with something like:
-
-        //     TEXT = ''''     TEXT='"'''     TEXT=' "'' '      TEXT='""',"''"
-        //             ^ ^           ^*^ ^          ^ *^  ^           ^ *^ ^ *^
-
-
-        Var * var = pb.createVar("followsFiltered", zeroes);
-        followsFilteredChar[index] = var;
-        it.createAssign(var, it.createOr(negMarked, posMarked));
-
-        return it.createOr(markAfterOddLengthNegRun, markAfterOddLengthPosRun);
-    };
-
-    auto compileCC =[&](const std::vector<char> & CCs) -> PabloAST * {
-        assert (!CCs.empty());
-        CC * cc = re::makeByte(CCs[0]);
-        for (unsigned i = 1; i < n; ++i) {
-            cc->insert(CCs[i]);
-        }
-        return ccc.compileCC(cc);
-    };
-
-    if (!Escape.empty()) {
-        PabloAST * escapeMark = compileCC(Escape);
-
-        auto it = pb.createScope();
-        pb.createIf(escapeMark, it);
-
-        // Look through runs of ///...// to see if there are an odd number of them. If so, the char after
-        // the last one is escaped out.
-
-        PabloAST * first = it.createAnd(it.createNot(it.createAdvance(escapeMark, 1)), escapeMark);
-        PabloAST * nonEscapedChars = it.createNot(identifyMarkAfterOddLengthRuns(it, first, escapeMark, n));
-
-        for (unsigned i = 0; i < n; ++i) {
-            PabloAST * q = it.createAnd(quoteMark[i], nonEscapedChars);
-            it.createAssign(quoteMark[i], q);
-        }
-
-    }
-
-    std::vector<Var *> followsQuote(n);
-    std::vector<Var *> advancedQuote(n);
-    for (unsigned i = 0; i < n; ++i) {
-        followsQuote[i] = pb.createVar("followsQuote", zeroes);
-        advancedQuote[i] = pb.createVar("advQuote", zeroes);
-    }
-
-    Var * allQuoteFollows = pb.createVar("allFollows", zeroes);
-
-    for (unsigned i = 0; i < n; ++i) {
-        // similar to above, we want to filter out adjacent quote marks. Unlike the / escapes, we will end up being
-        // one position after the quote we're interested in. So if we have:
-
-        // TEXT     = """ """""
-        // QM       = ...1.....1
-
-        // Ideal QM = 1.......1.
-
-        // This is problematic since what we consider the actual quote mark as opposed to the position after mark
-        // is dependent on whether we're starting or closing a mark span. We fix that in a subsequent stage
-        // by and only focus on finding the non-escaped quote marks
-
-        auto quoteScope = pb.createScope();
-        PabloAST * q = quoteMark[i];
-        pb.createIf(q, quoteScope);
-        PabloAST * advQ = quoteScope.createAdvance(q, 1);
-        quoteScope.createAssign(advancedQuote[i], advQ);
-
-        PabloAST * first = quoteScope.createAnd(quoteScope.createNot(advQ), q);
-        quoteScope.createAssign(followsQuote[i], identifyMarkAfterOddLengthRuns(quoteScope, first, q, i));
-        quoteScope.createAssign(allQuoteFollows, quoteScope.createOr(first, followsQuote[i]));
-    }
-
-    // Although not permited by RFC 4180, suppose both ' and " are valid quote characters. We may have
-    // TEXT pattern such as '"""' , which should be considered a field of three double quotes. A more
-    // problematic example would be "'",'"''' .
-
-    // To consider "mixed" runs like that, we need to iterate sequentially through spans to decide what
-    // type of span the "outermost" one is and remove any non-matching follows that precede the next
-    // non-escaped matching one.
-
-    // TODO: check if we have any mixed types. even if the validator supports multiple quote mark types
-    // its unlikely that a document mixes them this pathelogical fashion.
-
-    // ----------------------------------------------------------------------------------------------
-
-    std::vector<Var *> followStarts(n);
-    std::vector<Var *> followEnds(n);
-    for (unsigned i = 0; i < n; ++i) {
-        followStarts[i] = pb.createVar("starts", zeroes);
-        followEnds[i] = pb.createVar("ends", zeroes);
-    }
-
-    // get the first unprocessed follows? better than doing the insert first trick and scanning through to "here"?
-    PabloAST * start = pb.createNot(pb.createAdvance(pb.createNot(zeroes), 1));
-    PabloAST * first = pb.createScanTo(start, allQuoteFollows);
-
-    Var * anyOpener = pb.createVar("anyOpener", first);
-
-    // TODO: once identified, we probably no longer need to distinguish between quote type
-
-    auto filterScope = pb.createScope();
-    pb.createWhile(anyOpener, filterScope);
-    // ----------------------------------------------------------------------------------------------
-    Var * next = filterScope.createVar("next", zeroes);
-    for (unsigned i = 0; i < n; ++i) {
-        auto check = filterScope.createScope();
-        PabloAST * s = filterScope.createAnd(first, followsQuote[i]);
-        pb.createIf(s, check);
-        // ----------------------------------------------------------------------------------------------
-
-        // NOTE: to avoid the potential clean up problem of "'","'" we only store the start and end
-        // positions rather than the full span mask here. We later clean those out without worrying
-        // about them crossing over multiple fields.
-
-        PabloAST * t = check.createAdvanceThenScanTo(s, followsQuote[i]);
-        check.createAssign(followStarts[i], check.createOr(followStarts[i], s));
-        check.createAssign(followEnds[i], check.createOr(followEnds[i], t));
-
-        check.createAssign(next, t);
-        // ----------------------------------------------------------------------------------------------
-    }
-    PabloAST * nextOpener = filterScope.createAdvanceThenScanTo(next, allQuoteFollows);
-    filterScope.createAssign(anyOpener, nextOpener);
-    // ----------------------------------------------------------------------------------------------
-
-    Var * unquoted = pb.createVar("unquotedText", pb.createNot(zeroes));
-
-    for (unsigned i = 0; i < n; ++i) {
-        auto check = pb.createScope();
-        pb.createIf(followStarts[i], check);
-        // ----------------------------------------------------------------------------------------------
-        PabloAST * spans = check.createIntrinsicCall(pablo::Intrinsic::SpanUpTo, {followStarts[i], followEnds[i]});
-        PabloAST * unfiltered = check.createNot(spans);
-        // remove any deletion follows from streams that are enclosed by a different type of quotes
-        for (unsigned j = 0; j < i; ++j) {
-            Var * f = followsFilteredChar[j];
-            check.createAssign(f, check.createAnd(f, unfiltered));
-        }
-        for (unsigned j = i + 1; j < n; ++j) {
-            Var * f = followsFilteredChar[j];
-            check.createAssign(f, check.createAnd(f, unfiltered));
-        }
-        check.createAssign(unquoted, check.createAnd(unquoted, unfiltered));
-        // ----------------------------------------------------------------------------------------------
-    }
-
-    Var * breaks = getOutput(0);
-    PabloAST * fieldBreakChars = compileCC(FieldBreak);
-    pb.createAssign(pb.createExtract(breaks, 0), pb.createAnd(fieldBreakChars, unquoted));
-
-    PabloAST * recordBreakChars = compileCC(RecordBreak);
-    pb.createAssign(pb.createExtract(breaks, 1), pb.createAnd(recordBreakChars, unquoted));
-
-    Var * f = followsFilteredChar[0];
-
-    for (unsigned i = 1; i < followsFilteredChar.size(); ++i) {
-        pb.createAssign(f, pb.createOr(f, followsFilteredChar[i]));
-    }
-
-    Var * deletion = getOutput(1);
-    pb.createAssign(pb.createExtract(deletion, 0), f);
-}
-
-class PullBackOne final: public pablo::PabloKernel {
-public:
-    PullBackOne(BuilderRef b, StreamSet * const input, StreamSet * const output);
-protected:
-    void generatePabloMethod() override;
-};
-
-PullBackOne::PullBackOne (BuilderRef b, StreamSet * const input, StreamSet * const output)
-: PabloKernel(b, "csv_structure", // make name depend on options
-    {Bind("input", input, LookAhead(1))},
-    {Bind("output", output)},
-    {},
-    {}) {
-    assert (input->getNumElements() == 1);
-    assert (output->getNumElements() == 1);
-    addAttribute(SideEffecting());
-}
-
-void PullBackOne::generatePabloMethod() {
-    PabloBuilder pb(getEntryScope());
-    pb.createAssign(pb.createExtract(getOutput(0), 0), pb.createLookahead(getInput(0), 1));
-}
-
-#endif
-
 typedef void (*CSVValidatorFunctionType)(uint32_t fd, const char * fileName);
 
-#if 0
-
-WordCountFunctionType wcPipelineGen(CPUDriver & pxDriver) {
-
-    auto & iBuilder = pxDriver.getBuilder();
-
-    Type * const int32Ty = iBuilder->getInt32Ty();
-
-    auto P = pxDriver.makePipeline({Binding{int32Ty, "fd"}});
-
-    Scalar * const fileDescriptor = P->getInputScalar("fd");
-
-    StreamSet * const ByteStream = P->CreateStreamSet(1, 8);
-
-    P->CreateKernelCall<ReadSourceKernel>(fileDescriptor, ByteStream);
-
-    auto BasisBits = P->CreateStreamSet(8, 1);
-    P->CreateKernelCall<S2PKernel>(ByteStream, BasisBits);
-
-
-
-    auto breaks = P->CreateStreamSet(2, 1);
-    auto delFollows = P->CreateStreamSet(1, 1);
-
-    P->CreateKernelCall<StructureIdentifier>(BasisBits, breaks, delFollows);
-
-
-    auto deletions = P->CreateStreamSet(1, 1);
-    P->CreateKernelCall<PullBackOne>(delFollows, deletions);
-
-    // Do we need to delete all the data from the basis bits and derived streams? It might be better
-    // if we can treat them as skippable characters in the RE matchers. It would be easy to have optional
-    // quote starts but if we don't enforce that a field is either quoted or unquoted entirely (e.g.,
-    // treat "123"45"67" as illegal, as per RFC 4180), then this becomes far more difficult. Further,
-    // if we allow explicit escaped chars using / instead of only considering "", then we'd have
-    // to fall back to deleting all of them.
-
-    return reinterpret_cast<WordCountFunctionType>(P->compile());
-}
-
-#endif
+struct CSVSchemaDefinition {
+    std::vector<RE *> Validator;
+    std::vector<unsigned> FieldValidatorIndex;
+};
 
 class CSVSchemaValidatorKernel : public pablo::PabloKernel {
 public:
-    CSVSchemaValidatorKernel(BuilderRef b, RE * schema, StreamSet * basisBits, StreamSet * recordSeperators, StreamSet * fieldMarkers, StreamSet * invalid);
+    CSVSchemaValidatorKernel(BuilderRef b, CSVSchemaDefinition schema, StreamSet * basisBits, StreamSet * recordSeperators, StreamSet * fieldMarkers, StreamSet * invalid);
     llvm::StringRef getSignature() const override;
     bool hasSignature() const override { return true; }
 
 protected:
-    CSVSchemaValidatorKernel(BuilderRef b, RE * schema, std::string signature, StreamSet * basisBits, StreamSet * recordSeperators, StreamSet * fieldMarkers, StreamSet * invalid);
+    CSVSchemaValidatorKernel(BuilderRef b, CSVSchemaDefinition && schema, std::string signature, StreamSet * basisBits, StreamSet * recordSeperators, StreamSet * fieldMarkers, StreamSet * invalid);
     void generatePabloMethod() override;
 private:
     static std::string makeSignature(const std::vector<RE *> & fields);
 private:
-    RE * const                          mSchema;
+    CSVSchemaDefinition                 mSchema;
     std::string                         mSignature;
 
 };
 
-const static std::string FieldSepName = ":";
+CSVSchemaDefinition parseSchemaFile() {
+    CSVSchemaDefinition Def;
 
-RE * parseSchemaFile() {
-    RE * parsedSchema = nullptr;
-    std::vector<RE *> fields;
     std::ifstream schemaFile(inputSchema);
     if (LLVM_LIKELY(schemaFile.is_open())) {
+
+        RE_MemoizingTransformer memo("memoizer");
+
         std::string line;
-        Name * fs = nullptr;
+
+        boost::container::flat_map<RE *, unsigned> M;
+
         while(std::getline(schemaFile, line)) {
-            RE_Parser::parse(line);
-            RE * delim = nullptr;
-            if (fs == nullptr) {
-                fs = makeName(FieldSepName);
-                fs->setDefinition(makeAny()); // ExternalPropertyName::Create(FieldSepName.c_str()));
-                delim = makeStart();
-            } else {
-                delim = fs;
-            }
-            assert (delim);
-            fields.push_back(delim);
-            RE * const field = RE_Parser::parse(line);
+            RE * const original = RE_Parser::parse(line);
+            assert (original);
+            RE * const field = regular_expression_passes(memo.transformRE(original));
             assert (field);
-            fields.push_back(field);
+            auto f = M.find(field);
+            unsigned index = 0;
+            if (f == M.end()) {
+                index = M.size();
+                M.emplace(field, index);
+            } else {
+                index = f->second;
+            }
+            Def.FieldValidatorIndex.push_back(index);
         }
         schemaFile.close();
-        fields.push_back(makeEnd());
-        for (auto r : fields) {
-            assert (r);
+
+        Def.Validator.resize(M.size());
+        for (auto p : M) {
+            Def.Validator[p.second] = p.first;
         }
-        parsedSchema = makeSeq(fields.begin(), fields.end());
-        // TODO: ideally we want to "reuse" the equations for fields with the same validation RE. Instead of making
-        // a single big RE here, make separate ones. Can we automatically contract a sequence of the same RE into a range?
-        assert (parsedSchema);
-        parsedSchema = regular_expression_passes(parsedSchema);
+
     } else {
         report_fatal_error("Cannot open schema: " + inputSchema);
     }
-    return parsedSchema;
+    return Def;
 }
 
+std::string makeCSVSchemaDefinitionName(const CSVSchemaDefinition & schema) {
+    std::string tmp;
+    tmp.reserve(1024);
+    raw_string_ostream out(tmp);
+    out.write_hex(schema.FieldValidatorIndex[0]);
+    for (unsigned i = 1; i < schema.FieldValidatorIndex.size(); ++i) {
+        out << ':';
+        out.write_hex(schema.FieldValidatorIndex[i]);
+    }
+    for (const RE * re : schema.Validator) {
+        out << '\0' << Printer_RE::PrintRE(re);
+    }
+    out.flush();
+    return tmp;
+}
 
-CSVSchemaValidatorKernel::CSVSchemaValidatorKernel(BuilderRef b, RE * schema, StreamSet * basisBits, StreamSet * recordSeperators, StreamSet * fieldMarkers, StreamSet * invalid)
-: CSVSchemaValidatorKernel(b, schema, Printer_RE::PrintRE(schema), basisBits, recordSeperators, fieldMarkers, invalid) {
+CSVSchemaValidatorKernel::CSVSchemaValidatorKernel(BuilderRef b, CSVSchemaDefinition schema, StreamSet * basisBits, StreamSet * recordSeperators, StreamSet * fieldMarkers, StreamSet * invalid)
+: CSVSchemaValidatorKernel(b, std::move(schema), makeCSVSchemaDefinitionName(schema), basisBits, recordSeperators, fieldMarkers, invalid) {
 
 }
 
-CSVSchemaValidatorKernel::CSVSchemaValidatorKernel(BuilderRef b, RE * schema, std::string signature, StreamSet * basisBits, StreamSet * recordSeperators, StreamSet * fieldMarkers, StreamSet * invalid)
+CSVSchemaValidatorKernel::CSVSchemaValidatorKernel(BuilderRef b, CSVSchemaDefinition && schema, std::string signature, StreamSet * basisBits, StreamSet * recordSeperators, StreamSet * fieldMarkers, StreamSet * invalid)
 : PabloKernel(b, "csvv" + getStringHash(signature),
     {Binding{"basisBits", basisBits}, Binding{"recordSeperators", recordSeperators}, Binding{"fieldMarkers", fieldMarkers}},
     {Binding{"invalid", invalid}})
 , mSchema(schema)
 , mSignature(std::move(signature)) {
     addAttribute(InfrequentlyUsed());
-    assert (mSchema);
 }
 
 
@@ -561,12 +272,34 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
     Var * const fieldSeps = pb.createExtract(fieldMarkers, pb.getInteger(FieldSeperator));
     assert (fieldSeps->getType() == getStreamTy());
 
-    re_compiler.addPrecompiled(FieldSepName, RE_Compiler::ExternalStream(RE_Compiler::Marker(fieldSeps, 0), std::make_pair<int,int>(1, 1)));
+ //   re_compiler.addPrecompiled(FieldSepName, RE_Compiler::ExternalStream(RE_Compiler::Marker(fieldSeps, 0), std::make_pair<int,int>(1, 1)));
 
-    RE_Compiler::Marker matches = re_compiler.compileRE(mSchema);
-    errs() << "matches.offset=" << matches.offset() << "\n";
+    // TODO: if the number of validators equals the number of fields, just scan sequentially? We expect everything to be valid but if the
+    // total schema length is "long", we won't necessarily be starting a new record every block. Can we "break up" the validation checks to
+    // test if we should scan through a chunk of them based on the current position?
+
+    const auto & validators = mSchema.Validator;
+    std::vector<PabloAST *> matches(validators.size());
+    for (unsigned i = 0; i < validators.size(); ++i) {
+        RE_Compiler::Marker match = re_compiler.compileRE(validators[i]);
+        matches[i] = match.stream();
+    }
+
+    PabloAST * const mask = pb.createNot(pb.createOr(fieldSeps, recordSeperators), "mask");
+
+    RE_Compiler::Marker startMatch = re_compiler.compileRE(makeStart());
+    PabloAST * const allStarts = startMatch.stream();
+
+    const auto & fields = mSchema.FieldValidatorIndex;
+
+    PabloAST * currentPos = allStarts;
+    for (unsigned i = 0; i < fields.size(); ++i) {
+        currentPos = pb.createAdvanceThenScanThru(currentPos, mask);
+        currentPos = pb.createAnd(currentPos, matches[fields[i]]);
+    }
+    PabloAST * result = pb.createXor(currentPos, recordSeperators, "result");
+
     Var * const output = pb.createExtract(getOutputStreamVar("invalid"), pb.getInteger(0));
-    PabloAST * result = pb.createXor(matches.stream(), recordSeperators, "result");
     pb.createAssign(output, result);
 
 }
@@ -577,7 +310,7 @@ extern "C" void accumulate_match_wrapper(char * fileName, const size_t lineNum, 
     raw_string_ostream out(tmp);
     out << "Error found in " << fileName << ':' << lineNum;
     // TODO: this needs to report more information as to what field/rule was invalid
-    throw std::runtime_error(out.str());
+    report_fatal_error(out.str());
 }
 
 extern "C" void finalize_match_wrapper(char * fileName, char * buffer_end) {
