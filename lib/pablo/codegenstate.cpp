@@ -73,7 +73,6 @@ EveryNth * PabloBlock::createEveryNth(PabloAST * const expr, Integer * n, const 
 
 Not * PabloBlock::createNot(PabloAST * expr, const String * const name) {
     assert (expr);
-    assert (expr->getType() == getParent()->getStreamTy());
     return insertAtInsertionPoint(new (mAllocator) Not(expr, name, mAllocator));
 }
 

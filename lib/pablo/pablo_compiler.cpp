@@ -751,7 +751,12 @@ void PabloCompiler::compileStatement(BuilderRef b, const Statement * const stmt)
                     {
                         SmallVector<char, 256> tmp;
                         raw_svector_ostream out(tmp);
-                        PabloPrinter::print(cast<PabloAST>(stmt), out);
+                        const PabloAST * nameObj = stmt;
+                        PabloAST * const arg = call->getOperand(0);
+                        if (LLVM_LIKELY(isa<NamedPabloAST>(arg))) {
+                             nameObj = arg;
+                        }
+                        PabloPrinter::print(nameObj, out);
                         b->CallPrintRegister(out.str(), argv[0]);
                     }
                     value = argv[0];
