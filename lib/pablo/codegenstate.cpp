@@ -24,6 +24,7 @@
 #include <pablo/pe_pack.h>
 #include <pablo/pe_repeat.h>
 #include <pablo/pe_scanthru.h>
+#include <pablo/pe_spanafterfirst.h>
 #include <pablo/pe_string.h>
 #include <pablo/pe_var.h>
 #include <pablo/pe_zeroes.h>
@@ -104,6 +105,11 @@ TerminateAt * PabloBlock::createTerminateAt(PabloAST * strm, Integer *  code, co
 DebugPrint * PabloBlock::createDebugPrint(PabloAST * expr, const String * const name) {
     assert (expr);
     return insertAtInsertionPoint(new (mAllocator) DebugPrint(expr, name, mAllocator));
+}
+
+SpanAfterFirst * PabloBlock::createSpanAfterFirst(PabloAST * expr, const String * const name) {
+    assert (expr);
+    return insertAtInsertionPoint(new (mAllocator) SpanAfterFirst(expr, name, mAllocator));
 }
 
 /// BINARY CREATE FUNCTIONS

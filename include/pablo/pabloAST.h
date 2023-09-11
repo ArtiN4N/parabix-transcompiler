@@ -89,6 +89,7 @@ public:
         , AtEOF
         , TerminateAt
         , EveryNth
+        , SpanAfterFirst
         // Statistics operations
         , Count
         // Variable assignments
@@ -336,6 +337,7 @@ public:
             case PabloAST::ClassTypeId::ScanTo:
             case PabloAST::ClassTypeId::AdvanceThenScanTo:
             case PabloAST::ClassTypeId::MatchStar:
+            case PabloAST::ClassTypeId::SpanAfterFirst:
                 return true;
             default: return false;
         }

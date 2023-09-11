@@ -43,6 +43,7 @@
 #include <re/transforms/re_memoizing_transformer.h>
 #include <grep/regex_passes.h>
 #include <boost/intrusive/detail/math.hpp>
+#include <kernel/util/bixhash.h>
 #include <llvm/IR/Verifier.h>
 #ifdef ENABLE_PAPI
 #include <util/papi_helper.hpp>
@@ -59,10 +60,6 @@ static cl::OptionCategory wcFlags("Command Flags", "csv validator options");
 static cl::opt<std::string> inputSchema(cl::Positional, cl::desc("<input schema filename>"), cl::Required, cl::cat(wcFlags));
 
 static cl::list<std::string> inputFiles(cl::Positional, cl::desc("<input file ...>"), cl::OneOrMore, cl::cat(wcFlags));
-
-
-constexpr int ScanMatchBlocks = 4;
-
 
 std::vector<fs::path> allFiles;
 
@@ -126,7 +123,7 @@ public:
 protected:
     void generatePabloMethod() override;
 private:
-    const bool mDeleteHeader = false;
+    const bool mDeleteHeader = true;
 };
 
 void CSVDataParser::generatePabloMethod() {
@@ -148,18 +145,19 @@ void CSVDataParser::generatePabloMethod() {
     PabloAST * CRofCRLF = pb.createAnd(csvMarks[markCR], pb.createLookahead(csvMarks[markLF], 1));
 
     PabloAST * formattingQuotes = pb.createXor(dquote, escaped_quote);
-    PabloAST * nonText = pb.createOr3(formattingQuotes, CRofCRLF, recordSeparators);
-    // PabloAST * nonText = pb.createOr(formattingQuotes, CRofCRLF);
-    PabloAST * fieldData = pb.createNot(nonText);
-    if (mDeleteHeader) {
-        PabloAST * afterHeader = pb.createMatchStar(pb.createAdvance(recordSeparators, 1), pb.createOnes(), "afterHeader");
-        fieldData = pb.createAnd(fieldData, afterHeader);
-        allSeparators = pb.createAnd(allSeparators, afterHeader);
-        recordSeparators = pb.createAnd(recordSeparators, afterHeader);
-    }
+    // PabloAST * nonText = pb.createOr3(formattingQuotes, CRofCRLF, recordSeparators);
+    PabloAST * nonText = pb.createOr(formattingQuotes, CRofCRLF);
     PabloAST * utfIndex = pb.createExtract(getInputStreamVar("UTFindex"), pb.getInteger(0));
-    fieldData = pb.createAnd(fieldData, utfIndex);
-
+    PabloAST * fieldData = pb.createAnd(utfIndex, pb.createNot(nonText));
+    if (mDeleteHeader) {
+        // PabloAST * afterHeader = pb.createMatchStar(pb.createAdvance(recordSeparators, 1), pb.createOnes(), "afterHeader");
+        // pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {afterHeader} );
+        PabloAST * afterHeader2 = pb.createSpanAfterFirst(recordSeparators, "afterHeader");
+        // pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {afterHeader2} );
+        fieldData = pb.createAnd(fieldData, afterHeader2);
+        allSeparators = pb.createAnd(allSeparators, afterHeader2);
+        recordSeparators = pb.createAnd(recordSeparators, afterHeader2);
+    }
     pb.createAssign(pb.createExtract(getOutputStreamVar("fieldData"), pb.getInteger(0)), fieldData);
     pb.createAssign(pb.createExtract(getOutputStreamVar("recordSeparators"), pb.getInteger(0)), recordSeparators);
     pb.createAssign(pb.createExtract(getOutputStreamVar("allSeperators"), pb.getInteger(0)), allSeparators);
@@ -319,7 +317,7 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
     PabloAST * allSeparatorsMatches = nullptr;
 
     PabloAST * const nonSeparators = pb.createNot(allSeperators, "nonSeperators");
-    PabloAST * const nonRecordSeparators = pb.createNot(recordSeperators, "nonRecordSeparators");
+    PabloAST * const fieldSeparators = pb.createXor(allSeperators, recordSeperators, "fieldSeparators");
 
     const auto n = fields.size();
 
@@ -327,10 +325,11 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
         currentPos = pb.createAdvanceThenScanThru(currentPos, nonSeparators, "currentPos" + std::to_string(i + 1));
         currentPos = pb.createAnd(currentPos, matches[fields[i]], "field" + std::to_string(i + 1));
         if (i < (n - 1)) {
-            currentPos = pb.createAnd(currentPos, nonRecordSeparators);
+            currentPos = pb.createAnd(currentPos, fieldSeparators, "matchedFieldSep" + std::to_string(i + 1));
         } else {
-            currentPos = pb.createAnd(currentPos, recordSeperators);
+            currentPos = pb.createAnd(currentPos, recordSeperators, "matchedRecSep");
         }
+
         if (allSeparatorsMatches) {
             allSeparatorsMatches = pb.createOr(allSeparatorsMatches, currentPos);
         } else {
@@ -340,9 +339,7 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
 
 
     PabloAST * result = pb.createXor(allSeparatorsMatches, allSeperators, "result");
-
-    Var * const output = pb.createExtract(getOutputStreamVar("invalid"), pb.getInteger(0));
-    pb.createAssign(output, result);
+    pb.createAssign(pb.createExtract(getOutputStreamVar("invalid"), pb.getInteger(0)), result);
 
 }
 
@@ -350,16 +347,16 @@ static bool foundError = false;
 
 extern "C" void csv_error_identifier_callback(char * fileName, const size_t fieldNum, char * start, char * end) {
     foundError = true;
-    std::string tmp;
-    tmp.reserve(256);
-
-
-
-    raw_string_ostream out(tmp);
+    SmallVector<char, 1024> tmp;
+    raw_svector_ostream out(tmp);
     assert (NumOfFields > 0);
     const auto n = std::max<size_t>(NumOfFields, 1);
     out << "Error found in " << fileName << ": Field " << ((fieldNum % n) + 1) << " of Line " << ((fieldNum / n) + 1)
-        << '\n' << StringRef{start, (size_t)(end - start) + 1UL} << " does not match supplied rule.";
+        << '\n';
+    for (auto c = start; c < end; ++c) {
+        out << *c;
+    }
+    out << " does not match supplied rule.";
     // TODO: this needs to report more information as to what field/rule was invalid
     errs() << out.str();
 }
@@ -431,8 +428,6 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
 
     BasicBlock * const checkForNextFullStride = b->CreateBasicBlock("checkForNextFullStride");
 
-
-
     BasicBlock * const exit = b->CreateBasicBlock("exit");
 
     Value * const byteStreamProcessed = b->getProcessedItemCount("InputStream");
@@ -479,7 +474,6 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
     }
 
     anyError = b->bitblock_any(anyError);
-
     b->CreateUnlikelyCondBr(anyError, errorOrFinalPartialStrideStart, noErrorFoundFull);
 
     // -------------------------------------
@@ -524,12 +518,10 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
     PHINode * separatorPartialSumPhi = b->CreatePHI(sizeVecTy, 2);
     separatorPartialSumPhi->addIncoming(ConstantVector::getNullValue(sizeVecTy), findErrorIndexFound);
 
-    Value * fieldValue = b->loadInputStreamBlock("allSeparators", i32_ZERO, preErrorStrideIndexPhi);
+    Value * allSeparators = b->loadInputStreamBlock("allSeparators", i32_ZERO, preErrorStrideIndexPhi);
+    Value * lastSeparatorBeforeErrorStrideIndex = b->CreateSelect(b->bitblock_any(allSeparators), preErrorStrideIndexPhi, lastSeparatorBeforeErrorStrideIndexPhi);
 
-    Value * lastSeparatorBeforeErrorStrideIndex = b->CreateSelect(b->bitblock_any(fieldValue), preErrorStrideIndexPhi, lastSeparatorBeforeErrorStrideIndexPhi);
-
-
-    Value * const separatorPartialSum = b->simd_popcount(sizeWidth, fieldValue);
+    Value * const separatorPartialSum = b->simd_popcount(sizeWidth, allSeparators);
     Value * const nextSeparatorPartialSum = b->CreateAdd(separatorPartialSum, separatorPartialSumPhi);
 
     Value * const nextSumUpToEndIndex = b->CreateAdd(preErrorStrideIndexPhi, sz_ONE);
@@ -569,8 +561,10 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
     Value * const firstErrorWordPos = b->CreateCountForwardZeroes(firstErrorWord, "", true);
     Value * const firstErrorSeparator = b->CreateAdd(b->CreateMul(firstErrorWordIndex, sz_SIZEWIDTH), firstErrorWordPos);
     Value * const errorMask = b->CreateNot(b->bitblock_mask_from(firstErrorSeparator));
+
     Value * const unmaskedFinalValue = b->loadInputStreamBlock("allSeparators", i32_ZERO, strideIndexPhi);
     Value * const maskedFinalValue = b->CreateAnd(unmaskedFinalValue, errorMask);
+
     Value * const maskedSepVec = b->simd_popcount(sizeWidth, maskedFinalValue);
     assert (maskedSepVec->getType() == sizeVecTy);
     Value * const reportedSepVec = b->CreateAdd(maskedSepVec, updatedSeparatorPartialSumPhi);
@@ -582,9 +576,9 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
     // stream but not where it starts. We need to backtrack from the error position to find the start.
 
     Value * const potentialStartBlock = b->loadInputStreamBlock("allSeparators", i32_ZERO, updatedLastSeparatorBeforeErrorPhi);
-    Value * const startPositionInFinalValue = b->bitblock_any(maskedFinalValue);
-    Value * const priorSeparatorBlock = b->CreateBitCast(b->CreateSelect(startPositionInFinalValue, maskedFinalValue, potentialStartBlock), sizeVecTy);
+    Value * const startPositionInFinalValue = b->CreateOr(b->bitblock_any(maskedFinalValue), b->CreateICmpEQ(updatedLastSeparatorBeforeErrorPhi, sz_ZERO));
 
+    Value * const priorSeparatorBlock = b->CreateBitCast(b->CreateSelect(startPositionInFinalValue, maskedFinalValue, potentialStartBlock), sizeVecTy);
     Value * priorSeparatorWordIndex = sz_ZERO;
     for (unsigned i = 1; i < partialSumFieldCount; ++i) {
         Value * idx = b->getSize(i);
@@ -594,15 +588,20 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
     }
 
     Value * const priorSeparatorWord = b->CreateExtractElement(priorSeparatorBlock, priorSeparatorWordIndex);
+
     // If we have a field that spans the entire segment up to the error, priorSeparatorWord will be zero. However,
     // byteStreamProcessed will be set to the last separator in the previous segment so we can reuse that as our
     // start pos.
-    Value * priorSeparatorPos = b->CreateSub(sz_SIZEWIDTH, b->CreateCountReverseZeroes(priorSeparatorWord, "", false));
+
+//    Value * priorSeparatorPos = b->CreateSub(priorSeparatorPos, b->CreateCountReverseZeroes(priorSeparatorWord, "", false));
+//    priorSeparatorPos = b->CreateAdd(priorSeparatorPos, b->CreateMul(priorSeparatorWordIndex, sz_SIZEWIDTH));
+
+    Value * priorSeparatorPos = b->CreateMul(b->CreateAdd(priorSeparatorWordIndex, sz_ONE), sz_SIZEWIDTH);
+    priorSeparatorPos = b->CreateSub(priorSeparatorPos, b->CreateCountReverseZeroes(priorSeparatorWord, "", false));
     priorSeparatorPos = b->CreateSelect(b->CreateICmpEQ(priorSeparatorWord, sz_ZERO), byteStreamProcessed, priorSeparatorPos);
-
     Value * const priorSeparatorBlockIdx = b->CreateSelect(startPositionInFinalValue, strideIndexPhi, updatedLastSeparatorBeforeErrorPhi);
-    Value * const priorSeparator = b->CreateAdd(b->CreateMul(priorSeparatorBlockIdx, sz_BITBLOCKWIDTH), priorSeparatorPos);
 
+    Value * const priorSeparator = b->CreateAdd(b->CreateMul(priorSeparatorBlockIdx, sz_BITBLOCKWIDTH), priorSeparatorPos);
     callbackArgs[2] = b->getRawInputPointer("InputStream", priorSeparator);
     callbackArgs[3] = b->getRawInputPointer("InputStream", firstErrorSeparator);
 
@@ -730,8 +729,6 @@ CSVValidatorFunctionType wcPipelineGen(CPUDriver & pxDriver) {
     StreamSet * fieldData = P->CreateStreamSet(1);
     StreamSet * recordSeparators = P->CreateStreamSet(1);
     StreamSet * allSeparators = P->CreateStreamSet(1);
-
-
 
     StreamSet * u8index = P->CreateStreamSet();
     P->CreateKernelCall<UTF8_index>(BasisBits, u8index);

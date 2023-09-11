@@ -93,6 +93,10 @@ public:
 
     virtual llvm::Value * indexedAdvanceCarryInCarryOut(BuilderRef b, const IndexedAdvance * advance, llvm::Value * const strm, llvm::Value * const index_strm);
 
+    virtual llvm::Value * getNextCarryIn(BuilderRef b);
+
+    virtual void setNextCarryOut(BuilderRef b, llvm::Value * const carryOut);
+
     /* Methods for getting and setting carry summary values for If statements */
 
     virtual llvm::Value * generateEntrySummaryTest(BuilderRef b, llvm::Value * condition);
@@ -119,8 +123,6 @@ protected:
     void leaveScope();
 
     /* Methods for processing individual carry-generating operations. */
-    virtual llvm::Value * getNextCarryIn(BuilderRef b);
-    virtual void setNextCarryOut(BuilderRef b, llvm::Value * const carryOut);
     virtual llvm::Value * shortIndexedAdvanceCarryInCarryOut(BuilderRef b, const unsigned shiftAmount, llvm::Value * const strm, llvm::Value * const index_strm);
     virtual llvm::Value * longAdvanceCarryInCarryOut(BuilderRef b, llvm::Value * const value, const unsigned shiftAmount);
     virtual llvm::Value * readCarryInSummary(BuilderRef b) const;

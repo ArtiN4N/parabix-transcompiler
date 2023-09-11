@@ -26,6 +26,7 @@
 #include <pablo/pe_repeat.h>
 #include <pablo/pe_pack.h>
 #include <pablo/pe_var.h>
+#include <pablo/pe_spanafterfirst.h>
 #include <pablo/ps_assign.h>
 #include <pablo/ps_terminate.h>
 #include <pablo/carry_manager.h>
@@ -656,6 +657,58 @@ void PabloCompiler::compileStatement(BuilderRef b, const Statement * const stmt)
             } else {
                 value = b->CreateZExtOrTrunc(value, ty);
             }
+        } else if (const SpanAfterFirst * const s = dyn_cast<SpanAfterFirst>(stmt)) {
+            Value * stream = compileExpression(b, s->getExpr());
+            Value * carry = mCarryManager->getNextCarryIn(b);
+
+            Type * const carryTy = carry->getType();
+
+            if (carryTy != stream->getType()) {
+                carry = b->CreateBitCast(b->CreateZExt(carry, b->getIntNTy(b->getBitBlockWidth())), stream->getType());
+            }
+
+            IntegerType * const sizeTy = b->getSizeTy();
+            const auto n = b->getBitBlockWidth() / sizeTy->getBitWidth();
+            VectorType * vty = FixedVectorType::get(sizeTy, n);
+
+            stream = b->CreateOr(stream, b->CreateZExtOrBitCast(carry, stream->getType()));
+            stream = b->CreateBitCast(stream, vty);
+
+            SmallVector<Constant *, 32> subVal(n, b->getSize(1));
+
+            Value * const A = b->CreateSub(stream, ConstantVector::get(subVal));
+            Value * const B = b->CreateOr(b->CreateXor(b->CreateNot(A), stream), carry);
+            Constant * const zeroVec = ConstantVector::getNullValue(vty);
+
+
+
+            Value * const C = b->CreateSExt(b->CreateICmpNE(B, zeroVec), vty);
+
+            SmallVector<int, 16> Idxs(n);
+            for (unsigned i = 0; i < n; i++) {
+                Idxs[i] = (i + n - 1);
+            }
+
+            Value * const D = b->CreateShuffleVector(zeroVec, C, Idxs);
+            for (unsigned i = 0; i < n; i++) {
+                Idxs[i] = (i + n - 2);
+            }
+
+            Value * const E = b->CreateShuffleVector(zeroVec, b->CreateOr(C, D), Idxs);
+            Value * const F = b->simd_ternary(0xFE, B, D, E);
+            Value * carryOut = b->CreateICmpNE(b->CreateExtractElement(F, b->getSize(n - 1)), b->getSize(0));
+
+            if (carryTy->isIntegerTy()) {
+                carryOut = b->CreateZExt(carryOut, carryTy);
+            } else {
+                assert (carryTy == b->getBitBlockType());
+                carryOut = b->CreateZExt(carryOut, b->getIntNTy(b->getBitBlockWidth()));
+                carryOut = b->CreateBitCast(carryOut, carryTy);
+            }
+            mCarryManager->setNextCarryOut(b, carryOut);
+
+            value = b->simd_ternary(0xFE, B, E, F); // Or3
+
         } else if (const PackH * const p = dyn_cast<PackH>(stmt)) {
             const auto sourceWidth = cast<FixedVectorType>(p->getValue()->getType())->getElementType()->getIntegerBitWidth();
             const auto packWidth = p->getFieldWidth()->value();

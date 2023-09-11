@@ -185,6 +185,10 @@ public:
 
     PabloAST * createScanTo(PabloAST * from, PabloAST * to, const llvm::StringRef prefix);
 
+    PabloAST * createSpanAfterFirst(PabloAST * expr);
+
+    PabloAST * createSpanAfterFirst(PabloAST * expr, const llvm::StringRef prefix);
+
     PabloAST * createAdvanceThenScanThru(PabloAST * from, PabloAST * thru);
 
     PabloAST * createAdvanceThenScanThru(PabloAST * from, PabloAST * thru, const llvm::StringRef prefix);

@@ -8,6 +8,7 @@
 #include <pablo/pe_lookahead.h>
 #include <pablo/pe_matchstar.h>
 #include <pablo/pe_scanthru.h>
+#include <pablo/pe_spanafterfirst.h>
 #include <pablo/pe_repeat.h>
 #include <pablo/pe_pack.h>
 #include <pablo/pe_infile.h>
@@ -549,6 +550,15 @@ PabloAST * PabloBuilder::createAtEOF(PabloAST * expr) {
 
 PabloAST * PabloBuilder::createAtEOF(PabloAST * expr, const llvm::StringRef prefix) {
     return MAKE_NAMED_UNARY(AtEOF, prefix, expr);
+}
+
+
+PabloAST * PabloBuilder::createSpanAfterFirst(PabloAST * expr) {
+    return MAKE_UNARY(SpanAfterFirst, expr);
+}
+
+PabloAST * PabloBuilder::createSpanAfterFirst(PabloAST * expr, const llvm::StringRef prefix) {
+    return MAKE_NAMED_UNARY(SpanAfterFirst, prefix, expr);
 }
 
 PabloAST * PabloBuilder::createTerminateAt(PabloAST * strm, not_null<Integer *> code) {

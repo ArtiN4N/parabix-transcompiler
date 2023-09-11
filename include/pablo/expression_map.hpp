@@ -242,6 +242,7 @@ public:
         switch (typeId) {
             case TypeId::Var:
             case TypeId::Not:
+            case TypeId::SpanAfterFirst:
             case TypeId::Count: {
                     PabloAST * const expr1 = stmt->getOperand(0);
                     return mUnary.findOrAdd(stmt, typeId, expr1);

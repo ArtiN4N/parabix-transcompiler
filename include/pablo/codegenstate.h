@@ -39,6 +39,7 @@ namespace pablo { class PabloKernel; }
 namespace pablo { class PackH; }
 namespace pablo { class PackL; }
 namespace pablo { class DebugPrint; }
+namespace pablo { class SpanAfterFirst; }
 namespace pablo { class ScanThru; }
 namespace pablo { class ScanTo; }
 namespace pablo { class Sel; }
@@ -270,6 +271,12 @@ public:
     }
 
     MatchStar * createMatchStar(PabloAST * marker, PabloAST * charclass, const String * const name = nullptr);
+
+    SpanAfterFirst * createSpanAfterFirst(PabloAST * expr, const llvm::StringRef prefix) {
+        return createSpanAfterFirst(expr, makeName(prefix));
+    }
+
+    SpanAfterFirst * createSpanAfterFirst(PabloAST * expr, const String * const name = nullptr);
 
     ScanThru * createScanThru(PabloAST * from, PabloAST * thru, const llvm::StringRef prefix) {
         return createScanThru(from, thru, makeName(prefix));
