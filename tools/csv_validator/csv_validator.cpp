@@ -44,6 +44,10 @@
 #include <grep/regex_passes.h>
 #include <boost/intrusive/detail/math.hpp>
 #include <kernel/util/bixhash.h>
+#include <kernel/streamutils/deletion.h>
+#include <kernel/streamutils/pdep_kernel.h>
+#include <kernel/basis/p2s_kernel.h>
+#include <random>
 #include <llvm/IR/Verifier.h>
 #ifdef ENABLE_PAPI
 #include <util/papi_helper.hpp>
@@ -54,12 +58,15 @@ namespace fs = boost::filesystem;
 using namespace llvm;
 using namespace codegen;
 
-static cl::OptionCategory wcFlags("Command Flags", "csv validator options");
+static cl::OptionCategory wcFlags("Command Flags", "CSV Validator options");
 
 
 static cl::opt<std::string> inputSchema(cl::Positional, cl::desc("<input schema filename>"), cl::Required, cl::cat(wcFlags));
 
 static cl::list<std::string> inputFiles(cl::Positional, cl::desc("<input file ...>"), cl::OneOrMore, cl::cat(wcFlags));
+
+static cl::opt<bool> noHeaderLine("no-header", cl::desc("CSV record data begins on first line"), cl::init(false), cl::cat(wcFlags));
+
 
 std::vector<fs::path> allFiles;
 
@@ -70,7 +77,7 @@ using namespace re;
 
 using boost::intrusive::detail::floor_log2;
 
-#if 0
+#if 1
 class CSVDataLexer : public PabloKernel {
 public:
     CSVDataLexer(BuilderRef kb, StreamSet * Source, StreamSet * CSVlexical)
@@ -81,7 +88,7 @@ protected:
     void generatePabloMethod() override;
 };
 
-enum {markLF = 0, markCR = 1, markDQ = 2, markComma = 3, markEOF = 4};
+// enum {markLF = 0, markCR = 1, markDQ = 2, markComma = 3, markEOF = 4};
 
 void CSVDataLexer::generatePabloMethod() {
     pablo::PabloBuilder pb(getEntryScope());
@@ -91,8 +98,9 @@ void CSVDataLexer::generatePabloMethod() {
     PabloAST * CR = ccc->compileCC(re::makeCC(charCR, &cc::UTF8));
     PabloAST * DQ = ccc->compileCC(re::makeCC(charDQ, &cc::UTF8));
     PabloAST * Comma = ccc->compileCC(re::makeCC(charComma, &cc::UTF8));
-    PabloAST * EOFbit = pb.createAtEOF(pb.createAdvance(pb.createOnes(), 1));
+    PabloAST * EOFbit = pb.createAtEOF(pb.createOnes()); // pb.createAdvance(pb.createOnes(), 1));
     Var * lexOut = getOutputStreamVar("CSVlexical");
+    // TODO: multiplex these?
     pb.createAssign(pb.createExtract(lexOut, pb.getInteger(markLF)), LF);
     pb.createAssign(pb.createExtract(lexOut, pb.getInteger(markCR)), CR);
     pb.createAssign(pb.createExtract(lexOut, pb.getInteger(markDQ)), DQ);
@@ -110,10 +118,20 @@ enum CSVDataFieldMarkers {
 
 
 class CSVDataParser : public PabloKernel {
+    static std::string makeNameFromOptions() {
+        std::string tmp;
+        raw_string_ostream nm(tmp);
+        nm << "CSVDataParser";
+        if (noHeaderLine) {
+            nm << "NH";
+        }
+        nm.flush();
+        return tmp;
+    }
 public:
     CSVDataParser(BuilderRef kb, StreamSet * UTFindex, StreamSet * csvMarks,
                   StreamSet * fieldData, StreamSet * recordSeparators, StreamSet * allSeperators)
-        : PabloKernel(kb, "CSVDataParser",
+        : PabloKernel(kb, makeNameFromOptions(),
                       {Binding{"UTFindex", UTFindex}, Binding{"csvMarks", csvMarks, FixedRate(), LookAhead(1)}},
                       {Binding{"fieldData", fieldData}, Binding{"recordSeparators", recordSeparators}, Binding{"allSeperators", allSeperators}}) {
         addAttribute(SideEffecting());
@@ -122,8 +140,6 @@ public:
     }
 protected:
     void generatePabloMethod() override;
-private:
-    const bool mDeleteHeader = true;
 };
 
 void CSVDataParser::generatePabloMethod() {
@@ -145,11 +161,10 @@ void CSVDataParser::generatePabloMethod() {
     PabloAST * CRofCRLF = pb.createAnd(csvMarks[markCR], pb.createLookahead(csvMarks[markLF], 1));
 
     PabloAST * formattingQuotes = pb.createXor(dquote, escaped_quote);
-    // PabloAST * nonText = pb.createOr3(formattingQuotes, CRofCRLF, recordSeparators);
     PabloAST * nonText = pb.createOr(formattingQuotes, CRofCRLF);
     PabloAST * utfIndex = pb.createExtract(getInputStreamVar("UTFindex"), pb.getInteger(0));
     PabloAST * fieldData = pb.createAnd(utfIndex, pb.createNot(nonText));
-    if (mDeleteHeader) {
+    if (!noHeaderLine) {
         // PabloAST * afterHeader = pb.createMatchStar(pb.createAdvance(recordSeparators, 1), pb.createOnes(), "afterHeader");
         // pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {afterHeader} );
         PabloAST * afterHeader2 = pb.createSpanAfterFirst(recordSeparators, "afterHeader");
@@ -169,21 +184,24 @@ typedef void (*CSVValidatorFunctionType)(uint32_t fd, const char * fileName);
 struct CSVSchemaDefinition {
     std::vector<RE *> Validator;
     std::vector<unsigned> FieldValidatorIndex;
+    std::vector<unsigned> UIDFields;
 };
+
+
 
 class CSVSchemaValidatorKernel : public pablo::PabloKernel {
 public:
-    CSVSchemaValidatorKernel(BuilderRef b, CSVSchemaDefinition schema, StreamSet * basisBits, StreamSet * fieldData, StreamSet * recordSeperators, StreamSet * allSeperators, StreamSet * invalid);
+    CSVSchemaValidatorKernel(BuilderRef b, const CSVSchemaDefinition & schema, StreamSet * basisBits, StreamSet * fieldData, StreamSet * recordSeperators, StreamSet * allSeperators, StreamSet * invalid, StreamSet * keyRuns = nullptr);
     llvm::StringRef getSignature() const override;
     bool hasSignature() const override { return true; }
 
 protected:
-    CSVSchemaValidatorKernel(BuilderRef b, CSVSchemaDefinition && schema, std::string signature, StreamSet * basisBits, StreamSet * fieldData, StreamSet * recordSeperators, StreamSet * allSeperators, StreamSet * invalid);
+    CSVSchemaValidatorKernel(BuilderRef b, const CSVSchemaDefinition & schema, std::string signature, StreamSet * basisBits, StreamSet * fieldData, StreamSet * recordSeperators, StreamSet * allSeperators, StreamSet * invalid, StreamSet * keyRuns);
     void generatePabloMethod() override;
 private:
     static std::string makeSignature(const std::vector<RE *> & fields);
 private:
-    CSVSchemaDefinition                 mSchema;
+    const CSVSchemaDefinition &         mSchema;
     std::string                         mSignature;
 
 };
@@ -205,18 +223,18 @@ CSVSchemaDefinition parseSchemaFile() {
         boost::container::flat_map<RE *, unsigned> M;
 
         Name * fs = makeName(FieldSepName);
-        fs->setDefinition(makeAny());
+        fs->setDefinition(makeCC(charComma));
 
         FixedArray<RE *, 3> parsedLine;
         parsedLine[0] = makeAlt({makeStart(), fs});
 
-        parsedLine[2] = fs;
+        parsedLine[2] = fs; // makeAlt({fs, makeEnd()});
 
         while(std::getline(schemaFile, line)) {
             parsedLine[1] = RE_Parser::parse(line);
             assert (parsedLine[1]);
             RE * const original = makeSeq(parsedLine.begin(), parsedLine.end());
-            RE * const field = memo.transformRE(regular_expression_passes(toUTF8(original)));
+            RE * const field = memo.transformRE(toUTF8(regular_expression_passes(original)));
             assert (field);
 
             auto f = M.find(field);
@@ -236,6 +254,9 @@ CSVSchemaDefinition parseSchemaFile() {
             Def.Validator[p.second] = p.first;
         }
 
+        Def.UIDFields.push_back(0);
+        Def.UIDFields.push_back(1);
+
     } else {
         report_fatal_error("Cannot open schema: " + inputSchema);
     }
@@ -254,22 +275,29 @@ std::string makeCSVSchemaDefinitionName(const CSVSchemaDefinition & schema) {
     for (const RE * re : schema.Validator) {
         out << '\0' << Printer_RE::PrintRE(re);
     }
+    char joiner = 'u';
+    for (const auto k : schema.UIDFields) {
+        out << joiner; out.write_hex(k);
+        joiner = ',';
+    }
     out.flush();
     return tmp;
 }
 
-CSVSchemaValidatorKernel::CSVSchemaValidatorKernel(BuilderRef b, CSVSchemaDefinition schema, StreamSet * basisBits, StreamSet * fieldData, StreamSet * recordSeperators, StreamSet * allSeperators, StreamSet * invalid)
-: CSVSchemaValidatorKernel(b, std::move(schema), makeCSVSchemaDefinitionName(schema), basisBits, fieldData, recordSeperators, allSeperators, invalid) {
+CSVSchemaValidatorKernel::CSVSchemaValidatorKernel(BuilderRef b, const CSVSchemaDefinition & schema, StreamSet * basisBits, StreamSet * fieldData, StreamSet * recordSeperators, StreamSet * allSeperators, StreamSet * invalid, StreamSet * keyRuns)
+: CSVSchemaValidatorKernel(b, schema, makeCSVSchemaDefinitionName(schema), basisBits, fieldData, recordSeperators, allSeperators, invalid, keyRuns) {
 
 }
 
-CSVSchemaValidatorKernel::CSVSchemaValidatorKernel(BuilderRef b, CSVSchemaDefinition && schema, std::string signature, StreamSet * basisBits, StreamSet * fieldData, StreamSet * recordSeperators, StreamSet * allSeperators, StreamSet * invalid)
+CSVSchemaValidatorKernel::CSVSchemaValidatorKernel(BuilderRef b, const CSVSchemaDefinition & schema, std::string signature, StreamSet * basisBits, StreamSet * fieldData, StreamSet * recordSeperators, StreamSet * allSeperators, StreamSet * invalid, StreamSet * keyRuns)
 : PabloKernel(b, "csvv" + getStringHash(signature),
     {Binding{"basisBits", basisBits}, Binding{"fieldData", fieldData}, Binding{"allSeperators", allSeperators}, Binding{"recordSeperators", recordSeperators}},
     {Binding{"invalid", invalid}})
 , mSchema(schema)
 , mSignature(std::move(signature)) {
-    addAttribute(InfrequentlyUsed());
+    if (schema.UIDFields.size() > 0) {
+        mOutputStreamSets.emplace_back("hashKeyRuns", keyRuns);
+    }
 }
 
 
@@ -286,48 +314,84 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
 
     auto basisBits = getInputStreamSet("basisBits");
 
-    PabloAST * const fieldDataMask = pb.createExtract(getInputStreamVar("fieldData"), pb.getInteger(0));
+    Integer * const pb_ZERO = pb.getInteger(0);
+
+    PabloAST * const fieldDataMask = pb.createExtract(getInputStreamVar("fieldData"), pb_ZERO);
 
     re_compiler.setIndexing(&cc::UTF8, fieldDataMask);
 
     re_compiler.addAlphabet(&cc::UTF8, basisBits);
 
-    Var * const allSeperators = pb.createExtract(getInputStreamVar("allSeperators"), pb.getInteger(0));
+    Var * const allSeperators = pb.createExtract(getInputStreamVar("allSeperators"), pb_ZERO);
     assert (allSeperators->getType() == getStreamTy());
 
-    re_compiler.addPrecompiled(FieldSepName, RE_Compiler::ExternalStream(RE_Compiler::Marker(allSeperators, 0), std::make_pair<int,int>(1, 1)));
+    re_compiler.addPrecompiled(FieldSepName, RE_Compiler::ExternalStream(RE_Compiler::Marker(allSeperators, 1), std::make_pair<int,int>(1, 1)));
 
     // TODO: if the number of validators equals the number of fields, just scan sequentially? We expect everything to be valid but if the
     // total schema length is "long", we won't necessarily be starting a new record every block. Can we "break up" the validation checks to
     // test if we should scan through a chunk of them based on the current position?
 
+    using Mark = RE_Compiler::Marker;
+
     const auto & validators = mSchema.Validator;
     std::vector<PabloAST *> matches(validators.size());
     for (unsigned i = 0; i < validators.size(); ++i) {
-        RE_Compiler::Marker match = re_compiler.compileRE(validators[i]);
+        Mark match = re_compiler.compileRE(validators[i], Mark{fieldDataMask, 0}, 1);
+        assert (match.offset() == 1);
         matches[i] = match.stream();
     }
 
     RE_Compiler::Marker startMatch = re_compiler.compileRE(makeStart());
     PabloAST * const allStarts = startMatch.stream();
 
+
+
     const auto & fields = mSchema.FieldValidatorIndex;
 
     PabloAST * currentPos = allStarts;
     PabloAST * allSeparatorsMatches = nullptr;
 
-    PabloAST * const nonSeparators = pb.createNot(allSeperators, "nonSeperators");
+    PabloAST * const nonSeparators = pb.createInFile(pb.createNot(allSeperators), "nonSeperators");
+
     PabloAST * const fieldSeparators = pb.createXor(allSeperators, recordSeperators, "fieldSeparators");
 
     const auto n = fields.size();
 
+    // I expect to see at most one UID (since databases only really support a single primary/composite key)
+    // but since the logic here doesn't depend on it, I permit it for multiple independent keys.
+
+    std::vector<bool> usedInSchemaUID(n, false);
+    for (const auto k : mSchema.UIDFields) {
+        usedInSchemaUID[k] = true;
+    }
+
+    FixedArray<PabloAST *, 2> args;
+    args[0] = nullptr;
+
+    // TODO: this will fail on a blank line; should probably ignore them
+
     for (unsigned i = 0; i < n; ++i) {
-        currentPos = pb.createAdvanceThenScanThru(currentPos, nonSeparators, "currentPos" + std::to_string(i + 1));
-        currentPos = pb.createAnd(currentPos, matches[fields[i]], "field" + std::to_string(i + 1));
+        PabloAST * const fieldStart = currentPos;
+        currentPos = pb.createAdvanceThenScanThru(fieldStart, nonSeparators, "currentPos" + std::to_string(i + 1));
+        currentPos = pb.createAnd(currentPos, matches[fields[i]], "field" + std::to_string(fields[i]) + "." + std::to_string(i + 1));
+
         if (i < (n - 1)) {
             currentPos = pb.createAnd(currentPos, fieldSeparators, "matchedFieldSep" + std::to_string(i + 1));
         } else {
             currentPos = pb.createAnd(currentPos, recordSeperators, "matchedRecSep");
+        }
+        PabloAST * const fieldEnd = currentPos;
+
+        if (LLVM_UNLIKELY(usedInSchemaUID[i])) {
+
+            if (args[0] == nullptr) {
+                args[0] = fieldStart;
+                args[1] = fieldEnd;
+            } else {
+                args[0] = pb.createOr(args[0], fieldStart);
+                args[1] = pb.createOr(args[1], fieldEnd);
+            }
+
         }
 
         if (allSeparatorsMatches) {
@@ -337,9 +401,16 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
         }
     }
 
-
     PabloAST * result = pb.createXor(allSeparatorsMatches, allSeperators, "result");
-    pb.createAssign(pb.createExtract(getOutputStreamVar("invalid"), pb.getInteger(0)), result);
+    pb.createAssign(pb.createExtract(getOutputStreamVar("invalid"), pb_ZERO), result);
+
+    if (mSchema.UIDFields.size() > 0) {
+        // TODO: compute the run or store independent start/end markers? Work balance probably favours the latter.
+        PabloAST * const run = pb.createIntrinsicCall(pablo::Intrinsic::InclusiveSpan, args, "run");
+        PabloAST * const masked = pb.createAnd(run, nonSeparators);
+        pb.createAssign(pb.createExtract(getOutputStreamVar("hashKeyRuns"), pb_ZERO), masked);
+    }
+
 
 }
 
@@ -358,6 +429,7 @@ extern "C" void csv_error_identifier_callback(char * fileName, const size_t fiel
     }
     out << " does not match supplied rule.";
     // TODO: this needs to report more information as to what field/rule was invalid
+    // TODO: this cannot differntiate between erroneous line ends
     errs() << out.str();
 }
 
@@ -593,9 +665,6 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
     // byteStreamProcessed will be set to the last separator in the previous segment so we can reuse that as our
     // start pos.
 
-//    Value * priorSeparatorPos = b->CreateSub(priorSeparatorPos, b->CreateCountReverseZeroes(priorSeparatorWord, "", false));
-//    priorSeparatorPos = b->CreateAdd(priorSeparatorPos, b->CreateMul(priorSeparatorWordIndex, sz_SIZEWIDTH));
-
     Value * priorSeparatorPos = b->CreateMul(b->CreateAdd(priorSeparatorWordIndex, sz_ONE), sz_SIZEWIDTH);
     priorSeparatorPos = b->CreateSub(priorSeparatorPos, b->CreateCountReverseZeroes(priorSeparatorWord, "", false));
     priorSeparatorPos = b->CreateSelect(b->CreateICmpEQ(priorSeparatorWord, sz_ZERO), byteStreamProcessed, priorSeparatorPos);
@@ -704,6 +773,193 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
     b->SetInsertPoint(exit);
 }
 
+class BixHash2 final: public pablo::PabloKernel {
+public:
+    BixHash2(BuilderRef b,
+            StreamSet * basis, StreamSet * allSeparators, StreamSet * run,
+             StreamSet * hashes, StreamSet * selector_span, StreamSet * run_separators, unsigned steps=4, unsigned seed = 179321)
+    : PabloKernel(b, "BixHash2_" + std::to_string(hashes->getNumElements()) + "_" + std::to_string(steps) + "_" + std::to_string(seed),
+                  {Binding{"basis", basis}, Binding{"run", run}},
+                  {Binding{"hashes", hashes}, Binding{"selector_span", selector_span}, Binding{"keyFields", run_separators}}),
+    mHashBits(hashes->getNumElements()), mHashSteps(steps), mSeed(seed) {}
+
+
+protected:
+    void generatePabloMethod() override;
+private:
+    const unsigned mHashBits;
+    const unsigned mHashSteps;
+    const unsigned mSeed;
+};
+
+
+
+
+void BixHash2::generatePabloMethod() {
+    PabloBuilder pb(getEntryScope());
+
+    std::vector<PabloAST *> basis = getInputStreamSet("basis");
+    PabloAST * run = getInputStreamSet("run")[0];
+    std::vector<PabloAST *> hash(mHashBits);
+    // For every byte we create an in-place hash, in which each bit
+    // of the byte is xor'd with one other bit.
+    std::vector<unsigned> bitmix(mHashBits);
+    const auto m = basis.size(); assert (m > 0);
+    for (unsigned i = 0; i < mHashBits; ++i) {
+        bitmix[i] = i % m;
+    }
+
+    std::mt19937 rng(mSeed);
+
+    if (mHashBits > 1) {
+        // Avoid XOR-ing a value with itself. Since we may have significantly more hashbits than
+        // basis bits, we want to minimize the work needed to find such a solution.
+        for (unsigned j = 0; j < mHashBits; j += m) {
+            const auto l = j + std::min<unsigned>(mHashBits - j, m);
+ retry_shuffle:
+            std::shuffle (bitmix.begin() + j, bitmix.begin() + l, rng);
+            for (unsigned i = j; i < l; i++) {
+                if ((i % m) == bitmix[i]) {
+                    goto retry_shuffle;
+                }
+            }
+        }
+    }
+
+    // By masking out values in our runs here, we clear out the value
+    // in the separator(s) between runs.
+
+    for (unsigned i = 0; i < mHashBits; i++) {
+        hash[i] = pb.createAndXor(run, basis[i % m], basis[bitmix[i]]);
+    }
+
+    // In each step, the select stream will mark positions that are
+    // to receive bits from prior locations in the symbol.   The
+    // select stream must ensure that no bits from outside the symbol
+    // are included in the calculated hash value.
+    PabloAST * select = run;
+    for (unsigned j = 0; j < mHashSteps; j++) {
+        const auto shft = 1U << j;
+        // Select bits from prior positions.
+        std::shuffle (bitmix.begin(), bitmix.end(), rng);
+        for (unsigned i = 0; i < mHashBits; i++) {
+            PabloAST * priorBits = pb.createAdvance(hash[bitmix[i]], shft);
+            // Mix in bits from prior positions.
+            hash[i] = pb.createXorAnd(hash[i], priorBits, select);
+        }
+        select = pb.createAnd(select, pb.createAdvance(select, shft));
+    }
+
+    // if the value is still in the select span, we did not include it in
+    // the hash'ed value.
+    PabloAST * const selectors = pb.createAnd(run, pb.createNot(select));
+
+    Var * hashVar = getOutputStreamVar("hashes");
+    for (unsigned i = 0; i < mHashBits; i++) {
+        pb.createAssign(pb.createExtract(hashVar, pb.getInteger(i)), hash[i]);
+    }
+
+    pb.createAssign(pb.createExtract(getOutputStreamVar("selector_span"), pb.getInteger(0)), selectors);
+
+    // The "run" goes up to but not including the separator marker. Move it up to the separator.
+    // TODO: pass allSeparators into here and try to avoid the unnecessary advance?
+
+    PabloAST * advRun = pb.createAdvance(run, 1);
+//    PabloAST * fieldStarts = pb.createAnd(run, pb.createNot(advRun));
+    PabloAST * fieldEnds = pb.createAnd(advRun, pb.createNot(run));
+
+   Var * keyFieldVar = getOutputStreamVar("keyFields");
+
+//   pb.createAssign(pb.createExtract(keyFieldVar, pb.getInteger(0)), fieldStarts);
+   pb.createAssign(pb.createExtract(keyFieldVar, pb.getInteger(0)), fieldEnds);
+
+}
+
+
+class IdentifyLastSelector final: public pablo::PabloKernel {
+public:
+    IdentifyLastSelector(BuilderRef b, StreamSet * selector_span, StreamSet * selectors)
+    : PabloKernel(b, "IdentifyLastSelector",
+                  {Binding{"selector_span", selector_span, FixedRate(), LookAhead(1)}},
+                  {Binding{"selectors", selectors}}) {}
+protected:
+    void generatePabloMethod() override;
+};
+
+
+void IdentifyLastSelector::generatePabloMethod() {
+    PabloBuilder pb(getEntryScope());
+    // TODO: we shouldn't need this kernel to obtain the last mark of each run of a selector_span
+    Integer * pb_ZERO = pb.getInteger(0);
+    PabloAST * span = pb.createExtract(getInputStreamVar("selector_span"), pb_ZERO);
+    PabloAST * la = pb.createLookahead(span, 1);
+    PabloAST * selectors = pb.createAnd(span, pb.createNot(la));
+    pb.createAssign(pb.createExtract(getOutputStreamVar("selectors"), pb_ZERO), selectors);
+}
+
+
+class PullBack final: public pablo::PabloKernel {
+public:
+    PullBack(BuilderRef b, StreamSet * input, StreamSet * output, const unsigned ammount = 1)
+    : PabloKernel(b, "PullBack" + std::to_string(ammount),
+                  {Binding{"input", input, FixedRate(), LookAhead(ammount)}},
+                  {Binding{"output", output}}) {}
+protected:
+    void generatePabloMethod() override;
+
+};
+
+
+void PullBack::generatePabloMethod() {
+    PabloBuilder pb(getEntryScope());
+    // TODO: we shouldn't need this kernel to obtain the last mark of each run of a selector_span
+    Integer * pb_ZERO = pb.getInteger(0);
+    PabloAST * span = pb.createExtract(getInputStreamVar("input"), pb_ZERO);
+    const auto k = getInputStreamSetBinding(0).getLookahead();
+    PabloAST * la = pb.createLookahead(span, k);
+    pb.createAssign(pb.createExtract(getOutputStreamVar("output"), pb_ZERO), la);
+}
+
+
+#if 0
+
+class CheckKeyUniqueness : public SegmentOrientedKernel {
+public:
+    CheckKeyUniqueness(BuilderRef b, StreamSet * ByteStream, StreamSet * const HashValSequence,
+                       StreamSet * allSeparators, StreamSet * selectors,
+                       Scalar * const errorCallbackObject, const unsigned fieldsPerKey);
+private:
+    void generateDoSegmentMethod(BuilderRef b) override;
+private:
+    const unsigned FieldsPerKey;
+};
+
+CheckKeyUniqueness::CheckKeyUniqueness(BuilderRef b, StreamSet * ByteStream, StreamSet * const HashValSequence,
+                                       StreamSet * allSeparators, StreamSet * selectors,
+                                       Scalar * const errorCallbackObject, const unsigned fieldsPerKey)
+: SegmentOrientedKernel(b, "CheckKeyUniqueness" + std::to_string(fieldsPerKey),
+// inputs
+{Binding{"InputStream", ByteStream, GreedyRate(), Deferred()}},
+// outputs
+{},
+// input scalars
+{Binding{"callbackObject", errorCallbackObject}},
+// output scalars
+{},
+// kernel state
+{})
+, FieldsPerKey(fieldsPerKey) {
+    setStride(1);
+    addAttribute(SideEffecting());
+}
+
+void CheckKeyUniqueness::generateDoSegmentMethod(BuilderRef b) {
+
+
+}
+
+#endif
+
 CSVValidatorFunctionType wcPipelineGen(CPUDriver & pxDriver) {
 
     auto & b = pxDriver.getBuilder();
@@ -735,9 +991,104 @@ CSVValidatorFunctionType wcPipelineGen(CPUDriver & pxDriver) {
 
     P->CreateKernelCall<CSVDataParser>(u8index, csvCCs, fieldData, recordSeparators, allSeparators);
 
+   const auto schemaFile = parseSchemaFile();
+
     StreamSet * errors = P->CreateStreamSet(1);
 
-    P->CreateKernelFamilyCall<CSVSchemaValidatorKernel>(parseSchemaFile(), BasisBits, fieldData, recordSeparators, allSeparators, errors);
+    const auto uniqueFields = schemaFile.UIDFields.size();
+
+    if (uniqueFields == 0) {
+
+        P->CreateKernelFamilyCall<CSVSchemaValidatorKernel>(schemaFile, BasisBits, fieldData, recordSeparators, allSeparators, errors);
+
+    } else {
+        StreamSet * keyRuns = P->CreateStreamSet(1);
+
+
+
+        // If we use a bixhash like technique, we could possibly chunk the field data into N-byte phases and use
+        // a loop to combine the data. But how can we prevent the data from one record from being combined with
+        // another? We could scan through and iterate over each record individually?
+
+        P->CreateKernelFamilyCall<CSVSchemaValidatorKernel>(schemaFile, BasisBits, fieldData, recordSeparators, allSeparators, errors, keyRuns);
+
+//        P->CreateKernelCall<DebugDisplayKernel>("allSeparators", allSeparators);
+
+//        P->CreateKernelCall<DebugDisplayKernel>("keyRuns", keyRuns);
+
+        constexpr unsigned HASH_BITS = 16;
+
+        StreamSet * hashes = P->CreateStreamSet(HASH_BITS);
+
+        StreamSet * selector_span = P->CreateStreamSet(1);
+
+        StreamSet * key_separators = P->CreateStreamSet(1);
+
+        P->CreateKernelCall<BixHash2>(BasisBits, allSeparators, keyRuns, hashes, selector_span, key_separators, 5);
+
+        StreamSet * compressed_separators = P->CreateStreamSet(1);
+
+        P->CreateKernelCall<FieldCompressKernel>(Select(allSeparators, {0}), SelectOperationList{Select(key_separators, {0})}, compressed_separators, 64);
+
+        StreamSet * compressed_separators2 = P->CreateStreamSet(1);
+
+        P->CreateKernelCall<StreamCompressKernel>(allSeparators, compressed_separators, compressed_separators2, 64);
+
+        StreamSet * const compressed_separators3 = P->CreateStreamSet(1);
+
+        // TODO: merge PullBack with the decompression logic?
+
+        // Doesn't work if the very first field on the first line is a key. Needs fake start
+
+        P->CreateKernelCall<PullBack>(compressed_separators2, compressed_separators3);
+
+        StreamSet * const selected_starts = P->CreateStreamSet(1);
+
+      //  SpreadByMask(E, lineStarts, MatchesByLine, MatchedLineStarts);
+
+        P->CreateKernelCall<StreamExpandKernel>(allSeparators, compressed_separators3, selected_starts, P->CreateConstant(b->getSize(0)), false);
+
+        StreamSet * const selected_starts2 = P->CreateStreamSet(1);
+
+        P->CreateKernelCall<FieldDepositKernel>(allSeparators, selected_starts, selected_starts2);
+
+
+         P->CreateKernelCall<DebugDisplayKernel>("allSeparators", allSeparators);
+
+         P->CreateKernelCall<DebugDisplayKernel>("key_separators", key_separators);
+
+        P->CreateKernelCall<DebugDisplayKernel>("selected_starts2", selected_starts2);
+
+
+        StreamSet * selectors = P->CreateStreamSet(1);
+
+
+
+
+        // TODO: remove the need for the IdentifyLastSelector kernel
+
+        P->CreateKernelCall<IdentifyLastSelector>(selector_span, selectors);
+
+        StreamSet * const compressed = P->CreateStreamSet(HASH_BITS);
+
+
+
+
+        P->CreateKernelCall<FieldCompressKernel>(Select(selectors, {0}), SelectOperationList{Select(hashes, streamutils::Range(0, HASH_BITS))}, compressed, 64);
+
+        StreamSet * const outputs = P->CreateStreamSet(HASH_BITS);
+
+        P->CreateKernelCall<StreamCompressKernel>(selectors, compressed, outputs, 64);
+
+        StreamSet * const hashVals = P->CreateStreamSet(1, HASH_BITS);
+
+        P->CreateKernelCall<P2S16Kernel>(outputs, hashVals);
+
+        //
+
+
+    }
+
 
     Scalar * const fileName = P->getInputScalar("fileName");
 

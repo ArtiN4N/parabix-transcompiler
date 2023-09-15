@@ -51,10 +51,10 @@ std::vector<std::string> JSONfieldPrefixes(std::vector<std::string> fieldNames) 
     return tmp;
 }
 
-char charLF = 0xA;
-char charCR = 0xD;
-char charDQ = 0x22;
-char charComma = 0x2C;
+constexpr char charLF = 0xA;
+constexpr char charCR = 0xD;
+constexpr char charDQ = 0x22;
+constexpr char charComma = 0x2C;
 
 class CSVlexer : public PabloKernel {
 public:

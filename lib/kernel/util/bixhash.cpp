@@ -17,27 +17,44 @@ namespace kernel {
     
 void BixHash::generatePabloMethod() {
     PabloBuilder pb(getEntryScope());
+
     std::vector<PabloAST *> basis = getInputStreamSet("basis");
     PabloAST * run = getInputStreamSet("run")[0];
     std::vector<PabloAST *> hash(mHashBits);
     // For every byte we create an in-place hash, in which each bit
     // of the byte is xor'd with one other bit.
-    std::vector<int> bitmix(mHashBits);
-    std::iota(bitmix.begin(), bitmix.end(), 0);
-    std::mt19937 random_shuffle_engine(mSeed);
-    std::shuffle (bitmix.begin(), bitmix.end(), random_shuffle_engine);
-    for (unsigned i = 0; i < mHashBits; i++) {
-        hash[i] = pb.createXor(basis[i % basis.size()], basis[bitmix[i] % basis.size()]);
+    std::vector<unsigned> bitmix(mHashBits);
+    const auto m = basis.size();
+    for (unsigned i = 0; i < mHashBits; ++i) {
+        bitmix[i] = i % m;
     }
+
+    std::mt19937 rng(mSeed);
+
+    if (mHashBits > 0 && m > 0) {
+ retry_shuffle:
+        std::shuffle (bitmix.begin(), bitmix.end(), rng);
+        for (unsigned i = 0; i < mHashBits; i++) {
+            // avoid XOR-ing a value with itself
+            if ((i % m) == bitmix[i]) {
+                goto retry_shuffle;
+            }
+        }
+    }
+
+    for (unsigned i = 0; i < mHashBits; i++) {
+        hash[i] = pb.createXor(basis[i % m], basis[bitmix[i]]);
+    }
+
     // In each step, the select stream will mark positions that are
     // to receive bits from prior locations in the symbol.   The
     // select stream must ensure that no bits from outside the symbol
     // are included in the calculated hash value.
     PabloAST * select = run;
     for (unsigned j = 0; j < mHashSteps; j++) {
-        unsigned shft = 1<<j;
+        const auto shft = 1U << j;
         // Select bits from prior positions.
-        std::shuffle (bitmix.begin(), bitmix.end(), random_shuffle_engine);
+        std::shuffle (bitmix.begin(), bitmix.end(), rng);
         for (unsigned i = 0; i < mHashBits; i++) {
             PabloAST * priorBits = pb.createAdvance(hash[bitmix[i]], shft);
             // Mix in bits from prior positions.

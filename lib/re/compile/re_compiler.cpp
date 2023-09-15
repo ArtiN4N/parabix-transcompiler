@@ -38,6 +38,7 @@ using Marker = RE_Compiler::Marker;
 
 
 class RE_Block_Compiler {
+    friend class RE_Compiler;
 public:
 
     RE_Block_Compiler(RE_Compiler & main, PabloBuilder & pb);
@@ -822,6 +823,26 @@ Marker RE_Compiler::compileRE(RE * const re, Marker initialMarkers) {
     pb.createIf(initialMarkers.stream(), nested);
     return Marker(m, m1.offset());
 }
+
+Marker RE_Compiler::compileRE(RE * const re, Marker initialMarkers, const unsigned outputpos) {
+    pablo::PabloBuilder pb(mEntryScope);
+    //  An important use case for an initial set of cursors to be passed in
+    //  is that the initial cursors are computed from a prefix of an RE such
+    //  that there is a high probability of all cursors remaining in a block
+    //  are zeroed.   We therefore embed processing logic in an if-test,
+    //  dependent on the initial cursors.
+    Var * m = pb.createVar("m", pb.createZeroes());
+    auto nested = pb.createScope();
+    RE_Block_Compiler blockCompiler(*this, nested);
+    Marker m1 = blockCompiler.process(re, initialMarkers);
+    //Marker m1 = process(re, initialMarkers, nested);
+    nested.createAssign(m, m1.stream());
+    pb.createIf(initialMarkers.stream(), nested);
+    return blockCompiler.AdvanceMarker(Marker(m, m1.offset()), outputpos);
+}
+
+
+
 
 LLVM_ATTRIBUTE_NORETURN void RE_Compiler::UnsupportedRE(std::string errmsg) {
     llvm::report_fatal_error(errmsg);

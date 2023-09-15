@@ -146,6 +146,8 @@ class RE_Compiler {
     Marker compileRE(RE * re);
     
     Marker compileRE(RE * re, Marker initialMarkers);
+
+    Marker compileRE(RE * re, Marker initialMarkers, const unsigned outputpos);
         
     static LLVM_ATTRIBUTE_NORETURN void UnsupportedRE(std::string errmsg);
 
