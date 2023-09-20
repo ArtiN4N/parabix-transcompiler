@@ -575,12 +575,18 @@ PabloAST * PabloBuilder::createMatchStar(PabloAST * marker, PabloAST * charclass
     if (isa<Zeroes>(marker) || isa<Zeroes>(charclass)) {
         return marker;
     }
+    if (LLVM_UNLIKELY(marker == charclass)) {
+        return createOr(createAdvance(charclass, 1), charclass);
+    }
     return MAKE_BINARY(MatchStar, marker, charclass);
 }
 
 PabloAST * PabloBuilder::createMatchStar(PabloAST * marker, PabloAST * charclass, const llvm::StringRef prefix) {
     if (isa<Zeroes>(marker) || isa<Zeroes>(charclass)) {
         return marker;
+    }
+    if (LLVM_UNLIKELY(marker == charclass)) {
+        return createOr(createAdvance(charclass, 1), charclass);
     }
     return MAKE_NAMED_BINARY(MatchStar, prefix, marker, charclass);
 }

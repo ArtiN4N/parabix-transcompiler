@@ -129,13 +129,12 @@ class CSVDataParser : public PabloKernel {
         return tmp;
     }
 public:
-    CSVDataParser(BuilderRef kb, StreamSet * UTFindex, StreamSet * csvMarks,
+    CSVDataParser(BuilderRef kb, StreamSet * csvMarks,
                   StreamSet * fieldData, StreamSet * recordSeparators, StreamSet * allSeperators)
         : PabloKernel(kb, makeNameFromOptions(),
-                      {Binding{"UTFindex", UTFindex}, Binding{"csvMarks", csvMarks, FixedRate(), LookAhead(1)}},
+                      {Binding{"csvMarks", csvMarks, FixedRate(), LookAhead(1)}},
                       {Binding{"fieldData", fieldData}, Binding{"recordSeparators", recordSeparators}, Binding{"allSeperators", allSeperators}}) {
         addAttribute(SideEffecting());
-        assert (UTFindex->getNumElements() == 1);
         assert (csvMarks->getNumElements() == 5);
     }
 protected:
@@ -155,23 +154,18 @@ void CSVDataParser::generatePabloMethod() {
     PabloAST * quoted_data = pb.createIntrinsicCall(pablo::Intrinsic::InclusiveSpan, {start_dquote, end_dquote});
     PabloAST * unquoted = pb.createNot(quoted_data);
     PabloAST * recordSeparators = pb.createOrAnd(csvMarks[markEOF], csvMarks[markLF], unquoted, "recordSeparators");
-    //PabloAST * recordSeparators = pb.createOr(pb.createAnd(csvMarks[markLF], unquoted), csvMarks[markEOF], "recordSeparators");
     PabloAST * allSeparators = pb.createOrAnd(recordSeparators, csvMarks[markComma], unquoted, "allSeparators");
-    // PabloAST * allSeparators = pb.createOr(pb.createAnd(csvMarks[markComma], unquoted), recordSeparators, "allSeparators");
-    PabloAST * CRofCRLF = pb.createAnd(csvMarks[markCR], pb.createLookahead(csvMarks[markLF], 1));
+    PabloAST * CRofCRLF = pb.createAnd3(csvMarks[markCR], pb.createLookahead(csvMarks[markLF], 1), unquoted, "CRofCRLF");
+    PabloAST * formattingQuotes = pb.createXor(dquote, escaped_quote, "formattingQuotes");
 
-    PabloAST * formattingQuotes = pb.createXor(dquote, escaped_quote);
-    PabloAST * nonText = pb.createOr(formattingQuotes, CRofCRLF);
-    PabloAST * utfIndex = pb.createExtract(getInputStreamVar("UTFindex"), pb.getInteger(0));
-    PabloAST * fieldData = pb.createAnd(utfIndex, pb.createNot(nonText));
+    // If we remove the separators from the text, the RE cannot match the Sep terminator
+    PabloAST * nonText = pb.createOr(CRofCRLF, formattingQuotes); // allSeparators,
+    PabloAST * fieldData = pb.createNot(nonText);
     if (!noHeaderLine) {
-        // PabloAST * afterHeader = pb.createMatchStar(pb.createAdvance(recordSeparators, 1), pb.createOnes(), "afterHeader");
-        // pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {afterHeader} );
-        PabloAST * afterHeader2 = pb.createSpanAfterFirst(recordSeparators, "afterHeader");
-        // pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {afterHeader2} );
-        fieldData = pb.createAnd(fieldData, afterHeader2);
-        allSeparators = pb.createAnd(allSeparators, afterHeader2);
-        recordSeparators = pb.createAnd(recordSeparators, afterHeader2);
+        PabloAST * afterHeader = pb.createSpanAfterFirst(recordSeparators, "afterHeader");
+        fieldData = pb.createAnd(fieldData, afterHeader);
+        allSeparators = pb.createAnd(allSeparators, afterHeader);
+        recordSeparators = pb.createAnd(recordSeparators, afterHeader);
     }
     pb.createAssign(pb.createExtract(getOutputStreamVar("fieldData"), pb.getInteger(0)), fieldData);
     pb.createAssign(pb.createExtract(getOutputStreamVar("recordSeparators"), pb.getInteger(0)), recordSeparators);
@@ -179,7 +173,7 @@ void CSVDataParser::generatePabloMethod() {
 
 }
 
-typedef void (*CSVValidatorFunctionType)(uint32_t fd, const char * fileName);
+typedef void (*CSVValidatorFunctionType)(uint32_t fd, const char * fileName, void * uniqueKeyChecker);
 
 struct CSVSchemaDefinition {
     std::vector<RE *> Validator;
@@ -191,12 +185,12 @@ struct CSVSchemaDefinition {
 
 class CSVSchemaValidatorKernel : public pablo::PabloKernel {
 public:
-    CSVSchemaValidatorKernel(BuilderRef b, const CSVSchemaDefinition & schema, StreamSet * basisBits, StreamSet * fieldData, StreamSet * recordSeperators, StreamSet * allSeperators, StreamSet * invalid, StreamSet * keyRuns = nullptr);
+    CSVSchemaValidatorKernel(BuilderRef b, const CSVSchemaDefinition & schema, StreamSet * basisBits, StreamSet * UTFindex, StreamSet * fieldData, StreamSet * recordSeperators, StreamSet * allSeperators, StreamSet * invalid, StreamSet * keyRuns = nullptr);
     llvm::StringRef getSignature() const override;
     bool hasSignature() const override { return true; }
 
 protected:
-    CSVSchemaValidatorKernel(BuilderRef b, const CSVSchemaDefinition & schema, std::string signature, StreamSet * basisBits, StreamSet * fieldData, StreamSet * recordSeperators, StreamSet * allSeperators, StreamSet * invalid, StreamSet * keyRuns);
+    CSVSchemaValidatorKernel(BuilderRef b, const CSVSchemaDefinition & schema, std::string signature, StreamSet * basisBits, StreamSet * UTFindex, StreamSet * fieldData, StreamSet * recordSeperators, StreamSet * allSeperators, StreamSet * invalid, StreamSet * keyRuns);
     void generatePabloMethod() override;
 private:
     static std::string makeSignature(const std::vector<RE *> & fields);
@@ -284,14 +278,15 @@ std::string makeCSVSchemaDefinitionName(const CSVSchemaDefinition & schema) {
     return tmp;
 }
 
-CSVSchemaValidatorKernel::CSVSchemaValidatorKernel(BuilderRef b, const CSVSchemaDefinition & schema, StreamSet * basisBits, StreamSet * fieldData, StreamSet * recordSeperators, StreamSet * allSeperators, StreamSet * invalid, StreamSet * keyRuns)
-: CSVSchemaValidatorKernel(b, schema, makeCSVSchemaDefinitionName(schema), basisBits, fieldData, recordSeperators, allSeperators, invalid, keyRuns) {
+CSVSchemaValidatorKernel::CSVSchemaValidatorKernel(BuilderRef b, const CSVSchemaDefinition & schema, StreamSet * basisBits, StreamSet * UTFindex, StreamSet * fieldData, StreamSet * recordSeperators, StreamSet * allSeperators, StreamSet * invalid, StreamSet * keyRuns)
+: CSVSchemaValidatorKernel(b, schema, makeCSVSchemaDefinitionName(schema), basisBits, UTFindex, fieldData, recordSeperators, allSeperators, invalid, keyRuns) {
 
 }
 
-CSVSchemaValidatorKernel::CSVSchemaValidatorKernel(BuilderRef b, const CSVSchemaDefinition & schema, std::string signature, StreamSet * basisBits, StreamSet * fieldData, StreamSet * recordSeperators, StreamSet * allSeperators, StreamSet * invalid, StreamSet * keyRuns)
+CSVSchemaValidatorKernel::CSVSchemaValidatorKernel(BuilderRef b, const CSVSchemaDefinition & schema, std::string signature, StreamSet * basisBits, StreamSet * UTFindex, StreamSet * fieldData, StreamSet * recordSeperators, StreamSet * allSeperators, StreamSet * invalid, StreamSet * keyRuns)
 : PabloKernel(b, "csvv" + getStringHash(signature),
-    {Binding{"basisBits", basisBits}, Binding{"fieldData", fieldData}, Binding{"allSeperators", allSeperators}, Binding{"recordSeperators", recordSeperators}},
+    {Binding{"basisBits", basisBits}, Binding{"UTFindex", UTFindex}, Binding{"fieldData", fieldData},
+     Binding{"allSeperators", allSeperators}, Binding{"recordSeperators", recordSeperators}},
     {Binding{"invalid", invalid}})
 , mSchema(schema)
 , mSignature(std::move(signature)) {
@@ -316,14 +311,21 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
 
     Integer * const pb_ZERO = pb.getInteger(0);
 
-    PabloAST * const fieldDataMask = pb.createExtract(getInputStreamVar("fieldData"), pb_ZERO);
+    Var * const UTFindex = pb.createExtract(getInputStreamVar("UTFindex"), pb_ZERO);
+    pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {UTFindex });
 
-    re_compiler.setIndexing(&cc::UTF8, fieldDataMask);
+    Var * const fieldDataMask = pb.createExtract(getInputStreamVar("fieldData"), pb_ZERO);
+    pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {fieldDataMask });
+    assert (fieldDataMask->getType() == getStreamTy());
+    PabloAST * const textIndex = pb.createAnd(fieldDataMask, UTFindex, "textIndex");
+
+    pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {textIndex });
+
+    re_compiler.setIndexing(&cc::UTF8, textIndex);
 
     re_compiler.addAlphabet(&cc::UTF8, basisBits);
 
     Var * const allSeperators = pb.createExtract(getInputStreamVar("allSeperators"), pb_ZERO);
-    assert (allSeperators->getType() == getStreamTy());
 
     re_compiler.addPrecompiled(FieldSepName, RE_Compiler::ExternalStream(RE_Compiler::Marker(allSeperators, 1), std::make_pair<int,int>(1, 1)));
 
@@ -336,15 +338,17 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
     const auto & validators = mSchema.Validator;
     std::vector<PabloAST *> matches(validators.size());
     for (unsigned i = 0; i < validators.size(); ++i) {
-        Mark match = re_compiler.compileRE(validators[i], Mark{fieldDataMask, 0}, 1);
+        Mark match = re_compiler.compileRE(validators[i], Mark{textIndex, 1}, 1);
         assert (match.offset() == 1);
         matches[i] = match.stream();
+        cast<NamedPabloAST>(matches[i])->setName(pb.makeName("match" + std::to_string(i)));
+        pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {matches[i] });
     }
 
     RE_Compiler::Marker startMatch = re_compiler.compileRE(makeStart());
     PabloAST * const allStarts = startMatch.stream();
 
-
+    cast<NamedPabloAST>(allStarts)->setName(pb.makeName("AllStarts"));
 
     const auto & fields = mSchema.FieldValidatorIndex;
 
@@ -352,7 +356,6 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
     PabloAST * allSeparatorsMatches = nullptr;
 
     PabloAST * const nonSeparators = pb.createInFile(pb.createNot(allSeperators), "nonSeperators");
-
     PabloAST * const fieldSeparators = pb.createXor(allSeperators, recordSeperators, "fieldSeparators");
 
     const auto n = fields.size();
@@ -370,16 +373,28 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
 
     // TODO: this will fail on a blank line; should probably ignore them
 
+    // If we go through all non separators, we'll go past any trailing ", which we want to skip. But if we don't,
+    // we need another scanthru per field to reach the same position
+
+  //  pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {allStarts});
+
     for (unsigned i = 0; i < n; ++i) {
         PabloAST * const fieldStart = currentPos;
         currentPos = pb.createAdvanceThenScanThru(fieldStart, nonSeparators, "currentPos" + std::to_string(i + 1));
+    //    pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {currentPos});
+
         currentPos = pb.createAnd(currentPos, matches[fields[i]], "field" + std::to_string(fields[i]) + "." + std::to_string(i + 1));
+
+    //    pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {currentPos});
 
         if (i < (n - 1)) {
             currentPos = pb.createAnd(currentPos, fieldSeparators, "matchedFieldSep" + std::to_string(i + 1));
         } else {
             currentPos = pb.createAnd(currentPos, recordSeperators, "matchedRecSep");
         }
+
+    //    pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {currentPos});
+
         PabloAST * const fieldEnd = currentPos;
 
         if (LLVM_UNLIKELY(usedInSchemaUID[i])) {
@@ -405,10 +420,9 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
     pb.createAssign(pb.createExtract(getOutputStreamVar("invalid"), pb_ZERO), result);
 
     if (mSchema.UIDFields.size() > 0) {
-        // TODO: compute the run or store independent start/end markers? Work balance probably favours the latter.
-        PabloAST * const run = pb.createIntrinsicCall(pablo::Intrinsic::InclusiveSpan, args, "run");
-        PabloAST * const masked = pb.createAnd(run, nonSeparators);
-        pb.createAssign(pb.createExtract(getOutputStreamVar("hashKeyRuns"), pb_ZERO), masked);
+        PabloAST * const run = pb.createIntrinsicCall(pablo::Intrinsic::SpanUpTo, args, "run");
+        PabloAST * const hashableFieldData = pb.createAnd(run, nonSeparators);
+        pb.createAssign(pb.createExtract(getOutputStreamVar("hashKeyRuns"), pb_ZERO), hashableFieldData);
     }
 
 
@@ -432,6 +446,441 @@ extern "C" void csv_error_identifier_callback(char * fileName, const size_t fiel
     // TODO: this cannot differntiate between erroneous line ends
     errs() << out.str();
 }
+
+class BixHash2 final: public pablo::PabloKernel {
+public:
+    BixHash2(BuilderRef b,
+            StreamSet * basis, StreamSet * run,
+             StreamSet * hashes, StreamSet * selector_span, StreamSet * fields, unsigned steps=4, unsigned seed = 179321)
+    : PabloKernel(b, "BixHash2_" + std::to_string(hashes->getNumElements()) + "_" + std::to_string(steps) + "_" + std::to_string(seed),
+                  {Binding{"basis", basis}, Binding{"run", run}},
+                  {Binding{"hashes", hashes}, Binding{"selector_span", selector_span}, Binding{"field", fields}}),
+    mHashBits(hashes->getNumElements()), mHashSteps(steps), mSeed(seed) {
+        assert (fields->getNumElements() == 1);
+        assert (selector_span->getNumElements() == 1);
+    }
+
+
+protected:
+    void generatePabloMethod() override;
+private:
+    const unsigned mHashBits;
+    const unsigned mHashSteps;
+    const unsigned mSeed;
+};
+
+
+
+
+void BixHash2::generatePabloMethod() {
+    PabloBuilder pb(getEntryScope());
+
+    // TODO: if we assume this version of a BixHash is designed for UTF-8 text, are there optimal mixes?
+    // Can we use a genetic algorithm to deduce it?
+
+    std::vector<PabloAST *> basis = getInputStreamSet("basis");
+    const auto n = basis.size(); assert (n > 0);
+    PabloAST * run = getInputStreamSet("run")[0];
+
+    std::vector<PabloAST *> hash(mHashBits);
+    // For every byte we create an in-place hash, in which each bit
+    // of the byte is xor'd with one other bit.
+    std::vector<unsigned> bitmix(mHashBits);
+
+    for (unsigned i = 0; i < mHashBits; ++i) {
+        bitmix[i] = i % n;
+    }
+
+    std::mt19937 rng(mSeed);
+    for (unsigned i = 0; i < mHashBits; ) {
+        std::shuffle (bitmix.begin(), bitmix.begin(), rng);
+        // Avoid XOR-ing a value with itself.
+        for (unsigned j = 0; j < mHashBits && i < mHashBits; j += 2, ++i) {
+            hash[i] = pb.createAndXor(run, basis[bitmix[j]], basis[bitmix[j + 1]]);
+        }
+    }
+
+    // In each step, the select stream will mark positions that are
+    // to receive bits from prior locations in the symbol.   The
+    // select stream must ensure that no bits from outside the symbol
+    // are included in the calculated hash value.
+    PabloAST * select = run;
+
+    for (unsigned j = 0; j < mHashSteps; j++) {
+        const auto shft = 1U << j;
+        // Select bits from prior positions.
+        std::shuffle (bitmix.begin(), bitmix.end(), rng);
+        for (unsigned i = 0; i < mHashBits; i++) {
+            PabloAST * priorBits = pb.createAdvance(hash[bitmix[i]], shft);
+            // Mix in bits from prior positions.
+            hash[i] = pb.createXorAnd(hash[i], select, priorBits);
+        }
+        select = pb.createAnd(select, pb.createAdvance(select, shft));
+    }
+
+
+
+    Var * hashVar = getOutputStreamVar("hashes");
+    for (unsigned i = 0; i < mHashBits; i++) {
+        pb.createAssign(pb.createExtract(hashVar, pb.getInteger(i)), hash[i]);
+    }
+
+    // if the value is still in the select span, we did not include it in
+    // the hash'ed value.
+    PabloAST * const selectors = pb.createAnd(run, pb.createNot(select), "selectors");
+    pb.createAssign(pb.createExtract(getOutputStreamVar("selector_span"), pb.getInteger(0)), selectors);
+
+    // Mark the start and end of each run; since the run cannot contain any separators
+    // these will be disjoint posititions that we can use later to identify the start and ends
+    // of unquoted symbols.
+    PabloAST * const markers = pb.createXor(run, pb.createAdvance(run, 1), "markers");
+    pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {markers});
+    pb.createAssign(pb.createExtract(getOutputStreamVar("field"), pb.getInteger(0)), markers);
+
+}
+
+
+class IdentifyLastSelector final: public pablo::PabloKernel {
+public:
+    IdentifyLastSelector(BuilderRef b, StreamSet * selector_span, StreamSet * selectors)
+    : PabloKernel(b, "IdentifyLastSelector",
+                  {Binding{"selector_span", selector_span, FixedRate(), LookAhead(1)}},
+                  {Binding{"selectors", selectors}}) {}
+protected:
+    void generatePabloMethod() override;
+};
+
+
+void IdentifyLastSelector::generatePabloMethod() {
+    PabloBuilder pb(getEntryScope());
+    // TODO: we shouldn't need this kernel to obtain the last mark of each run of a selector_span
+    // if we can push them ahead to the end of the run but that may add an N advances where N is
+    // the hash code bit width.
+    Integer * pb_ZERO = pb.getInteger(0);
+    PabloAST * span = pb.createExtract(getInputStreamVar("selector_span"), pb_ZERO);
+    PabloAST * la = pb.createLookahead(span, 1);
+    PabloAST * selectors = pb.createAnd(span, pb.createNot(la));
+    pb.createAssign(pb.createExtract(getOutputStreamVar("selectors"), pb_ZERO), selectors);
+}
+
+#if 1
+
+class ExtractCoordinateSequence : public MultiBlockKernel {
+public:
+    ExtractCoordinateSequence(BuilderRef b, StreamSet * const Matches, StreamSet * const Coordinates, unsigned strideBlocks = 1);
+private:
+    void generateMultiBlockLogic(BuilderRef iBuilder, llvm::Value * const numOfStrides) override;
+};
+
+
+ExtractCoordinateSequence::ExtractCoordinateSequence(BuilderRef b,
+                                               StreamSet * const Matches,
+                                               StreamSet * const Coordinates, unsigned strideBlocks)
+: MultiBlockKernel(b, "ExtractCoordinateSequence" + std::to_string(strideBlocks),
+// inputs
+{Binding{"markers", Matches}},
+// outputs
+{Bind("Coordinates", Coordinates, PopcountOf("markers"))},
+// input scalars
+{},
+// output scalars
+{},
+// kernel state
+{}) {
+     assert (Matches->getNumElements() == 1);
+     assert (Coordinates->getNumElements() == 1);
+}
+
+void ExtractCoordinateSequence::generateMultiBlockLogic(BuilderRef b, Value * const numOfStrides) {
+
+    Constant * const sz_ZERO = b->getSize(0);
+    Constant * const sz_ONE = b->getSize(1);
+    IntegerType * sizeTy = b->getSizeTy();
+    const auto sizeTyWidth = sizeTy->getBitWidth();
+
+    Constant * const sz_BITS = b->getSize(sizeTyWidth);
+    Constant * const sz_MAXBIT = b->getSize(sizeTyWidth - 1);
+
+    Type * const blockTy = b->getBitBlockType();
+
+
+    assert ((mStride % sizeTyWidth ) == 0);
+
+    const auto vecsPerStride = mStride / sizeTyWidth;
+
+    BasicBlock * const entryBlock = b->GetInsertBlock();
+
+    // we expect that every block will have at least one marker
+
+    BasicBlock * const stridePrologue = b->CreateBasicBlock("stridePrologue");
+    BasicBlock * const strideCoordinateVecLoop = b->CreateBasicBlock("strideCoordinateVecLoop");
+    BasicBlock * const strideCoordinateElemLoop = b->CreateBasicBlock("strideCoordinateElemLoop");
+    BasicBlock * const strideCoordinateElemDone = b->CreateBasicBlock("strideCoordinateElemDone");
+    BasicBlock * const strideCoordinateVecDone = b->CreateBasicBlock("strideCoordinateVecDone");
+    BasicBlock * const strideCoordinatesDone = b->CreateBasicBlock("strideCoordinatesDone");
+
+    Value * const processedMarkers = b->getProcessedItemCount("markers");
+    Value * const coordinatePtr = b->getRawOutputPointer("Coordinates", b->getProducedItemCount("Coordinates"));
+    b->CreateBr(stridePrologue);
+
+    b->SetInsertPoint(stridePrologue);
+    PHINode * const strideNumPhi = b->CreatePHI(sizeTy, 2);
+    strideNumPhi->addIncoming(sz_ZERO, entryBlock);
+    PHINode * const currentProcessed = b->CreatePHI(sizeTy, 2);
+    currentProcessed->addIncoming(processedMarkers, entryBlock);
+    PHINode * const outerCoordinatePtrPhi = b->CreatePHI(coordinatePtr->getType(), 2);
+    outerCoordinatePtrPhi->addIncoming(coordinatePtr, entryBlock);
+
+    Value * const currentMarks = b->loadInputStreamBlock("markers", sz_ZERO, strideNumPhi);
+    FixedVectorType * const sizeVecTy = FixedVectorType::get(sizeTy, vecsPerStride);
+    Value * currentVec = b->CreateBitCast(currentMarks, sizeVecTy);
+
+    b->CreateLikelyCondBr(b->bitblock_any(currentMarks), strideCoordinateVecLoop, strideCoordinateVecDone);
+
+    b->SetInsertPoint(strideCoordinateVecLoop);
+    PHINode * const elemIdx = b->CreatePHI(sizeTy, 2, "elemIdx");
+    elemIdx->addIncoming(sz_ZERO, stridePrologue);
+    PHINode * const incomingOuterCoordinatePtrPhi = b->CreatePHI(coordinatePtr->getType(), 2);
+    incomingOuterCoordinatePtrPhi->addIncoming(outerCoordinatePtrPhi, stridePrologue);
+    Value * const elem = b->CreateExtractElement(currentVec, elemIdx);
+    b->CreateCondBr(b->CreateICmpNE(elem, sz_ZERO), strideCoordinateElemLoop, strideCoordinateElemDone);
+
+    b->SetInsertPoint(strideCoordinateElemLoop);
+    PHINode * const remaining = b->CreatePHI(sizeTy, 2);
+    remaining->addIncoming(elem, strideCoordinateVecLoop);
+    PHINode * const innerCoordinatePtrPhi = b->CreatePHI(coordinatePtr->getType(), 2);
+    innerCoordinatePtrPhi->addIncoming(incomingOuterCoordinatePtrPhi, strideCoordinateVecLoop);
+
+    Value * pos = b->CreateCountForwardZeroes(remaining);
+    pos = b->CreateAdd(pos, b->CreateMul(elemIdx, sz_BITS));
+    pos = b->CreateAdd(pos, currentProcessed);
+    b->CreateStore(pos, innerCoordinatePtrPhi);
+
+    Value * const nextCoordPtr = b->CreateGEP(innerCoordinatePtrPhi, sz_ONE);
+    innerCoordinatePtrPhi->addIncoming(nextCoordPtr, strideCoordinateElemLoop);
+    Value * const nextRemaining = b->CreateResetLowestBit(remaining);
+    remaining->addIncoming(nextRemaining, strideCoordinateElemLoop);
+    b->CreateCondBr(b->CreateICmpNE(nextRemaining, sz_ZERO), strideCoordinateElemLoop, strideCoordinateElemDone);
+
+    b->SetInsertPoint(strideCoordinateElemDone);
+    PHINode * const nextCoordinatePtrPhi = b->CreatePHI(coordinatePtr->getType(), 2);
+    nextCoordinatePtrPhi->addIncoming(outerCoordinatePtrPhi, strideCoordinateVecLoop);
+    nextCoordinatePtrPhi->addIncoming(nextCoordPtr, strideCoordinateElemLoop);
+    incomingOuterCoordinatePtrPhi->addIncoming(nextCoordinatePtrPhi, strideCoordinateElemDone);
+    Value * const nextElemIdx = b->CreateAdd(elemIdx, sz_ONE);
+    elemIdx->addIncoming(nextElemIdx, strideCoordinateElemDone);
+    Value * const moreVecs = b->CreateICmpNE(nextElemIdx, b->getSize(vecsPerStride));
+    b->CreateCondBr(moreVecs, strideCoordinateVecLoop, strideCoordinateVecDone);
+
+    b->SetInsertPoint(strideCoordinateVecDone);
+    PHINode * const nextOuterCoordinatePtrPhi = b->CreatePHI(coordinatePtr->getType(), 2);
+    nextOuterCoordinatePtrPhi->addIncoming(outerCoordinatePtrPhi, stridePrologue);
+    nextOuterCoordinatePtrPhi->addIncoming(nextCoordinatePtrPhi, strideCoordinateElemDone);
+    Value * const nextStrideNum = b->CreateAdd(strideNumPhi, sz_ONE);
+    strideNumPhi->addIncoming(nextStrideNum, strideCoordinateVecDone);
+    currentProcessed->addIncoming(b->CreateAdd(currentProcessed, b->getSize(mStride)), strideCoordinateVecDone);
+    outerCoordinatePtrPhi->addIncoming(nextOuterCoordinatePtrPhi, strideCoordinateVecDone);
+
+    b->CreateCondBr(b->CreateICmpULT(nextStrideNum, numOfStrides), stridePrologue, strideCoordinatesDone);
+
+    b->SetInsertPoint(strideCoordinatesDone);
+}
+
+#endif
+
+#if 1
+
+struct UniqueKeySets {
+    constexpr static size_t NumOfKeyMapBuckets = 257;
+
+    std::array<DenseSet<StringRef>, NumOfKeyMapBuckets> Sets;
+    SlabAllocator<char> Allocator;
+};
+
+
+bool check_unique_keyset(UniqueKeySets & sets, const size_t hashCode, const size_t numOfFields, const char ** keys) {
+
+    // storing this as a trie would potentially be better. should we store the line that this was added from?
+    // look into hat-trie? Hash array mapped trie could be a good system since we can naturally use the hashCode
+    // to define the layer to look at. Need to expand the number of bits provided which could be a detriment with
+    // 4x 32 advances. Should each field word be treated independently? Should each field be an independent table
+    // with the N+1-th combining all N fields?
+
+    // The only way we won't use the allocated space is if we find an error.
+
+    size_t bytesNeeded = numOfFields * 2U;
+    for (unsigned i = 0; i < numOfFields; ++i) {
+        bytesNeeded += (keys[i * 2 + 1] - keys[i * 2]);
+    }
+
+    char * const buffer = sets.Allocator.allocate(bytesNeeded);
+    auto p = buffer;
+    for (unsigned i = 0; i < numOfFields; ++i) {
+        const auto length = (keys[i * 2 + 1] - keys[i * 2]) + 1U;
+        std::memcpy(p, keys[i * 2], length);
+        p += length;
+        *p++ = '\0';
+    }
+
+    auto & S = sets.Sets[hashCode % UniqueKeySets::NumOfKeyMapBuckets];
+
+    return S.insert(StringRef{buffer, bytesNeeded}).second;
+}
+
+class CheckKeyUniqueness : public SegmentOrientedKernel {
+public:
+    CheckKeyUniqueness(BuilderRef b, StreamSet * ByteStream, StreamSet * const HashVals, StreamSet * fieldCoordinates,
+                       StreamSet * errorCoordinates,
+                       Scalar * mapCallbackObject,
+                       const unsigned fieldsPerKey);
+    void linkExternalMethods(BuilderRef b) override;
+private:
+    void generateDoSegmentMethod(BuilderRef b) override;
+private:
+    const unsigned FieldsPerKey;
+};
+
+CheckKeyUniqueness::CheckKeyUniqueness(BuilderRef b, StreamSet * ByteStream, StreamSet * const hashCodes, StreamSet * fieldCoordinates,
+                                       StreamSet * errorCoordinates,
+                                       Scalar * keySetObject,
+                                       const unsigned fieldsPerKey)
+: SegmentOrientedKernel(b, "CheckKeyUniqueness" + std::to_string(fieldsPerKey),
+// inputs
+{Binding{"InputStream", ByteStream, GreedyRate(), Deferred()}
+, Binding{"HashCodes", hashCodes, FixedRate(1)}
+, Binding{"fieldCoordinates", fieldCoordinates, FixedRate(2)}},
+// outputs
+{Binding{"errorCoordinates", errorCoordinates, BoundedRate(0, 1)}},
+// input scalars
+{Binding{"keySetObject", keySetObject}},
+// output scalars
+{},
+// kernel state
+{})
+, FieldsPerKey(fieldsPerKey) {
+    setStride(fieldsPerKey);
+    addAttribute(SideEffecting());
+}
+
+/** ------------------------------------------------------------------------------------------------------------- *
+ * @brief linkExternalMethods
+ ** ------------------------------------------------------------------------------------------------------------- */
+void CheckKeyUniqueness::linkExternalMethods(BuilderRef b) {
+    // bool check_unique_keyset(UniqueKeySets & sets, const size_t hashCode, const size_t numOfFields, const char ** keys)
+
+    FixedArray<Type *, 4> paramTys;
+    paramTys[0] = b->getVoidPtrTy();
+    paramTys[1] = b->getSizeTy();
+    paramTys[2] = b->getSizeTy();
+    paramTys[3] = b->getInt8PtrTy()->getPointerTo();
+    FunctionType * fty = FunctionType::get(b->getInt1Ty(), paramTys, false);
+    b->LinkFunction("check_unique_keyset", fty, (void*)check_unique_keyset);
+}
+
+void CheckKeyUniqueness::generateDoSegmentMethod(BuilderRef b) {
+
+    Value * const numOfUnprocessedHashCodes = b->getAccessibleItemCount("HashCodes");
+
+    BasicBlock * const entry = b->GetInsertBlock();
+    BasicBlock * const loopStart = b->CreateBasicBlock("strideCoordinateVecLoop");
+    BasicBlock * const foundDuplicate = b->CreateBasicBlock("foundDuplicate");
+    BasicBlock * const continueToNext = b->CreateBasicBlock("continueToNext");
+    BasicBlock * const loopEnd = b->CreateBasicBlock("strideCoordinateElemLoop");
+
+    Constant * const sz_ZERO = b->getSize(0);
+    Constant * const sz_ONE = b->getSize(1);
+    IntegerType * sizeTy = b->getSizeTy();
+
+    Value * const hashCodesProcessed = b->getProcessedItemCount("HashCodes");
+
+    Value * const hashCodePtr = b->getRawInputPointer("HashCodes", hashCodesProcessed);
+
+    Value * const fieldCoordinatePtr = b->getRawInputPointer("fieldCoordinates", b->CreateShl(hashCodesProcessed, sz_ONE));
+
+    Value * const keySetObj = b->getScalarField("keySetObject");
+
+    ArrayType * const coordTy = ArrayType::get(b->getInt8PtrTy(), FieldsPerKey * 2);
+    Value * const coordArray = b->CreateAllocaAtEntryPoint(coordTy);
+
+    Value * const initial = b->getProcessedItemCount("InputStream");
+
+    b->CreateLikelyCondBr(b->CreateICmpNE(numOfUnprocessedHashCodes, sz_ZERO), loopStart, loopEnd);
+
+    b->SetInsertPoint(loopStart);
+    PHINode * const hashCodePtrPhi = b->CreatePHI(hashCodePtr->getType(), 2);
+    hashCodePtrPhi->addIncoming(hashCodePtr, entry);
+    PHINode * const fieldCoordinatePtrPhi = b->CreatePHI(fieldCoordinatePtr->getType(), 2);
+    fieldCoordinatePtrPhi->addIncoming(fieldCoordinatePtr, entry);
+    PHINode * const currentStrideNumPhi = b->CreatePHI(sizeTy, 2);
+    currentStrideNumPhi->addIncoming(sz_ZERO, entry);
+
+    Value * hashVal = nullptr;
+    for (unsigned i = 0; i < FieldsPerKey; ++i) {
+        Value * const ptr = b->CreateGEP(hashCodePtrPhi, b->getSize(i));
+        Value * const val = b->CreateZExt(b->CreateLoad(ptr), sizeTy);
+        b->CallPrintInt("hashVal" + std::to_string(i), val);
+        if (hashVal == nullptr) {
+            hashVal = val;
+        } else {
+            hashVal = b->CreateAdd(hashVal, val);
+        }
+    }
+
+    Value * pos = nullptr;
+    FixedArray<Value *, 2> offset;
+    offset[0] = sz_ZERO;
+    for (unsigned i = 0; i < (FieldsPerKey * 2); ++i) {
+        Constant * sz_I = b->getSize(i);
+        pos = b->CreateLoad(b->CreateGEP(fieldCoordinatePtrPhi, sz_I));
+        assert (pos->getType() == sizeTy);
+        Value * const ptr = b->getRawInputPointer("InputStream", pos);
+        offset[1] = sz_I;
+        b->CreateStore(ptr, b->CreateGEP(coordArray, offset));
+    }
+
+    ConstantInt * sz_STEP = b->getSize(mStride);
+
+    FixedArray<Value *, 4> args;
+    args[0] = keySetObj;
+    args[1] = hashVal;
+    args[2] = sz_STEP;
+    args[3] = b->CreateBitCast(coordArray, b->getInt8PtrTy()->getPointerTo());
+
+    Function * callbackFn = b->getModule()->getFunction("check_unique_keyset"); assert (callbackFn);
+    Value * const retVal = b->CreateCall(callbackFn->getFunctionType(), callbackFn, args);
+
+    b->CreateUnlikelyCondBr(b->CreateIsNull(retVal), foundDuplicate, continueToNext);
+
+    b->SetInsertPoint(foundDuplicate);
+    Value * const producedErrorCoords = b->getProducedItemCount("errorCoordinates");
+    Value * const errorCoordPtr = b->getRawOutputPointer("errorCoordinates", producedErrorCoords);
+    b->CreateStore(b->CreateLoad(fieldCoordinatePtrPhi), errorCoordPtr);
+    b->setProducedItemCount("errorCoordinates", b->CreateAdd(producedErrorCoords, sz_ONE));
+    b->CreateBr(continueToNext);
+
+    b->SetInsertPoint(continueToNext);
+
+    Value * const nextHashCodePtr = b->CreateGEP(hashCodePtrPhi, sz_STEP);
+    hashCodePtrPhi->addIncoming(nextHashCodePtr, continueToNext);
+
+    Value * const nextFieldCoordinatePtr = b->CreateGEP(fieldCoordinatePtrPhi, b->getSize(mStride * 2));
+    fieldCoordinatePtrPhi->addIncoming(nextFieldCoordinatePtr, continueToNext);
+
+    Value * const nextStrideNum = b->CreateAdd(currentStrideNumPhi, sz_STEP);
+    currentStrideNumPhi->addIncoming(nextStrideNum, continueToNext);
+
+    Value * const notDone = b->CreateICmpULT(nextStrideNum, numOfUnprocessedHashCodes);
+    b->CreateCondBr(notDone, loopStart, loopEnd);
+
+    b->SetInsertPoint(loopEnd);
+    PHINode * const finalPos = b->CreatePHI(sizeTy, 2);
+    finalPos->addIncoming(initial, entry);
+    finalPos->addIncoming(pos, continueToNext);
+    b->setProcessedItemCount("InputStream", finalPos);
+}
+
+
+#endif
 
 class CSVErrorIdentifier : public MultiBlockKernel {
 public:
@@ -773,200 +1222,13 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
     b->SetInsertPoint(exit);
 }
 
-class BixHash2 final: public pablo::PabloKernel {
-public:
-    BixHash2(BuilderRef b,
-            StreamSet * basis, StreamSet * allSeparators, StreamSet * run,
-             StreamSet * hashes, StreamSet * selector_span, StreamSet * run_separators, unsigned steps=4, unsigned seed = 179321)
-    : PabloKernel(b, "BixHash2_" + std::to_string(hashes->getNumElements()) + "_" + std::to_string(steps) + "_" + std::to_string(seed),
-                  {Binding{"basis", basis}, Binding{"run", run}},
-                  {Binding{"hashes", hashes}, Binding{"selector_span", selector_span}, Binding{"keyFields", run_separators}}),
-    mHashBits(hashes->getNumElements()), mHashSteps(steps), mSeed(seed) {}
-
-
-protected:
-    void generatePabloMethod() override;
-private:
-    const unsigned mHashBits;
-    const unsigned mHashSteps;
-    const unsigned mSeed;
-};
-
-
-
-
-void BixHash2::generatePabloMethod() {
-    PabloBuilder pb(getEntryScope());
-
-    std::vector<PabloAST *> basis = getInputStreamSet("basis");
-    PabloAST * run = getInputStreamSet("run")[0];
-    std::vector<PabloAST *> hash(mHashBits);
-    // For every byte we create an in-place hash, in which each bit
-    // of the byte is xor'd with one other bit.
-    std::vector<unsigned> bitmix(mHashBits);
-    const auto m = basis.size(); assert (m > 0);
-    for (unsigned i = 0; i < mHashBits; ++i) {
-        bitmix[i] = i % m;
-    }
-
-    std::mt19937 rng(mSeed);
-
-    if (mHashBits > 1) {
-        // Avoid XOR-ing a value with itself. Since we may have significantly more hashbits than
-        // basis bits, we want to minimize the work needed to find such a solution.
-        for (unsigned j = 0; j < mHashBits; j += m) {
-            const auto l = j + std::min<unsigned>(mHashBits - j, m);
- retry_shuffle:
-            std::shuffle (bitmix.begin() + j, bitmix.begin() + l, rng);
-            for (unsigned i = j; i < l; i++) {
-                if ((i % m) == bitmix[i]) {
-                    goto retry_shuffle;
-                }
-            }
-        }
-    }
-
-    // By masking out values in our runs here, we clear out the value
-    // in the separator(s) between runs.
-
-    for (unsigned i = 0; i < mHashBits; i++) {
-        hash[i] = pb.createAndXor(run, basis[i % m], basis[bitmix[i]]);
-    }
-
-    // In each step, the select stream will mark positions that are
-    // to receive bits from prior locations in the symbol.   The
-    // select stream must ensure that no bits from outside the symbol
-    // are included in the calculated hash value.
-    PabloAST * select = run;
-    for (unsigned j = 0; j < mHashSteps; j++) {
-        const auto shft = 1U << j;
-        // Select bits from prior positions.
-        std::shuffle (bitmix.begin(), bitmix.end(), rng);
-        for (unsigned i = 0; i < mHashBits; i++) {
-            PabloAST * priorBits = pb.createAdvance(hash[bitmix[i]], shft);
-            // Mix in bits from prior positions.
-            hash[i] = pb.createXorAnd(hash[i], priorBits, select);
-        }
-        select = pb.createAnd(select, pb.createAdvance(select, shft));
-    }
-
-    // if the value is still in the select span, we did not include it in
-    // the hash'ed value.
-    PabloAST * const selectors = pb.createAnd(run, pb.createNot(select));
-
-    Var * hashVar = getOutputStreamVar("hashes");
-    for (unsigned i = 0; i < mHashBits; i++) {
-        pb.createAssign(pb.createExtract(hashVar, pb.getInteger(i)), hash[i]);
-    }
-
-    pb.createAssign(pb.createExtract(getOutputStreamVar("selector_span"), pb.getInteger(0)), selectors);
-
-    // The "run" goes up to but not including the separator marker. Move it up to the separator.
-    // TODO: pass allSeparators into here and try to avoid the unnecessary advance?
-
-    PabloAST * advRun = pb.createAdvance(run, 1);
-//    PabloAST * fieldStarts = pb.createAnd(run, pb.createNot(advRun));
-    PabloAST * fieldEnds = pb.createAnd(advRun, pb.createNot(run));
-
-   Var * keyFieldVar = getOutputStreamVar("keyFields");
-
-//   pb.createAssign(pb.createExtract(keyFieldVar, pb.getInteger(0)), fieldStarts);
-   pb.createAssign(pb.createExtract(keyFieldVar, pb.getInteger(0)), fieldEnds);
-
-}
-
-
-class IdentifyLastSelector final: public pablo::PabloKernel {
-public:
-    IdentifyLastSelector(BuilderRef b, StreamSet * selector_span, StreamSet * selectors)
-    : PabloKernel(b, "IdentifyLastSelector",
-                  {Binding{"selector_span", selector_span, FixedRate(), LookAhead(1)}},
-                  {Binding{"selectors", selectors}}) {}
-protected:
-    void generatePabloMethod() override;
-};
-
-
-void IdentifyLastSelector::generatePabloMethod() {
-    PabloBuilder pb(getEntryScope());
-    // TODO: we shouldn't need this kernel to obtain the last mark of each run of a selector_span
-    Integer * pb_ZERO = pb.getInteger(0);
-    PabloAST * span = pb.createExtract(getInputStreamVar("selector_span"), pb_ZERO);
-    PabloAST * la = pb.createLookahead(span, 1);
-    PabloAST * selectors = pb.createAnd(span, pb.createNot(la));
-    pb.createAssign(pb.createExtract(getOutputStreamVar("selectors"), pb_ZERO), selectors);
-}
-
-
-class PullBack final: public pablo::PabloKernel {
-public:
-    PullBack(BuilderRef b, StreamSet * input, StreamSet * output, const unsigned ammount = 1)
-    : PabloKernel(b, "PullBack" + std::to_string(ammount),
-                  {Binding{"input", input, FixedRate(), LookAhead(ammount)}},
-                  {Binding{"output", output}}) {}
-protected:
-    void generatePabloMethod() override;
-
-};
-
-
-void PullBack::generatePabloMethod() {
-    PabloBuilder pb(getEntryScope());
-    // TODO: we shouldn't need this kernel to obtain the last mark of each run of a selector_span
-    Integer * pb_ZERO = pb.getInteger(0);
-    PabloAST * span = pb.createExtract(getInputStreamVar("input"), pb_ZERO);
-    const auto k = getInputStreamSetBinding(0).getLookahead();
-    PabloAST * la = pb.createLookahead(span, k);
-    pb.createAssign(pb.createExtract(getOutputStreamVar("output"), pb_ZERO), la);
-}
-
-
-#if 0
-
-class CheckKeyUniqueness : public SegmentOrientedKernel {
-public:
-    CheckKeyUniqueness(BuilderRef b, StreamSet * ByteStream, StreamSet * const HashValSequence,
-                       StreamSet * allSeparators, StreamSet * selectors,
-                       Scalar * const errorCallbackObject, const unsigned fieldsPerKey);
-private:
-    void generateDoSegmentMethod(BuilderRef b) override;
-private:
-    const unsigned FieldsPerKey;
-};
-
-CheckKeyUniqueness::CheckKeyUniqueness(BuilderRef b, StreamSet * ByteStream, StreamSet * const HashValSequence,
-                                       StreamSet * allSeparators, StreamSet * selectors,
-                                       Scalar * const errorCallbackObject, const unsigned fieldsPerKey)
-: SegmentOrientedKernel(b, "CheckKeyUniqueness" + std::to_string(fieldsPerKey),
-// inputs
-{Binding{"InputStream", ByteStream, GreedyRate(), Deferred()}},
-// outputs
-{},
-// input scalars
-{Binding{"callbackObject", errorCallbackObject}},
-// output scalars
-{},
-// kernel state
-{})
-, FieldsPerKey(fieldsPerKey) {
-    setStride(1);
-    addAttribute(SideEffecting());
-}
-
-void CheckKeyUniqueness::generateDoSegmentMethod(BuilderRef b) {
-
-
-}
-
-#endif
-
 CSVValidatorFunctionType wcPipelineGen(CPUDriver & pxDriver) {
 
     auto & b = pxDriver.getBuilder();
 
     Type * const int32Ty = b->getInt32Ty();
 
-    auto P = pxDriver.makePipeline({Binding{int32Ty, "fd"}, Binding{b->getInt8PtrTy(), "fileName"}});
+    auto P = pxDriver.makePipeline({Binding{int32Ty, "fd"}, Binding{b->getInt8PtrTy(), "fileName"}, Binding{b->getVoidPtrTy(), "uniquenessCheckObj"}});
 
     P->setUniqueName("csv_validator");
 
@@ -986,35 +1248,35 @@ CSVValidatorFunctionType wcPipelineGen(CPUDriver & pxDriver) {
     StreamSet * recordSeparators = P->CreateStreamSet(1);
     StreamSet * allSeparators = P->CreateStreamSet(1);
 
+    P->CreateKernelCall<CSVDataParser>(csvCCs, fieldData, recordSeparators, allSeparators);
+
+    const auto schemaFile = parseSchemaFile();
+
     StreamSet * u8index = P->CreateStreamSet();
     P->CreateKernelCall<UTF8_index>(BasisBits, u8index);
 
-    P->CreateKernelCall<CSVDataParser>(u8index, csvCCs, fieldData, recordSeparators, allSeparators);
-
-   const auto schemaFile = parseSchemaFile();
-
     StreamSet * errors = P->CreateStreamSet(1);
+
+    StreamSet * duplicateKeys = nullptr;
 
     const auto uniqueFields = schemaFile.UIDFields.size();
 
     if (uniqueFields == 0) {
 
-        P->CreateKernelFamilyCall<CSVSchemaValidatorKernel>(schemaFile, BasisBits, fieldData, recordSeparators, allSeparators, errors);
+        P->CreateKernelFamilyCall<CSVSchemaValidatorKernel>(schemaFile, BasisBits, u8index, fieldData, recordSeparators, allSeparators, errors);
 
     } else {
         StreamSet * keyRuns = P->CreateStreamSet(1);
-
-
 
         // If we use a bixhash like technique, we could possibly chunk the field data into N-byte phases and use
         // a loop to combine the data. But how can we prevent the data from one record from being combined with
         // another? We could scan through and iterate over each record individually?
 
-        P->CreateKernelFamilyCall<CSVSchemaValidatorKernel>(schemaFile, BasisBits, fieldData, recordSeparators, allSeparators, errors, keyRuns);
+        P->CreateKernelFamilyCall<CSVSchemaValidatorKernel>(schemaFile, BasisBits, u8index, fieldData, recordSeparators, allSeparators, errors, keyRuns);
 
-//        P->CreateKernelCall<DebugDisplayKernel>("allSeparators", allSeparators);
+        P->CreateKernelCall<DebugDisplayKernel>("allSeparators", allSeparators);
 
-//        P->CreateKernelCall<DebugDisplayKernel>("keyRuns", keyRuns);
+        P->CreateKernelCall<DebugDisplayKernel>("keyRuns", keyRuns);
 
         constexpr unsigned HASH_BITS = 16;
 
@@ -1022,78 +1284,46 @@ CSVValidatorFunctionType wcPipelineGen(CPUDriver & pxDriver) {
 
         StreamSet * selector_span = P->CreateStreamSet(1);
 
-        StreamSet * key_separators = P->CreateStreamSet(1);
+        StreamSet * fields = P->CreateStreamSet(1);
 
-        P->CreateKernelCall<BixHash2>(BasisBits, allSeparators, keyRuns, hashes, selector_span, key_separators, 5);
+        P->CreateKernelCall<BixHash2>(BasisBits, keyRuns, hashes, selector_span, fields, 5);
 
-        StreamSet * compressed_separators = P->CreateStreamSet(1);
+        const auto sizeTyWidth = b->getSizeTy()->getBitWidth();
 
-        P->CreateKernelCall<FieldCompressKernel>(Select(allSeparators, {0}), SelectOperationList{Select(key_separators, {0})}, compressed_separators, 64);
+        StreamSet * const fieldSeq = P->CreateStreamSet(1, sizeTyWidth);
 
-        StreamSet * compressed_separators2 = P->CreateStreamSet(1);
+        P->CreateKernelCall<ExtractCoordinateSequence>(fields, fieldSeq);
 
-        P->CreateKernelCall<StreamCompressKernel>(allSeparators, compressed_separators, compressed_separators2, 64);
+        StreamSet * const hash_bit_selector = P->CreateStreamSet(1);
 
-        StreamSet * const compressed_separators3 = P->CreateStreamSet(1);
-
-        // TODO: merge PullBack with the decompression logic?
-
-        // Doesn't work if the very first field on the first line is a key. Needs fake start
-
-        P->CreateKernelCall<PullBack>(compressed_separators2, compressed_separators3);
-
-        StreamSet * const selected_starts = P->CreateStreamSet(1);
-
-      //  SpreadByMask(E, lineStarts, MatchesByLine, MatchedLineStarts);
-
-        P->CreateKernelCall<StreamExpandKernel>(allSeparators, compressed_separators3, selected_starts, P->CreateConstant(b->getSize(0)), false);
-
-        StreamSet * const selected_starts2 = P->CreateStreamSet(1);
-
-        P->CreateKernelCall<FieldDepositKernel>(allSeparators, selected_starts, selected_starts2);
-
-
-         P->CreateKernelCall<DebugDisplayKernel>("allSeparators", allSeparators);
-
-         P->CreateKernelCall<DebugDisplayKernel>("key_separators", key_separators);
-
-        P->CreateKernelCall<DebugDisplayKernel>("selected_starts2", selected_starts2);
-
-
-        StreamSet * selectors = P->CreateStreamSet(1);
-
-
-
-
-        // TODO: remove the need for the IdentifyLastSelector kernel
-
-        P->CreateKernelCall<IdentifyLastSelector>(selector_span, selectors);
+        P->CreateKernelCall<IdentifyLastSelector>(selector_span, hash_bit_selector);
 
         StreamSet * const compressed = P->CreateStreamSet(HASH_BITS);
 
-
-
-
-        P->CreateKernelCall<FieldCompressKernel>(Select(selectors, {0}), SelectOperationList{Select(hashes, streamutils::Range(0, HASH_BITS))}, compressed, 64);
+        P->CreateKernelCall<FieldCompressKernel>(Select(hash_bit_selector, {0}), SelectOperationList{Select(hashes, streamutils::Range(0, HASH_BITS))}, compressed, 64);
 
         StreamSet * const outputs = P->CreateStreamSet(HASH_BITS);
 
-        P->CreateKernelCall<StreamCompressKernel>(selectors, compressed, outputs, 64);
+        P->CreateKernelCall<StreamCompressKernel>(hash_bit_selector, compressed, outputs, 64);
 
         StreamSet * const hashVals = P->CreateStreamSet(1, HASH_BITS);
 
         P->CreateKernelCall<P2S16Kernel>(outputs, hashVals);
 
-        //
+        duplicateKeys = P->CreateStreamSet(1, sizeTyWidth);
 
+        Scalar * const uniquenessCheckObj = P->getInputScalar("uniquenessCheckObj");
+
+        P->CreateKernelFamilyCall<CheckKeyUniqueness>(ByteStream, hashVals, fieldSeq, duplicateKeys, uniquenessCheckObj, uniqueFields);
 
     }
-
 
     Scalar * const fileName = P->getInputScalar("fileName");
 
     // TODO: using the scan match here like this won't really let us determine what field is wrong in the case an error occurs
     // since the only information we get is whether a match fails.
+
+    // TODO: What if we had pablo functions that automatically converts bit markers into an integer sequence and vv?
 
     P->CreateKernelCall<CSVErrorIdentifier>(errors, allSeparators, ByteStream, fileName);
 
@@ -1120,7 +1350,8 @@ void wc(CSVValidatorFunctionType fn_ptr, const fs::path & fileName) {
         std::cerr << "csv_validator: " << fileName << ": Is a directory.\n";
     } else {
         foundError = false;
-        fn_ptr(fd, fn);
+        UniqueKeySets K;
+        fn_ptr(fd, fn, (void*)&K);
     }
     close(fd);
 }

@@ -380,6 +380,7 @@ private:
 
     unsigned mCarryGroup;
     unsigned mCarryWidth;
+
 };
 
 class StatementList {

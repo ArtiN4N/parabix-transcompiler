@@ -83,8 +83,11 @@ void PipelineAnalysis::generateInitialBufferGraph() {
 
             if (LLVM_UNLIKELY(rate.getKind() == RateId::Unknown)) {
                 bp.Flags |= BufferPortType::IsManaged;
+            }
+            if (!rate.isFixed()) {
                 cannotBePlacedIntoThreadLocalMemory = true;
             }
+
 
             BufferNode & bn = mBufferGraph[streamSet];
 
