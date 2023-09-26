@@ -60,6 +60,8 @@ struct FileLock {
     ~FileLock() noexcept {
         if (locked()) {
             unlock(mFd);
+        }
+        if (BOOST_LIKELY(mFd != -1)) {
             close(mFd);
         }
     }

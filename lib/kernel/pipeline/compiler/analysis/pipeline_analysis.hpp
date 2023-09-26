@@ -19,7 +19,7 @@ public:
 //SEED: 2622027106
 //SEED: 388749444
 
-        std::random_device rd;
+        //std::random_device rd;
         //pipeline_random_engine rng{rd()};
 
 //        const unsigned seed = rd();

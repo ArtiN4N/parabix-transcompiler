@@ -19,6 +19,7 @@
 #endif
 #include <llvm/IR/Verifier.h>
 #include <system_error>
+#include <stdlib.h>
 
 using namespace llvm;
 using namespace boost;
@@ -217,8 +218,11 @@ void ParabixObjectCache::notifyObjectCompiled(const Module * M, MemoryBufferRef 
             msg << "Could not write to \""
                 << objectName.str()
                 << "\" in object cache directory.\n\n"
-                "Reason: " << EC.message() << "\n\n"
+                "Reason " << EC.value() << ": " << EC.message() << "\n\n"
                 "Rerun " << codegen::ProgramName << " with --enable-object-cache=0";
+            if (EC.value() == 24) {
+                ::system(("lsof -p " + std::to_string(getpid())).c_str());
+            }
             report_fatal_error(msg.str());
         }
         objFile.write(Obj.getBufferStart(), Obj.getBufferSize());
@@ -233,8 +237,11 @@ void ParabixObjectCache::notifyObjectCompiled(const Module * M, MemoryBufferRef 
             msg << "Could not write to \""
                 << objectName.str()
                 << "\" in object cache directory.\n\n"
-                "Reason: " << EC.message() << "\n\n"
+                "Reason " << EC.value() << ": " << EC.message() << "\n\n"
                 "Rerun " << codegen::ProgramName << " with --enable-object-cache=0";
+            if (EC.value() == 24) {
+                ::system(("lsof -p " + std::to_string(getpid())).c_str());
+            }
             report_fatal_error(msg.str());
         }
 

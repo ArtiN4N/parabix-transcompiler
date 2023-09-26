@@ -34,6 +34,19 @@ enum class UnterminatedLineAtEOF {Ignore, Add1};
             file is not a text file and that processing should be aborted. */
 enum class NullCharMode {Data, Break, Abort};
 
+/*  Helper class to provide a LF stream as input to UnicodeLines logic,
+    necessary so that LookAhead operations on the stream are available
+    for CRLF processing.  */
+
+class LineFeedKernelBuilder final : public pablo::PabloKernel {
+public:
+    LineFeedKernelBuilder(BuilderRef b, kernel::StreamSet * Basis, kernel::StreamSet * LineFeedStream);
+protected:
+    void generatePabloMethod() override;
+    const unsigned mNumOfStreams;
+    const unsigned mStreamFieldWidth;
+};
+
 /*  To signal that processing should be aborted, a call back object must
     be provided whenever NullCharMode::Abort is specified.   This call back
     object is provide as an input Scalar to the kernel, and must be a pointer

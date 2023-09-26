@@ -138,6 +138,11 @@ public:
         return *mContext;
     }
 
+    // NOTE: this shadows both the PabloAST and AttributeSet print methods
+    void print(llvm::raw_ostream & O) const {
+        PabloAST::print(O);
+    }
+
     bool requiresExplicitPartialFinalStride() const override;
 
 protected:

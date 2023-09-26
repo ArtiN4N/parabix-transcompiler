@@ -34,4 +34,20 @@ DEPS
     toolchain
 )
 
+parabix_add_executable(
+NAME
+    hashtester
+SRC
+    hashtester.cpp
+DEPS
+    fileselect
+    grep
+    pablo
+    kernel.basis
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    kernel.util
+    toolchain
+)
 

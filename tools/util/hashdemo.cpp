@@ -176,9 +176,9 @@ void RunLengthSelector::generatePabloMethod() {
 const unsigned hash_bits = 8;
 const unsigned hash_entries = 1 << hash_bits;
 
-class HashTable6 {
+class HashTable {
 public:
-    HashTable6() {
+    HashTable() {
         for (unsigned i = 0; i < hash_entries; i++) {
             mTable[i] = {};
         }
@@ -216,7 +216,7 @@ private:
     std::vector<unsigned> mCount[hash_entries];
 };
 
-HashTable6 T6;
+HashTable T6;
 
 typedef void (*HashDemoFunctionType)(uint32_t fd, ParabixIllustrator * illustrator);
 
