@@ -39,6 +39,7 @@ NAME
     hashtester
 SRC
     hashtester.cpp
+    murmur3/MurmurHash3.cpp
 DEPS
     fileselect
     grep
