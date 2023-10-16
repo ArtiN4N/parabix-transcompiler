@@ -386,5 +386,75 @@ P2S16KernelWithCompressedOutputOld::P2S16KernelWithCompressedOutputOld(BuilderRe
               {}, {}, {}) {
 }
 
+void P2S32Kernel::generateDoBlockMethod(BuilderRef b) {
+    Value * zeroes = b->allZeroes();
+
+    const auto bitCount = getInputStreamSet(0)->getNumElements();
+
+    if (LLVM_UNLIKELY(bitCount > 32)) {
+        report_fatal_error("P2S32 cannot handle basis bit inputs with more than 32 elements");
+    }
+
+    if (LLVM_UNLIKELY(getOutputStreamSet(0)->getFieldWidth() != 32)) {
+        report_fatal_error("P2S32 output must have a 32-bit fieldwidth");
+    }
+
+    Value * bytes[32];
+
+    for (unsigned i = 0; i < 32; i += 8) {
+        if (i < bitCount) {
+            Value * bits[8];
+            for (unsigned j = 0; j < 8; ++j) {
+                const auto k = i + j;
+                if (k < bitCount) {
+                    bits[j] = b->loadInputStreamBlock("basisBits", b->getInt32(k));
+                } else {
+                    bits[j] = zeroes;
+                }
+            }
+            p2s(b, bits, bytes + i);
+        } else {
+            for (unsigned j = 0; j < 8; ++j) {
+                bytes[i + j] = zeroes;
+            }
+        }
+    }
+
+
+    for (unsigned j = 0; j < 8; ++j) {
+        Value * quadbyte32[4];
+        if (mByteNumbering == cc::ByteNumbering::BigEndian) {
+            Value * hi_dblbyte_0 = b->bitCast(b->esimd_mergel(8, bytes[24 + j], bytes[16 + j]));
+            Value * hi_dblbyte_1 = b->bitCast(b->esimd_mergeh(8, bytes[24 + j], bytes[16 + j]));
+            Value * lo_dblbyte_0 = b->bitCast(b->esimd_mergel(8, bytes[8 + j], bytes[0 + j]));
+            Value * lo_dblbyte_1 = b->bitCast(b->esimd_mergeh(8, bytes[8 + j], bytes[0 + j]));
+            quadbyte32[0] = b->bitCast(b->esimd_mergel(16, hi_dblbyte_0, lo_dblbyte_0));
+            quadbyte32[1] = b->bitCast(b->esimd_mergeh(16, hi_dblbyte_0, lo_dblbyte_0));
+            quadbyte32[2] = b->bitCast(b->esimd_mergel(16, hi_dblbyte_1, lo_dblbyte_1));
+            quadbyte32[3] = b->bitCast(b->esimd_mergeh(16, hi_dblbyte_1, lo_dblbyte_1));
+        } else {
+            Value * hi_dblbyte_0 = b->bitCast(b->esimd_mergel(8, bytes[16 + j], bytes[24 + j]));
+            Value * hi_dblbyte_1 = b->bitCast(b->esimd_mergeh(8, bytes[16 + j], bytes[24 + j]));
+            Value * lo_dblbyte_0 = b->bitCast(b->esimd_mergel(8, bytes[0 + j], bytes[8 + j]));
+            Value * lo_dblbyte_1 = b->bitCast(b->esimd_mergeh(8, bytes[0 + j], bytes[8 + j]));
+            quadbyte32[0] = b->bitCast(b->esimd_mergel(16, lo_dblbyte_0, hi_dblbyte_0));
+            quadbyte32[1] = b->bitCast(b->esimd_mergeh(16, lo_dblbyte_0, hi_dblbyte_0));
+            quadbyte32[2] = b->bitCast(b->esimd_mergel(16, lo_dblbyte_1, hi_dblbyte_1));
+            quadbyte32[3] = b->bitCast(b->esimd_mergeh(16, lo_dblbyte_1, hi_dblbyte_1));
+        }
+        for (unsigned k = 0; k < 4; k++) {
+            b->storeOutputStreamPack("u32stream", b->getInt32(0), b->getInt32(4 * j + k), quadbyte32[k]);
+        }
+    }
+}
+
+P2S32Kernel::P2S32Kernel(BuilderRef b, StreamSet * basis, StreamSet *u32stream, cc::ByteNumbering numbering)
+: BlockOrientedKernel(b, "p2s_32" + cc::numberingSuffix(numbering),
+{Binding{"basisBits", basis}},
+{Binding{"u32stream", u32stream}},
+{}, {}, {}), mByteNumbering(numbering) {
+    assert(basis->getNumElements() <= u32stream->getFieldWidth());
+    assert(basis->getFieldWidth() == u32stream->getNumElements());
+}
 
 }

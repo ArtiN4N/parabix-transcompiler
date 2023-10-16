@@ -602,6 +602,108 @@ void S2P_21Kernel::generateMultiBlockLogic(BuilderRef kb, Value * const numOfStr
     kb->SetInsertPoint(s2pDone);
 }
 
+
+S2P_32Kernel::S2P_32Kernel(BuilderRef b, StreamSet * const codeUnitStream, StreamSet * const BasisBits)
+: MultiBlockKernel(b, "s2p_" + std::to_string(BasisBits->getNumElements()),
+{Binding{"codeUnitStream", codeUnitStream, FixedRate(), Principal()}},
+    {Binding{"basisBits", BasisBits}}, {}, {}, {})  {}
+
+void S2P_32Kernel::generateMultiBlockLogic(BuilderRef kb, Value * const numOfStrides) {
+    BasicBlock * entry = kb->GetInsertBlock();
+    BasicBlock * processBlock = kb->CreateBasicBlock("s2p21_loop");
+
+
+    BasicBlock * finish_s2p = kb->CreateBasicBlock("finish_s2p");
+    BasicBlock * s2pDone = kb->CreateBasicBlock("s2p21_done");
+    Constant * const ZERO = kb->getSize(0);
+    Constant * ZERO_BLOCK = kb->allZeroes();
+
+    Value * numOfBlocks = numOfStrides;
+    if (getStride() != kb->getBitBlockWidth()) {
+        numOfBlocks = kb->CreateShl(numOfStrides, kb->getSize(std::log2(getStride()/kb->getBitBlockWidth())));
+    }
+    kb->CreateBr(processBlock);
+
+    kb->SetInsertPoint(processBlock);
+    PHINode * blockOffsetPhi = kb->CreatePHI(kb->getSizeTy(), 4); // block offset from the base block, e.g. 0, 1, 2, ...
+    blockOffsetPhi->addIncoming(ZERO, entry);
+    Value * nextBlk = kb->CreateAdd(blockOffsetPhi, kb->getSize(1));
+    Value * moreToDo = kb->CreateICmpNE(nextBlk, numOfBlocks);
+    Value * u32byte[4][8];
+
+    const auto bitCount = getInputStreamSet(0)->getFieldWidth();
+
+    Value * anyByte = nullptr;
+
+    for (unsigned i = 0; i < 8; i++) {
+        Value * UTF32units[4];
+        for (unsigned j = 0; j < 4; j++) {
+            UTF32units[j] = kb->loadInputStreamPack("codeUnitStream", ZERO, kb->getInt32(4 * i + j), blockOffsetPhi);
+        }
+        Value * u32lo16_0 = kb->hsimd_packl(32, UTF32units[0], UTF32units[1]);
+        Value * u32lo16_1 = kb->hsimd_packl(32, UTF32units[2], UTF32units[3]);
+        Value * u32hi16_0 = kb->hsimd_packh(32, UTF32units[0], UTF32units[1]);
+        Value * u32hi16_1 = kb->hsimd_packh(32, UTF32units[2], UTF32units[3]);
+        u32byte[0][i] = kb->hsimd_packl(16, u32lo16_0, u32lo16_1);
+        u32byte[1][i] = kb->hsimd_packh(16, u32lo16_0, u32lo16_1);
+        if (LLVM_LIKELY(bitCount > 16)) {
+            u32byte[2][i] = kb->hsimd_packl(16, u32hi16_0, u32hi16_1);
+        } else {
+            u32byte[2][i] = ZERO_BLOCK;
+        }
+        if (LLVM_LIKELY(bitCount > 24)) {
+            u32byte[3][i] = kb->hsimd_packh(16, u32hi16_0, u32hi16_1);
+        } else {
+            u32byte[3][i] = ZERO_BLOCK;
+        }
+    }
+    Value * basisbits[8];
+
+    s2p(kb, u32byte[0], basisbits);
+    for (unsigned i = 0; i < 8; ++i) {
+        kb->storeOutputStreamBlock("basisBits", kb->getInt32(i), blockOffsetPhi, basisbits[i]);
+    }
+    Value * any[3];
+    for (unsigned i = 0; i < 3; ++i) {
+        any[i] = u32byte[i][0];
+        for (unsigned j = 1; j < 8; ++j) {
+            any[i] = kb->CreateOr(any[i], u32byte[i][j]);
+        }
+    }
+
+    any[1] = kb->CreateOr(any[1], any[2]);
+    any[0] = kb->CreateOr(any[0], any[1]);
+
+
+
+    for (unsigned i = 0; i < 2; ++i) {
+
+        BasicBlock * const write_zeroes = kb->CreateBasicBlock("write_zeroes", s2pDone);
+        BasicBlock * const continue_s2p = kb->CreateBasicBlock("continue_s2p", s2pDone);
+        kb->CreateCondBr(kb->bitblock_any(any[i]), continue_s2p, write_zeroes);
+
+        kb->SetInsertPoint(write_zeroes);
+        for (unsigned j = 8 * (i + 1); j < 32; ++j) {
+            kb->storeOutputStreamBlock("basisBits", kb->getInt32(j), blockOffsetPhi, ZERO_BLOCK);
+        }
+        blockOffsetPhi->addIncoming(nextBlk, write_zeroes);
+        kb->CreateCondBr(moreToDo, processBlock, s2pDone);
+
+        kb->SetInsertPoint(continue_s2p);
+        s2p(kb, u32byte[i + 1], basisbits);
+        for (unsigned j = 0; j < 8; ++j) {
+            kb->storeOutputStreamBlock("basisBits", kb->getInt32((i * 8) + j), blockOffsetPhi, basisbits[j]);
+        }
+    }
+
+    blockOffsetPhi->addIncoming(nextBlk, kb->GetInsertBlock());
+    kb->CreateCondBr(moreToDo, processBlock, s2pDone);
+
+
+
+    kb->SetInsertPoint(s2pDone);
+}
+
 void S2P_PabloKernel::generatePabloMethod() {
     pablo::PabloBlock * const pb = getEntryScope();
     const unsigned steps = std::log2(mCodeUnitWidth);

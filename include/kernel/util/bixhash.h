@@ -38,5 +38,21 @@ private:
     unsigned mSeed;
 };
 
+class BixSubHash final: public pablo::PabloKernel {
+public:
+    BixSubHash(BuilderRef b,
+            StreamSet * basis, StreamSet * run, StreamSet * hashes, StreamSet * hashSpan, const unsigned steps=4, const unsigned seed = 179321)
+    : PabloKernel(b, "BixSubHash" + std::to_string(hashes->getNumElements()) + "_" + std::to_string(steps) + "_" + std::to_string(seed),
+                  {Binding{"basis", basis}, Binding{"runs", run}},
+                  {Binding{"hashes", hashes}, Binding{"hashSpan", hashSpan}}),
+    mHashSteps(steps), mSeed(seed) {}
+protected:
+    void generatePabloMethod() override;
+private:
+    unsigned mHashSteps;
+    unsigned mSeed;
+};
+
+
 }
 #endif

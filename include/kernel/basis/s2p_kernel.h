@@ -64,6 +64,14 @@ protected:
     void generateMultiBlockLogic(BuilderRef kb, llvm::Value * const numOfStrides) override;
 };
 
+class S2P_32Kernel final : public MultiBlockKernel {
+public:
+    S2P_32Kernel(BuilderRef b, StreamSet * const codeUnitStream, StreamSet * const BasisBits);
+protected:
+    void generateMultiBlockLogic(BuilderRef kb, llvm::Value * const numOfStrides) override;
+};
+
+
 class S2P_PabloKernel final : public pablo::PabloKernel {
 public:
     S2P_PabloKernel(BuilderRef b, StreamSet * const codeUnitStream, StreamSet * const BasisBits);

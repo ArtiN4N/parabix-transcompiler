@@ -73,6 +73,15 @@ private:
     cc::ByteNumbering mByteNumbering;
 };
 
+class P2S32Kernel final : public BlockOrientedKernel {
+public:
+    P2S32Kernel(BuilderRef b, StreamSet * u21bits, StreamSet * u32stream, cc::ByteNumbering = cc::ByteNumbering::LittleEndian);
+private:
+    void generateDoBlockMethod(BuilderRef b) override;
+    cc::ByteNumbering mByteNumbering;
+};
+
+
 }
 
 #endif
