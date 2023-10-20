@@ -312,26 +312,40 @@ void * CPUDriver::finalizeObject(kernel::Kernel * const pk) {
     const auto e = true; // pk->containsKernelFamilyCalls() || pk->generatesDynamicRepeatingStreamSets();
     const auto method = e ? Kernel::AddInternal : Kernel::DeclareExternal;    
     Function * const main = pk->addOrDeclareMainFunction(mBuilder, method);
-    mBuilder->setModule(mMainModule);
 
     // NOTE: the pipeline kernel is destructed after calling clear unless this driver preserves kernels!
     if (getPreservesKernels()) {
+
+        auto addIfNotPreserved = [&](KernelSet::value_type & kernel) {
+            // All of these will be destroyed upon driver deconstruction but a programmer may be reusing
+            // kernels. Check if an entry in the preserved list already exists to avoid double
+            // deconstruction errors.
+            auto val = kernel.release();
+            for ( const auto & preserved : mPreservedKernel) {
+                if (preserved.get() == val) {
+                    return;
+                }
+            }
+            mPreservedKernel.emplace_back(val);
+        };
+
         for (auto & kernel : mCachedKernel) {
-            mPreservedKernel.emplace_back(kernel.release());
+            addIfNotPreserved(kernel);
         }
         for (auto & kernel : mCompiledKernel) {
-            mPreservedKernel.emplace_back(kernel.release());
+            addIfNotPreserved(kernel);
         }
     } else {
         mPreservedKernel.clear();
     }
+
     mCachedKernel.clear();
     mCompiledKernel.clear();
 
+
     // return the compiled main method
     mEngine->getTargetMachine()->setOptLevel(CodeGenOpt::None);
-    const auto mainModulePtr = mainModule.get();
-    mEngine->addModule(std::move(mainModule));
+    mEngine->addModule(std::unique_ptr<Module>(mainModule.get()));
     mEngine->finalizeObject();
     #if LLVM_VERSION_INTEGER >= LLVM_VERSION_CODE(11, 0, 0)
     auto mainFnPtr = mEngine->getFunctionAddress(main->getName().str());
@@ -340,10 +354,11 @@ void * CPUDriver::finalizeObject(kernel::Kernel * const pk) {
     #endif
     removeModules(Normal);
     removeModules(Infrequent);
-    //#if LLVM_VERSION_INTEGER >= LLVM_VERSION_CODE(12, 0, 0)
-    mEngine->removeModule(mainModulePtr);
-    mEngine->removeModule(mMainModule);
-    //#endif
+
+    mEngine->removeModule(mainModule.get());
+
+    mBuilder->setModule(mMainModule);
+
     return reinterpret_cast<void *>(mainFnPtr);
 }
 

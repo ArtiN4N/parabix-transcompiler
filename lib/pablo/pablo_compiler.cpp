@@ -810,7 +810,12 @@ void PabloCompiler::compileStatement(BuilderRef b, const Statement * const stmt)
                              nameObj = arg;
                         }
                         PabloPrinter::print(nameObj, out);
-                        b->CallPrintRegister(out.str(), argv[0]);
+                        Value * val = argv[0];
+                        if (val->getType()->isIntOrPtrTy()) {
+                            b->CallPrintInt(out.str(), val);
+                        } else {
+                            b->CallPrintRegister(out.str(), val);
+                        }
                     }
                     value = argv[0];
                     break;

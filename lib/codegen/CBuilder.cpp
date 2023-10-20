@@ -976,11 +976,17 @@ void __report_failure_v(const char * name, const char * fmt, const __backtrace_d
     if (trace) {
         SmallVector<char, 4096> tmp;
         raw_svector_ostream trace_string(tmp);
-        for (uint32_t i = 0; i < traceLength; ++i) {
-            const auto & T = trace[i];
-            trace_string << T.FunctionName << '(' << T.FileName << ':' << T.LineNo << ")\n";
+//        for (uint32_t i = 0; i < traceLength; ++i) {
+//            const auto & T = trace[i];
+//            if (T.FunctionName) {
+//                trace_string << T.FunctionName;
+//            }
+//            if (T.FileName) {
+//                trace_string << '(' << T.FileName << ':' << T.LineNo << ')';
+//            }
+//            trace_string << '\n';
 
-        }
+//        }
         if (colourize) {
             out.changeColor(raw_fd_ostream::WHITE, true);
         }

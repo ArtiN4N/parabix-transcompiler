@@ -53,6 +53,5 @@ private:
     unsigned mSeed;
 };
 
-
 }
 #endif

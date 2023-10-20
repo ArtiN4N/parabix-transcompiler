@@ -73,8 +73,91 @@ void PipelineAnalysis::simpleEstimateInterPartitionDataflow(PartitionGraph & P, 
     }
 
     NonFixedTaintGraph T(numOfPartitions);
+
+    for (unsigned prodId = 0; prodId < numOfPartitions; ++prodId) {
+        const PartitionData & N = P[prodId];
+        const auto & K = N.Kernels;
+        const auto m = K.size();
+
+        T[prodId] = false;
+
+        for (unsigned i = 0; i < m; ++i) {
+            const auto producer = K[i];
+            const auto stridesPerSegmentVar = VarList[producer];
+            assert (stridesPerSegmentVar);
+            assert (Relationships[producer].Type == RelationshipNode::IsKernel);
+
+            for (const auto e : make_iterator_range(out_edges(producer, Relationships))) {
+                const auto binding = target(e, Relationships);
+                if (Relationships[binding].Type == RelationshipNode::IsBinding) {
+                    const auto f = first_out_edge(binding, Relationships);
+                    assert (Relationships[f].Reason != ReasonType::Reference);
+                    const auto streamSet = target(f, Relationships);
+                    assert (Relationships[streamSet].Type == RelationshipNode::IsStreamSet);
+                    const RelationshipNode & output = Relationships[binding];
+                    assert (output.Type == RelationshipNode::IsBinding);
+                    const Binding & outputBinding = output.Binding;
+                    const ProcessingRate & oRate = outputBinding.getRate();
+
+                    for (const auto e : make_iterator_range(out_edges(streamSet, Relationships))) {
+                        const auto binding = target(e, Relationships);
+                        const RelationshipNode & input = Relationships[binding];
+                        if (input.Type == RelationshipNode::IsBinding) {
+                            const Binding & inputBinding = input.Binding;
+                            const ProcessingRate & iRate = inputBinding.getRate();
+
+                            const auto f = first_out_edge(binding, Relationships);
+                            assert (Relationships[f].Reason != ReasonType::Reference);
+                            const unsigned consumer = target(f, Relationships);
+
+                            const auto c = PartitionIds.find(consumer);
+                            assert (c != PartitionIds.end());
+                            const auto consumerPartitionId = c->second;
+                            assert (prodId <= consumerPartitionId);
+
+                            if (prodId != consumerPartitionId) {
+
+                                const Binding & inputBinding = input.Binding;
+                                const ProcessingRate & iRate = inputBinding.getRate();
+
+                                const auto f = first_out_edge(binding, Relationships);
+                                assert (Relationships[f].Reason != ReasonType::Reference);
+                                const unsigned consumer = target(f, Relationships);
+
+                                // mark that there is non-fixed dataflow between these
+                                const auto e = add_edge(prodId, consumerPartitionId, false, T).first;
+                                if (!oRate.isFixed() || !iRate.isFixed()) {
+                                    T[e] = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #ifndef NDEBUG
+    const reverse_traversal ordering(numOfPartitions);
+    assert (is_valid_topological_sorting(ordering, T));
+    #endif
+
+
+    // iterate through the graph in topological order to determine what portions of
+    // the program are not strictly fixed rate
     for (unsigned partId = 0; partId < numOfPartitions; ++partId) {
-        T[partId] = false;
+        for (const auto e : make_iterator_range(in_edges(partId, T))) {
+            if (T[e]) {
+                T[partId] = true;
+                for (const auto f : make_iterator_range(in_edges(partId, T))) {
+                    T[f] = true;
+                }
+                for (const auto f : make_iterator_range(out_edges(partId, T))) {
+                    T[f] = true;
+                }
+                break;
+            }
+        }
     }
 
 
@@ -122,12 +205,9 @@ void PipelineAnalysis::simpleEstimateInterPartitionDataflow(PartitionGraph & P, 
                             if (prodId != consumerPartitionId) {
 
                                 // mark that there is non-fixed dataflow between these
-                                const auto e = add_edge(prodId, consumerPartitionId, false, T).first;
-                                if (!oRate.isFixed() || !iRate.isFixed()) {
-                                    T[e] = true;
-                                }
-
-                                if (LLVM_UNLIKELY(oRate.isUnknown())) {
+                                const auto t = edge(prodId, consumerPartitionId, T);
+                                assert (t.second);
+                                if (T[t.first]) {
                                     continue;
                                 }
 
@@ -157,26 +237,6 @@ void PipelineAnalysis::simpleEstimateInterPartitionDataflow(PartitionGraph & P, 
                     }
 
                 }
-            }
-        }
-    }
-
-    #ifndef NDEBUG
-    const reverse_traversal ordering(numOfPartitions);
-    assert (is_valid_topological_sorting(ordering, T));
-    #endif
-
-
-    // iterate through the graph in topological order to determine what portions of
-    // the program are not strictly fixed rate
-    for (unsigned partId = 0; partId < numOfPartitions; ++partId) {
-        for (const auto e : make_iterator_range(in_edges(partId, T))) {
-            if (T[e]) {
-                T[partId] = true;
-                for (const auto f : make_iterator_range(out_edges(partId, T))) {
-                    T[f] = true;
-                }
-                break;
             }
         }
     }

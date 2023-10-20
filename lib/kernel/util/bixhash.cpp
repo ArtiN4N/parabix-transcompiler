@@ -181,7 +181,7 @@ retry:
                 if (Vj == Vi) {
                     goto retry;
                 }
-                if (LLVM_LIKELY(potential <= n)) {
+                if (LLVM_LIKELY(potential <= n && potential < total)) {
                     for (size_t k = 0; k < j; ++k) {
                         const auto & Vk = variables[k];
                         if ((Vj ^ Vk) == Vi) {

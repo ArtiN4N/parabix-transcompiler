@@ -1518,7 +1518,6 @@ Value * PipelineCompiler::getMaximumNumOfPartialSumStrides(BuilderRef b,
     if (peekableItemCount) {
         cond = b->CreateAnd(cond, b->CreateICmpUGE(sourceItemCount, minimumItemCount));
     }
-
     b->CreateLikelyCondBr(cond, popCountLoop, popCountLoopExit);
 
     // TODO: replace this with a parallel icmp check and bitscan? binary search with initial
@@ -1564,6 +1563,8 @@ Value * PipelineCompiler::getMaximumNumOfPartialSumStrides(BuilderRef b,
     Value * const notDone = b->CreateICmpNE(strideIndex, sz_ZERO);
     Value * const repeat = b->CreateAnd(notDone, notEnough);
 
+    Value * availNumOfStrides = b->CreateSelect(notEnough, strideIndex, numOfStrides);
+
     if (LLVM_UNLIKELY(CheckAssertions)) {
         const Binding & input = getInputBinding(ref);
         Value * const inputName = b->GetString(input.getName());
@@ -1581,7 +1582,7 @@ Value * PipelineCompiler::getMaximumNumOfPartialSumStrides(BuilderRef b,
     b->SetInsertPoint(popCountLoopExit);
     PHINode * const numOfStridesPhi = b->CreatePHI(sizeTy, 2);
     numOfStridesPhi->addIncoming(sz_ZERO, popCountEntry);
-    numOfStridesPhi->addIncoming(numOfStrides, popCountLoop);
+    numOfStridesPhi->addIncoming(availNumOfStrides, popCountLoop);
     PHINode * const requiredItemsPhi = b->CreatePHI(sizeTy, 2);
     requiredItemsPhi->addIncoming(sz_ZERO, popCountEntry);
     requiredItemsPhi->addIncoming(requiredItems, popCountLoop);

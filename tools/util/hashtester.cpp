@@ -65,9 +65,13 @@
 #include "murmur3/MurmurHash3.h"
 #include <boost/intrusive/detail/math.hpp>
 
+#include <util/slab_allocator.h>
+
 using boost::intrusive::detail::ceil_log2;
 
 #define USE_BIX_SUB_HASH
+
+#define GET_HASH_STATISTISTICS
 
 using namespace pablo;
 using namespace parse;
@@ -111,26 +115,124 @@ static cl::opt<bool> Murmur3Only("murmur3only",  cl::init(false),
                                       cl::desc("only run murmur3 has on data"),
                                       cl::value_desc("positive integer"), cl::cat(HashDemoOptions));
 
+template<typename ValueType>
+class HashArrayMappedTrie {
 
-/** ------------------------------------------------------------------------------------------------------------- *
- * @brief printGraph
- ** ------------------------------------------------------------------------------------------------------------- */
-template <typename Graph>
-void printGraph(const Graph & G, raw_ostream & out, const StringRef name = "G") {
+    struct DataNode {
+        const char *    Start;
+        size_t          Length;
+        ValueType       Value;
+        DataNode *      Next;
+    };
 
-//    out << "digraph \"" << name << "\" {\n";
-//    for (auto v : make_iterator_range(vertices(G))) {
-//        out << "v" << v << " [label=\"" << v << "\"];\n";
-//    }
-//    for (auto e : make_iterator_range(edges(G))) {
-//        const auto s = source(e, G);
-//        const auto t = target(e, G);
-//        out << "v" << s << " -> v" << t << ";\n";
-//    }
+public:
 
-//    out << "}\n\n";
-//    out.flush();
-}
+    std::pair<bool, ValueType> insert(const uint32_t hashKey, const char * start, const char * end, ValueType value) {
+
+        ++TotalEntries;
+
+        const auto mask = (1ULL << BitsPerKey) - 1ULL;
+        void ** current = Root;
+        auto key = hashKey;
+        for (size_t i = 1; i < TrieLevels; ++i) {
+           void ** node = current + (key & mask);
+           if (*node == nullptr) {
+               void ** newNode = mInternalAllocator.allocate<void *>(1ULL << BitsPerKey);
+               for (unsigned i = 0; i < (1ULL << BitsPerKey); ++i) {
+                   newNode[i] = nullptr;
+               }
+               *node = newNode;
+           }
+           key >>= BitsPerKey;
+           current = node;
+        }
+
+
+
+        DataNode ** data = (DataNode **)current;
+
+        DataNode * prior = nullptr;
+
+        assert (*end == '\n');
+
+        const size_t length = end - start;
+
+        assert (length <= (1ULL << NumOfSteps) + 1ULL);
+
+        for (;;) {
+
+            if (LLVM_LIKELY(*data == nullptr)) {
+                DataNode * newNode = mInternalAllocator.allocate<DataNode>(1);
+                char * string = mInternalAllocator.allocate<char>(length);
+                std::strncpy(string, start, length);
+                newNode->Start = string;
+                newNode->Length = length;
+                newNode->Value = value;
+                newNode->Next = prior;
+                *((DataNode **)current) = newNode;
+                ++NewEntries;
+                return std::make_pair(true, value);
+            }
+
+            prior = *data;
+
+            if (prior->Length == length) {
+                if (std::strncmp(prior->Start, start, length) == 0) {
+                    ++ExistingEntries;
+                    return std::make_pair(false, prior->Value);
+                }
+            }
+
+            data = &(prior->Next);
+
+        }
+
+
+    }
+
+    HashArrayMappedTrie(const size_t BitsPerKey, const size_t TrieLevels)
+    : Root(mInternalAllocator.allocate<void *>(1ULL << BitsPerKey))
+    , BitsPerKey(BitsPerKey)
+    , TrieLevels(TrieLevels) {
+        for (unsigned i = 0; i < (1ULL << BitsPerKey); ++i) {
+            Root[i] = nullptr;
+        }
+    }
+
+    void clear() {
+        mInternalAllocator.Reset();
+        Root = mInternalAllocator.allocate<void *>(1ULL << BitsPerKey);
+        for (unsigned i = 0; i < (1ULL << BitsPerKey); ++i) {
+            Root[i] = nullptr;
+        }
+        NewEntries = 0;
+        ExistingEntries = 0;
+        TotalEntries = 0;
+    }
+
+    size_t getNewEntries() const {
+        return NewEntries;
+    }
+
+    size_t getExistingEntries() const {
+        assert (ExistingEntries == (TotalEntries - NewEntries));
+        return ExistingEntries;
+    }
+
+private:
+
+    SlabAllocator<char> mInternalAllocator;
+
+    void ** Root;
+    const size_t BitsPerKey;
+    const size_t TrieLevels;
+
+    size_t NewEntries = 0;
+    size_t ExistingEntries = 0;
+    size_t TotalEntries = 0;
+};
+
+static HashArrayMappedTrie<uint64_t> HT2(5, NumOfHashBits / 5);
 
 class IdentifyLastSelector final: public pablo::PabloKernel {
 public:
@@ -154,6 +256,34 @@ void IdentifyLastSelector::generatePabloMethod() {
     PabloAST * selectors = pb.createAnd(span, pb.createNot(la));
     pb.createAssign(pb.createExtract(getOutputStreamVar("selectors"), pb_ZERO), selectors);
 }
+
+class CountTwoStreams final: public pablo::PabloKernel {
+public:
+    CountTwoStreams(BuilderRef b, StreamSet * A, StreamSet * B)
+    : PabloKernel(b, "CountTwoStreams",
+    {Binding{"A", A}, Binding{"B", B}},
+    {},
+    {},
+    {}) {
+        addAttribute(SideEffecting());
+    }
+protected:
+    void generatePabloMethod() override;
+};
+
+
+void CountTwoStreams::generatePabloMethod() {
+    PabloBuilder pb(getEntryScope());
+    // TODO: we shouldn't need this kernel to obtain the last mark of each run of a selector_span
+    // if we can push them ahead to the end of the run but that may add an N advances where N is
+    // the hash code bit width.
+    pablo::Integer * pb_ZERO = pb.getInteger(0);
+    PabloAST * A = pb.createCount(pb.createExtract(getInputStreamVar("A"), pb_ZERO), "cA");
+    PabloAST * B = pb.createCount(pb.createExtract(getInputStreamVar("B"), pb_ZERO), "cB");
+    pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {A});
+    pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {B});
+}
+
 
 // using BixHashGenome = adjacency_list<vecS, vecS, bidirectionalS>;
 
@@ -327,31 +457,6 @@ void BixHashGenerator::generatePabloMethod() {
 
 }
 
-class MaskHash : public pablo::PabloKernel {
-public:
-    MaskHash(BuilderRef kb, kernel::StreamSet * hashes, kernel::StreamSet * mask, kernel::StreamSet * output);
-protected:
-    void generatePabloMethod() override;
-};
-
-MaskHash::MaskHash (BuilderRef b, kernel::StreamSet * hashes, kernel::StreamSet * mask, kernel::StreamSet * output)
-: PabloKernel(b, "MashHash" + std::to_string(hashes->getNumElements()),
-          {Binding{"hashes", hashes}, Binding{"mask", mask}},
-          {Binding{"output", output}}) {
-
-}
-
-
-void MaskHash::generatePabloMethod() {
-    PabloBuilder pb(getEntryScope());
-    PabloAST * mask = pb.createExtract(getInputStreamVar("mask"), pb.getInteger(0));
-    const auto hashes = getInputStreamSet("hashes");
-    for (unsigned i = 0; i < hashes.size(); ++i) {
-        PabloAST * v = pb.createAnd(mask, hashes[i]);
-        pb.createAssign(pb.createExtract(getOutputStreamVar("output"), pb.getInteger(i)), v);
-    }
-}
-
 
 class NegateStreamSet : public pablo::PabloKernel {
 public:
@@ -382,9 +487,7 @@ class HashTable {
 public:
 
     HashTable()
-    : mTable(NumOfBuckets, 0)
-    , mBitFlipHistory(NumOfBitFlips + 1, 0)
-    , mHashCodeIndex(0)
+    : mHashCodeIndex(0)
     , mNumOfSameBitValues(0)
     , mNumOfDifferentBitValues(0) {
 
@@ -432,11 +535,13 @@ public:
     }
 
     void clear() {
-        for (auto & T : mTable) {
-            T = 0;
+        mTable.resize(NumOfBuckets);
+        for (unsigned i = 0; i < NumOfBuckets; ++i) {
+            mTable[i] = 0;
         }
-        for (auto & T : mBitFlipHistory) {
-            T = 0;
+        mBitFlipHistory.resize(NumOfBitFlips + 1);
+       for (unsigned i = 0; i <= NumOfBitFlips; ++i) {
+            mBitFlipHistory[i] = 0;
         }
         mHashCodeIndex = 0;
         mNumOfSameBitValues = 0;
@@ -447,8 +552,7 @@ public:
         const auto p = percentDifference();
         assert (0.0 <= p && p <= 2.0);
         const auto c = chiSquareTest();
-        errs() << "CHI: " << c << ", PD: " << p << "\n";
-        return -c * std::pow(10.0, p);
+        return c * std::pow(10.0, p);
     }
 
     double chiSquareTest() const {
@@ -464,7 +568,7 @@ public:
 
         const double expected = (double)(totalCount) / (double)(NumOfBuckets);
         double sum = 0.0;
-        for (unsigned i = 0; i < mTable.size(); ++i) {
+        for (unsigned i = 0; i < NumOfBuckets; ++i) {
             const auto T = mTable[i];
             errs() << i << "," << T << "\n";
             const double x = (double)(T) - expected;
@@ -499,14 +603,29 @@ private:
 
 };
 
+#ifdef GET_HASH_STATISTISTICS
+static HashTable HT1;
+#endif
 
-static HashTable HT;
+
 
 typedef void (*HashDemoFunctionType)(const char * data, const size_t length);
 
 extern "C" void hashtable_callback(uint64_t hashval, const char * const start, const char * const end) {
-    HT.insert(hashval, start, end);
+    assert (start < end);
+    #ifdef GET_HASH_STATISTISTICS
+    HT1.insert(hashval, start, end);
+    #endif
+    HT2.insert(hashval, start, end, 0);
 }
+
+extern "C" void hashtable_clear() {
+    #ifdef GET_HASH_STATISTISTICS
+    HT1.clear();
+    #endif
+    HT2.clear();
+}
+
 
 class PopulateHashTable : public MultiBlockKernel {
 public:
@@ -570,9 +689,7 @@ void PopulateHashTable::generateMultiBlockLogic(BuilderRef b, llvm::Value * cons
     BasicBlock * const strideCoordinatesDone = b->CreateBasicBlock("strideCoordinatesDone");
 
     Value * const initialProcessed = b->getProcessedItemCount("codeUnitStream");
-
     Value * const initialStrideCount = b->CreateUDiv(b->getProcessedItemCount("SymbolEnds"), sz_STRIDEWIDTH);
-
     Value * const hashProcessed = b->getProcessedItemCount("HashValues");
 
     b->CreateBr(stridePrologue);
@@ -587,7 +704,6 @@ void PopulateHashTable::generateMultiBlockLogic(BuilderRef b, llvm::Value * cons
 
     Value * const symbolEnds = b->loadInputStreamBlock("SymbolEnds", sz_ZERO, strideNumPhi);
     Value * const strideBaseCharacterOffset = b->CreateMul(b->CreateAdd(initialStrideCount, strideNumPhi), sz_STRIDEWIDTH);
-
     FixedVectorType * const sizeVecTy = FixedVectorType::get(sizeTy, vecsPerStride);
     Value * const symbolEndVec = b->CreateBitCast(symbolEnds, sizeVecTy);
 
@@ -605,14 +721,14 @@ void PopulateHashTable::generateMultiBlockLogic(BuilderRef b, llvm::Value * cons
     b->CreateCondBr(b->CreateICmpNE(elem, sz_ZERO), strideCoordinateElemLoop, strideCoordinateElemDone);
 
     b->SetInsertPoint(strideCoordinateElemLoop);
-    PHINode * const remaining = b->CreatePHI(sizeTy, 2);
-    remaining->addIncoming(elem, strideCoordinateVecLoop);
+    PHINode * const remainingPhi = b->CreatePHI(sizeTy, 2);
+    remainingPhi->addIncoming(elem, strideCoordinateVecLoop);
     PHINode * const innerProcessedPhi = b->CreatePHI(sizeTy, 2);
     innerProcessedPhi->addIncoming(incomingProcessedPhi, strideCoordinateVecLoop);
     PHINode * const innerHashProcessedPhi = b->CreatePHI(sizeTy, 2);
     innerHashProcessedPhi->addIncoming(incomingHashProcessedPhi, strideCoordinateVecLoop);
 
-    Value * pos = b->CreateCountForwardZeroes(remaining);
+    Value * pos = b->CreateCountForwardZeroes(remainingPhi, "", true);
     pos = b->CreateAdd(pos, b->CreateMul(elemIdx, sz_BITS));
     pos = b->CreateAdd(pos, strideBaseCharacterOffset);
 
@@ -623,17 +739,21 @@ void PopulateHashTable::generateMultiBlockLogic(BuilderRef b, llvm::Value * cons
     args[1] = b->getRawInputPointer("codeUnitStream", innerProcessedPhi);
     args[2] = b->getRawInputPointer("codeUnitStream", pos);
 
+    b->CreateAssert (b->CreateICmpULT(innerProcessedPhi, pos), "string too small 1");
+
+    b->CreateAssert (b->CreateICmpULT(args[1], args[2]), "string too small 2");
+
     Function * callbackFn = b->getModule()->getFunction("hashtable_callback"); assert (callbackFn);
     b->CreateCall(callbackFn->getFunctionType(), callbackFn, args);
 
-    Value * const nextRemaining = b->CreateResetLowestBit(remaining);
-
-    remaining->addIncoming(nextRemaining, strideCoordinateElemLoop);
+    Value * const nextRemaining = b->CreateResetLowestBit(remainingPhi);
+    remainingPhi->addIncoming(nextRemaining, strideCoordinateElemLoop);
 
     Value * const nextHashProcessed = b->CreateAdd(innerHashProcessedPhi, sz_ONE);
-
     innerHashProcessedPhi->addIncoming(nextHashProcessed, strideCoordinateElemLoop);
-    innerProcessedPhi->addIncoming(pos, strideCoordinateElemLoop);
+
+    Value * const nextStart = b->CreateAdd(pos, sz_ONE);
+    innerProcessedPhi->addIncoming(nextStart, strideCoordinateElemLoop);
 
     b->CreateCondBr(b->CreateICmpNE(nextRemaining, sz_ZERO), strideCoordinateElemLoop, strideCoordinateElemDone);
 
@@ -641,7 +761,7 @@ void PopulateHashTable::generateMultiBlockLogic(BuilderRef b, llvm::Value * cons
 
     PHINode * const nextProcessedPhi = b->CreatePHI(sizeTy, 2);
     nextProcessedPhi->addIncoming(incomingProcessedPhi, strideCoordinateVecLoop);
-    nextProcessedPhi->addIncoming(pos, strideCoordinateElemLoop);
+    nextProcessedPhi->addIncoming(nextStart, strideCoordinateElemLoop);
     incomingProcessedPhi->addIncoming(nextProcessedPhi, strideCoordinateElemDone);
 
     PHINode * const nextHashProcessedPhi = b->CreatePHI(sizeTy, 2);
@@ -722,9 +842,6 @@ HashDemoFunctionType hashdemo_gen (CPUDriver & driver) {
 
     P->CreateKernelCall<StreamCompressKernel>(SymbolEnds, compressed, Hashes, 64);
 
-    StreamSet * masked = P->CreateStreamSet(NumOfHashBits);
-    P->CreateKernelCall<MaskHash>(BixHashes, SymbolEnds, masked);
-
     StreamSet * const HashValues = P->CreateStreamSet(1, 1UL << ceil_log2(NumOfHashBits));
 
     if (NumOfHashBits <= 8) {
@@ -735,7 +852,9 @@ HashDemoFunctionType hashdemo_gen (CPUDriver & driver) {
         P->CreateKernelCall<P2S32Kernel>(Hashes, HashValues);
     }
 
-    P->CreateKernelCall<PopulateHashTable>(codeUnitStream, SymbolEnds, HashValues);
+    P->CreateKernelCall<PopulateHashTable>(codeUnitStream, LineFeeds, HashValues);
+
+//    P->CreateKernelCall<CountTwoStreams>(LineFeeds, SymbolEnds);
 
     auto f = reinterpret_cast<HashDemoFunctionType>(P->compile());
     assert (f);
@@ -760,7 +879,7 @@ public:
         HT.clear();
         func(InputData.data(), InputData.size());
 #endif
-        const auto r = HT.calculateScore();
+        const auto r = HT1.calculateScore();
         return r;
     }
 
@@ -786,8 +905,6 @@ public:
         if (!ga::draw(recombination_rate, rng)) {
             return std::array<individual_type, 2u> {x, y};
         }
-
-#if 1
 
         const BixHashGenome & A = *x;
         const BixHashGenome & B = *y;
@@ -899,86 +1016,7 @@ public:
         }
 
         return std::array<individual_type, 2u> {std::move(C), std::move(D)};
-#else
 
-        const auto size = NumOfBasisBits + NumOfHashBits * (NumOfSteps + 1);
-
-        const BixHashGenome & A = *x;
-        const BixHashGenome & B = *y;
-
-        assert (num_vertices(A) == num_vertices(B));
-        assert (num_vertices(A) == size);
-
-        BixHashGenome::edge_iterator ea, ea_end;
-        std::tie(ea, ea_end) = edges(A);
-        BixHashGenome::edge_iterator eb, eb_end;
-        std::tie(eb, eb_end) = edges(B);
-
-        std::uniform_int_distribution<size_t> pos(1, size - 2);
-
-        const auto p = pos(rng);
-
-        auto C = std::make_shared<BixHashGenome>(size);
-        auto D = std::make_shared<BixHashGenome>(size);
-
-        for (size_t i = 0; i < p; ++i) {
-            for (auto e : make_iterator_range(in_edges(i, A))) {
-                add_edge(source(e, A), target(e, A), *C);
-            }
-            for (auto e : make_iterator_range(in_edges(i, B))) {
-                add_edge(source(e, B), target(e, B), *D);
-            }
-        }
-
-        for (size_t i = p + 1; i < size; ++i) {
-            for (auto e : make_iterator_range(in_edges(i, A))) {
-                add_edge(source(e, A), target(e, A), *D);
-            }
-            for (auto e : make_iterator_range(in_edges(i, B))) {
-                add_edge(source(e, B), target(e, B), *C);
-            }
-        }
-
-        for (size_t i = size - NumOfHashBits; i-- >= NumOfBasisBits; ) {
-            if (out_degree(i, *C) == 0) {
-                clear_in_edges(i, *C);
-            }
-        }
-
-        for (size_t i = size - NumOfHashBits; i-- >= NumOfBasisBits; ) {
-            if (out_degree(i, *D) == 0) {
-                clear_in_edges(i, *D);
-            }
-        }
-
-        auto fixChild = [&](BixHashGenome & X) {
-            for (size_t u = NumOfBasisBits; u < size; ++u) {
-                if (in_degree(u, X) == 0) {
-                    std::uniform_int_distribution<size_t> W(0, currentLayerStart(u) - 1);
-                    const auto w = W(rng);
-                    assert (w < u);
-                    add_edge(w, u, X);
-                }
-            }
-
-            for (size_t u = NumOfBasisBits; u < size - NumOfHashBits; ++u) {
-                if (out_degree(u, X) == 0) {
-                    const auto s = nextLayerStart(u);
-                    assert (s < size);
-                    std::uniform_int_distribution<size_t> V(s, size - 1);
-                    const auto v = V(rng);
-                    assert (u < v);
-                    assert (v < size);
-                    add_edge(u, v, X);
-                }
-            }
-        };
-
-        fixChild(*C);
-        fixChild(*D);
-
-        return std::array<individual_type, 2u> {std::move(C), std::move(D)};
-#endif
     }
 
     auto mutate(individual_type & x, generator_type& g) const -> void {
@@ -1017,49 +1055,6 @@ public:
 
 
 
-#if 0
-        // we want to flip one of the edge/non-edges
-
-        BixHashGenome & C = *x;
-
-        const auto n = num_vertices(C);
-        assert (n == (NumOfBasisBits + NumOfHashBits * (NumOfSteps + 1)));
-
-        std::binomial_distribution<size_t> P(n, 0.2);
-
-        const auto count = P(g);
-
-        for (unsigned i = 0; i < count; ++i) {
-
-            std::uniform_int_distribution<size_t> U(0, n - (NumOfHashBits + 1));
-            const auto u = U(g);
-            const auto s = nextLayerStart(u);
-            assert (s > u);
-            std::uniform_int_distribution<size_t> V(s, n - 1);
-            const auto v = V(g);
-            assert (v >= NumOfBasisBits);
-            assert (u < v);
-
-            if (edge(u, v, C).second) {
-                remove_edge(u, v, C);
-                if (out_degree(u, C) == 0) {
-                    std::uniform_int_distribution<size_t> V(s, n - 1);
-                    const auto w = V(g);
-                    assert (u < w);
-                    add_edge(u, w, C);
-                }
-                if (in_degree(v, C) == 0) {
-                    std::uniform_int_distribution<size_t> U(0, currentLayerStart(v) - 1);
-                    const auto w = U(g);
-                    assert (w < v);
-                    add_edge(w, v, C);
-                }
-            } else {
-                add_edge(u, v, C);
-            }
-
-        }
-#endif
     }
 
     bixhash_optimization_problem(std::vector<char> && data)
@@ -1123,163 +1118,6 @@ public:
                 std::shuffle(O.begin(), O.end(), rng);
             }
 
-#if 0
-
-            auto & variables = *C;
-
-            for (unsigned i = 0; i < m; ++i) {
-                assert (variables[i].size() == 0);
-                variables[i].resize(size, false);
-            }
-
-            std::binomial_distribution<size_t> M(3, 0.2);
-
-            auto selected_pos = selected.end();
-
-            for (unsigned i = 0; i < size; ++i) {
-                if (selected_pos == selected.end()) {
-                    std::shuffle(selected.begin(), selected.end(), rng);
-                    selected_pos = selected.begin();
-                }
-                const auto k = M(rng) + 1U;
-                for (unsigned j = 0; j != k; ++j) {
-                    variables[*selected_pos++].set(i);
-                }
-            }
-
-#endif
-
-#if 0
-
-            std::binomial_distribution<size_t> M(4, 0.3);
-
-            for (size_t step = 0, begin = 0; step < steps; ++step) {
-
-                const auto s = n + m * step;
-                assert (begin < s);
-                const auto e = s + m;
-
-                auto target_pos = targets.end();
-
-                for (size_t u = begin; u < s; ++u) {
-
-                    size_t m = (M(rng) * 2) + 1;
-                    while (m) {
-
-                        if (target_pos == targets.end()) {
-                            std::shuffle(targets.begin(), targets.end(), rng);
-                            target_pos = targets.begin();
-                        }
-
-                        const size_t v = s + (*target_pos);
-                        ++target_pos;
-                        if (edge(u, v, *C).second) {
-                            remove_edge(u, v, *C);
-                            ++m;
-                        } else {
-                            add_edge(u, v, *C);
-                            --m;
-                        }
-                    }
-                }
-                begin = s;
-            }
-#endif
-
-#if 0
-
-            std::binomial_distribution<size_t> M(4, 0.3);
-
-            for (size_t step = 0, begin = 0; step < steps; ++step) {
-
-                const auto s = n + m * step;
-                assert (begin < s);
-                const auto e = s + m;
-
-                auto target_pos = targets.end();
-
-                for (size_t u = begin; u < s; ++u) {
-
-                    size_t m = (M(rng) * 2) + 1;
-                    while (m) {
-
-                        if (target_pos == targets.end()) {
-                            std::shuffle(targets.begin(), targets.end(), rng);
-                            target_pos = targets.begin();
-                        }
-
-                        const size_t v = s + (*target_pos);
-                        ++target_pos;
-                        if (edge(u, v, *C).second) {
-                            remove_edge(u, v, *C);
-                            ++m;
-                        } else {
-                            add_edge(u, v, *C);
-                            --m;
-                        }
-                    }
-                }
-                begin = s;
-            }
-#endif
-
-#if 0
-            for (size_t step = 0; step < steps; ++step) {
-
-                const auto s = n + m * step;
-                const auto e = s + m;
-
-                const auto l = (step == 0) ? n : m;
-
-                std::uniform_int_distribution<size_t> U(s - l, s - 1);
-
-                std::uniform_int_distribution<size_t> W(e, e + m - 1);
-
-                std::binomial_distribution<size_t> M(3, 0.5);
-
-                for (size_t v = s; v < e; ++v) {
-                    for (size_t m = M(rng) + 1ULL; m; --m) {
-                        const size_t u = U(rng);
-                        if (!edge(u, v, *C).second) {
-                            add_edge(u, v, *C);
-                        }
-                    }
-                }
-
-                if (step < (steps - 1)) {
-
-                    for (size_t v = s; v < e; ++v) {
-                        for (size_t m = M(rng) + 1ULL; m; --m) {
-                            const size_t w = W(rng);
-                            if (!edge(v, w, *C).second) {
-                                add_edge(v, w, *C);
-                            }
-                        }
-                    }
-
-                }
-            }
-
-//            const auto s = n + m * steps;
-//            const auto e = size;
-//            assert ((s + m) == size);
-
-//            std::uniform_int_distribution<size_t> U(0, s - 1);
-
-//            std::binomial_distribution<size_t> M(m - 1, 0.2);
-
-//            for (size_t v = s; v < e; ++v) {
-//                for (size_t m = M(rng) + 1ULL; m; --m) {
-//                    const size_t u = U(rng);
-//                    if (!edge(u, v, *C).second) {
-//                        add_edge(u, v, *C);
-//                    }
-//                }
-//            }
-#endif
-
-   //         printGraph(*C, errs(), "C");
-
             P.emplace_back(std::move(C));
         }
 
@@ -1287,25 +1125,6 @@ public:
 
         return P;
     }
-
-#if 0
-
-private:
-
-    static void clean_genome(BixHashGraphGenome & G) {
-        // We have N basis bits and STEPS * (M + 1) other verticies. Each layer of M vertices defines what will eventually
-        // be written. If a layer is not the last, it must have an out degree of at least one or it will simply generate
-        // dead code.
-        const auto limit = NumOfBasisBits + NumOfSteps * (NumOfHashBits + 1);
-        assert (num_vertices(G) == limit);
-        for (unsigned i = limit; i >= NumOfBasisBits; --i) {
-            if (out_degree(i, G) == 0) {
-                clear_in_edges(i, G);
-            }
-        }
-    }
-
-#endif
 
 private:
 
@@ -1318,7 +1137,8 @@ std::vector<char> readFileData(const std::vector<fs::path> & fileNames, bixhash_
 
     char * line = nullptr;
     size_t len = 0;
-    const ssize_t maxLineSize = 1UL << NumOfSteps;
+
+    errs() << " -- loading data\n";
 
     size_t requiredSize = 0;
 
@@ -1333,9 +1153,9 @@ std::vector<char> readFileData(const std::vector<fs::path> & fileNames, bixhash_
 
     std::vector<char> data(requiredSize * (NumOfBitFlips + 1));
 
-    BitVector T(maxLineSize * 8);
-
     DenseSet<StringRef> observed;
+
+    DenseSet<StringRef> temp;
 
     size_t current = 0;
 
@@ -1348,80 +1168,106 @@ std::vector<char> readFileData(const std::vector<fs::path> & fileNames, bixhash_
         }
 
         for (;;) {
-            const auto r = getline(&line, &len, fp);
+            ssize_t r = getdelim(&line, &len, '\n', fp);
             // r is -1 or the number of characters read, including the delimiter
             if (LLVM_UNLIKELY(r == -1)) {
                 break;
             }
-            if (LLVM_UNLIKELY(r == 0)) {
-                continue;
+
+            assert (r > 0);
+
+            if (LLVM_LIKELY(line[r - 1] == '\n')) {
+                --r;
             }
-            const auto m = std::min<size_t>(r, maxLineSize);
 
             // To simplify the process, we just discard any entries that aren't long
             // enough for bit flipping
-            if (NumOfBitFlips > (m * 8)) {
+            if (LLVM_UNLIKELY((r * 8) < NumOfBitFlips)) {
                 continue;
             }
 
+            const auto m = std::min<size_t>(r, 1ULL << NumOfSteps);
+
+            assert (m < r || line[r] == '\n');
+
+            line[m] = '\n';
+
+            assert (m > 0);
+
+            assert (data.size() >= (current + (m + 1) * (NumOfBitFlips + 1)));
+
+            std::memcpy(&data[current], line, m + 1);
+
+            auto p = current + m + 1;
+
+            #ifndef NDEBUG
+            for (auto i = current; i < (p - 1); ++i) {
+                assert (data[i] != '\n');
+            }
+            #endif
+
             // we want only unique keys in the list to avoid needing sub-hashtables
             // for unique keys later.
-            auto f = observed.find(StringRef{line, m});
+            auto f = observed.find(StringRef{&data[current], m});
             if (LLVM_UNLIKELY(f != observed.end())) {
                 continue;
             }
 
-            assert (data.size() >= (current + (m + 1) * (NumOfBitFlips + 1)));
+            assert (temp.empty());
+            temp.insert(StringRef{&data[current], m});
 
-            std::memcpy(&data[current], line, m);
+            size_t remaining = 20;
 
-            observed.insert(StringRef{&data[current], m});
+            for (unsigned i = 0; i < NumOfBitFlips; ) {
 
-            auto p = current + m;
+                std::memcpy(&data[p], &data[current], m + 1);
 
-            data[p++] = '\n';
-
-            T.reset();
-
-            // generate bit flipped data from the original "word"
-            for (unsigned i = 0; i < NumOfBitFlips; ++i) {
-
-                std::memcpy(&data[p], line, m);
-
-                assert (!T.all());
-
-                assert (i <= (m * 8) - 1);
-
-                std::uniform_int_distribution<size_t> pos(0, (m * 8) - 1 - i);
+                std::uniform_int_distribution<size_t> pos(0, (m * 8) - 1);
 
                 const auto j = pos(rng);
+                assert ((j / 8) < m);
 
-                for (auto k = T.find_next_unset(j); k != -1; k = T.find_next_unset(k)) {
+                char & c = data[p + (j / 8)];
 
-                    char & c = data[p + (k / 8)];
+                c ^= (1U << (j & 7U));
 
-                    c ^= (1U << (k & 7U));
-
-                    T.set(k);
+                if (LLVM_UNLIKELY(c == '\n' || temp.count(StringRef{&data[p], m}) > 0 || observed.count(StringRef{&data[p], m}) > 0)) {
+                    if (--remaining) {
+                        goto reject;
+                    } else {
+                        continue;
+                    }
                 }
 
-                p += m;
+                temp.insert(StringRef{&data[p], m});
 
-                data[p++] = '\n';
+                p += (m + 1);
+                ++i;
             }
 
             current = p;
+
+            for (auto & t : temp) {
+                observed.insert(t);
+            }
+reject:
+            temp.clear();
         }
 
         fclose(fp);
     }
     free(line);
+
+    data.resize(current);
+
+    errs() << " -- loaded data: observed=" << observed.size() << "\n";
+
     return data;
 }
 
 void runMurmur3HashOnData(const std::vector<char> & data) {
 
-     HT.clear();
+    hashtable_clear();
 
     size_t start = 0;
     const auto len = data.size();
@@ -1430,38 +1276,48 @@ void runMurmur3HashOnData(const std::vector<char> & data) {
 
     for (size_t i = 0; i < len; ++i) {
         if (data[i] == '\n') {
-            if (start + 1 < i) {
-                uint32_t hashOut = 0;
-                MurmurHash3_x86_32(&data[start], i - start, 0, &hashOut);
-                HT.insert(hashOut & mask, &data[start], &data[i]);
-            }
+            assert (start < i);
+            uint32_t hashOut = 0;
+            assert ((i - start) <= (1ULL << NumOfSteps) + 1ULL);
+            MurmurHash3_x86_32(&data[start], i - start, 0, &hashOut);
+            #ifdef GET_HASH_STATISTISTICS
+            HT1.insert(hashOut & mask, &data[start], &data[i]);
+            #endif
+            HT2.insert(hashOut & mask, &data[start], &data[i], 0);
             start = i + 1;
         }
     }
-
-    errs() << "MURMUR3 SCORE: CHI=" << HT.chiSquareTest() << " % DIFF=" << HT.percentDifference() << "\n";
-
+    #ifdef GET_HASH_STATISTISTICS
+    errs() << "MURMUR3 SCORE: CHI=" << HT1.chiSquareTest() << " % DIFF=" << HT1.percentDifference() << "\n";
+    #endif
+    errs() << "MURMUR3: NEW=" << HT2.getNewEntries() << " EXISTING=" << HT2.getExistingEntries() << "\n";
 
 }
 
 void runSubHashHashOnData(const std::vector<char> & data) {
 #ifdef USE_BIX_SUB_HASH
-    CPUDriver pxDriver("hashtester");
-    auto func = hashdemo_gen(pxDriver);
-    HT.clear();
+
+    CPUDriver driver("ht");
+    auto func = hashdemo_gen(driver);
+    hashtable_clear();
     func(data.data(), data.size());
-    errs() << "BIXHASH SCORE: CHI=" << HT.chiSquareTest() << " % DIFF=" << HT.percentDifference() << "\n";
+    #ifdef GET_HASH_STATISTISTICS
+    errs() << "BIXHASH: CHI=" << HT1.chiSquareTest() << " % DIFF=" << HT1.percentDifference() << "\n";
+    #endif
+    errs() << "BIXHASH: NEW=" << HT2.getNewEntries() << " EXISTING=" << HT2.getExistingEntries() << "\n";
 #endif
+}
+
+using rng = bixhash_optimization_problem::generator_type;
+
+std::vector<char> getAllFileData(rng & generator) {
+    CPUDriver pxDriver("allfiles");
+    auto allFiles = argv::getFullFileList(pxDriver, inputFiles);
+    return readFileData(allFiles, generator);
 }
 
 int main(int argc, char *argv[]) {
     codegen::ParseCommandLineOptions(argc, argv, {&HashDemoOptions, pablo_toolchain_flags(), codegen::codegen_flags()});
-
-    CPUDriver pxDriver("hashtester");
-
-
-    auto allFiles = argv::getFullFileList(pxDriver, inputFiles);
-
 
     uint64_t seed = 0;
     if (BaseSeed.isDefaultOption()) {
@@ -1473,17 +1329,17 @@ int main(int argc, char *argv[]) {
 
     bixhash_optimization_problem::generator_type generator(seed);
 
-    auto fileData = readFileData(allFiles, generator);
+    auto fileData = getAllFileData(generator);
 
     runMurmur3HashOnData(fileData);
-
-    runSubHashHashOnData(fileData);
-
-    #ifndef USE_BIX_SUB_HASH
 
     if (Murmur3Only) {
         return 0;
     }
+
+    runSubHashHashOnData(fileData);
+
+    #ifndef USE_BIX_SUB_HASH
 
     bixhash_optimization_problem P(std::move(fileData));
 
@@ -1522,5 +1378,7 @@ int main(int argc, char *argv[]) {
     errs() << "\n\nFITNESS: " << solution.fitness << "\n";
     #endif
 
+    // LLVM seems to have an issue correctly exiting here. Its internal hash table gets stuck in an infinite loop?
+    exit(0);
     return 0;
 }
