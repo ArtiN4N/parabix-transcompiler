@@ -183,12 +183,12 @@ inline ProcessingRate RateEqualTo(llvm::StringRef ref) {
     return ProcessingRate(ProcessingRate::KindId::Relative, 1, 1, ref);
 }
 
-inline ProcessingRate PopcountOf(llvm::StringRef ref) {
-    return ProcessingRate(ProcessingRate::KindId::PopCount, 0, 1, ref);
+inline ProcessingRate PopcountOf(llvm::StringRef ref, const unsigned numOfElements = 1) {
+    return ProcessingRate(ProcessingRate::KindId::PopCount, 0, numOfElements, ref);
 }
 
-inline ProcessingRate PopcountOfNot(llvm::StringRef ref) {
-    return ProcessingRate(ProcessingRate::KindId::NegatedPopCount, 0, 1, ref);
+inline ProcessingRate PopcountOfNot(llvm::StringRef ref, const unsigned numOfElements = 1) {
+    return ProcessingRate(ProcessingRate::KindId::NegatedPopCount, 0, numOfElements, ref);
 }
 
 inline ProcessingRate PartialSum(llvm::StringRef ref) {
