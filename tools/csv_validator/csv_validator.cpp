@@ -49,6 +49,9 @@
 #include <kernel/basis/p2s_kernel.h>
 #include <random>
 #include <llvm/IR/Verifier.h>
+#include "simple_csv_schema_parser.hpp"
+#include "csv_schema_validator.h"
+#include "check_hash_table.h"
 #ifdef ENABLE_PAPI
 #include <util/papi_helper.hpp>
 #endif
@@ -204,256 +207,7 @@ void CSVDataParser::generatePabloMethod() {
 
 typedef void (*CSVValidatorFunctionType)(uint32_t fd, const char * fileName);
 
-struct CSVSchemaDefinition {
-    std::vector<RE *> Validator;
-    std::vector<unsigned> FieldValidatorIndex;
-    std::vector<unsigned> UIDFields;
-};
-
-
-
-class CSVSchemaValidatorKernel : public pablo::PabloKernel {
-public:
-    CSVSchemaValidatorKernel(BuilderRef b, const CSVSchemaDefinition & schema, StreamSet * basisBits, StreamSet * UTFindex, StreamSet * fieldData, StreamSet * recordSeperators, StreamSet * allSeperators, StreamSet * invalid, StreamSet * keyMarkers = nullptr, StreamSet * keyRuns = nullptr);
-    llvm::StringRef getSignature() const override;
-    bool hasSignature() const override { return true; }
-
-protected:
-    CSVSchemaValidatorKernel(BuilderRef b, const CSVSchemaDefinition & schema, std::string signature, StreamSet * basisBits, StreamSet * UTFindex, StreamSet * fieldData, StreamSet * recordSeperators, StreamSet * allSeperators, StreamSet * invalid, StreamSet * keyMarkers, StreamSet * keyRuns);
-    void generatePabloMethod() override;
-private:
-    static std::string makeSignature(const std::vector<RE *> & fields);
-private:
-    const CSVSchemaDefinition &         mSchema;
-    std::string                         mSignature;
-
-};
-
 static size_t NumOfFields = 1;
-
-const static std::string FieldSepName = ":";
-
-CSVSchemaDefinition parseSchemaFile() {
-    CSVSchemaDefinition Def;
-
-    std::ifstream schemaFile(inputSchema);
-    if (LLVM_LIKELY(schemaFile.is_open())) {
-
-        RE_MemoizingTransformer memo("memoizer");
-
-        std::string line;
-
-        boost::container::flat_map<RE *, unsigned> M;
-
-        Name * fs = makeName(FieldSepName);
-        fs->setDefinition(makeCC(charComma));
-
-        FixedArray<RE *, 3> parsedLine;
-        parsedLine[0] = makeAlt({makeStart(), fs});
-
-        parsedLine[2] = fs; // makeAlt({fs, makeEnd()});
-
-        while (std::getline(schemaFile, line)) {
-            parsedLine[1] = RE_Parser::parse(line);
-            assert (parsedLine[1]);
-            RE * const original = makeSeq(parsedLine.begin(), parsedLine.end());
-            RE * const field = memo.transformRE(toUTF8(regular_expression_passes(original)));
-            assert (field);
-
-            auto f = M.find(field);
-            unsigned index = 0;
-            if (f == M.end()) {
-                index = M.size();
-                M.emplace(field, index);
-            } else {
-                index = f->second;
-            }
-            Def.FieldValidatorIndex.push_back(index);
-        }
-        schemaFile.close();
-        NumOfFields = Def.FieldValidatorIndex.size();
-        Def.Validator.resize(M.size());
-        for (auto p : M) {
-            Def.Validator[p.second] = p.first;
-        }
-
-        Def.UIDFields.push_back(0);
-        Def.UIDFields.push_back(1);
-
-    } else {
-        report_fatal_error("Cannot open schema: " + inputSchema);
-    }
-    return Def;
-}
-
-std::string makeCSVSchemaDefinitionName(const CSVSchemaDefinition & schema) {
-    std::string tmp;
-    tmp.reserve(1024);
-    raw_string_ostream out(tmp);
-    out.write_hex(schema.FieldValidatorIndex[0]);
-    for (unsigned i = 1; i < schema.FieldValidatorIndex.size(); ++i) {
-        out << ':';
-        out.write_hex(schema.FieldValidatorIndex[i]);
-    }
-    for (const RE * re : schema.Validator) {
-        out << '\0' << Printer_RE::PrintRE(re);
-    }
-    char joiner = 'u';
-    for (const auto k : schema.UIDFields) {
-        out << joiner; out.write_hex(k);
-        joiner = ',';
-    }
-    out.flush();
-    return tmp;
-}
-
-CSVSchemaValidatorKernel::CSVSchemaValidatorKernel(BuilderRef b, const CSVSchemaDefinition & schema, StreamSet * basisBits, StreamSet * UTFindex, StreamSet * fieldData, StreamSet * recordSeperators, StreamSet * allSeperators, StreamSet * invalid, StreamSet * keyMarkers, StreamSet * keyRuns)
-: CSVSchemaValidatorKernel(b, schema, makeCSVSchemaDefinitionName(schema), basisBits, UTFindex, fieldData, recordSeperators, allSeperators, invalid, keyMarkers, keyRuns) {
-
-}
-
-CSVSchemaValidatorKernel::CSVSchemaValidatorKernel(BuilderRef b, const CSVSchemaDefinition & schema, std::string signature, StreamSet * basisBits, StreamSet * UTFindex, StreamSet * fieldData, StreamSet * recordSeperators, StreamSet * allSeperators, StreamSet * invalid, StreamSet * keyMarkers, StreamSet * keyRuns)
-: PabloKernel(b, "csvv" + getStringHash(signature),
-    {Binding{"basisBits", basisBits}, Binding{"UTFindex", UTFindex}, Binding{"fieldData", fieldData},
-     Binding{"allSeperators", allSeperators}, Binding{"recordSeperators", recordSeperators}},
-    {Binding{"invalid", invalid}})
-, mSchema(schema)
-, mSignature(std::move(signature)) {
-    if (schema.UIDFields.size() > 0) {
-        mOutputStreamSets.emplace_back("hashKeyMarkers", keyRuns);
-        mOutputStreamSets.emplace_back("hashKeyRuns", keyRuns);
-    }
-}
-
-
-StringRef CSVSchemaValidatorKernel::getSignature() const {
-    return mSignature;
-}
-
-void CSVSchemaValidatorKernel::generatePabloMethod() {
-    PabloBuilder pb(getEntryScope());
-
-    Var * const recordSeperators = pb.createExtract(getInputStreamVar("recordSeperators"), pb.getInteger(0));
-
-    RE_Compiler re_compiler(getEntryScope(), recordSeperators, &cc::UTF8);
-
-    auto basisBits = getInputStreamSet("basisBits");
-
-    Integer * const pb_ZERO = pb.getInteger(0);
-
-    Var * const UTFindex = pb.createExtract(getInputStreamVar("UTFindex"), pb_ZERO);
-    pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {UTFindex });
-
-    Var * const fieldDataMask = pb.createExtract(getInputStreamVar("fieldData"), pb_ZERO);
-    pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {fieldDataMask });
-    assert (fieldDataMask->getType() == getStreamTy());
-    PabloAST * const textIndex = pb.createAnd(fieldDataMask, UTFindex, "textIndex");
-
-    pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {textIndex });
-
-    re_compiler.setIndexing(&cc::UTF8, textIndex);
-
-    re_compiler.addAlphabet(&cc::UTF8, basisBits);
-
-    Var * const allSeperators = pb.createExtract(getInputStreamVar("allSeperators"), pb_ZERO);
-
-    re_compiler.addPrecompiled(FieldSepName, RE_Compiler::ExternalStream(RE_Compiler::Marker(allSeperators, 1), std::make_pair<int,int>(1, 1)));
-
-    // TODO: if the number of validators equals the number of fields, just scan sequentially? We expect everything to be valid but if the
-    // total schema length is "long", we won't necessarily be starting a new record every block. Can we "break up" the validation checks to
-    // test if we should scan through a chunk of them based on the current position?
-
-    using Mark = RE_Compiler::Marker;
-
-    const auto & validators = mSchema.Validator;
-    std::vector<PabloAST *> matches(validators.size());
-    for (unsigned i = 0; i < validators.size(); ++i) {
-        Mark match = re_compiler.compileRE(validators[i], Mark{textIndex, 1}, 1);
-        assert (match.offset() == 1);
-        matches[i] = match.stream();
-        cast<NamedPabloAST>(matches[i])->setName(pb.makeName("match" + std::to_string(i)));
-        pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {matches[i] });
-    }
-
-    RE_Compiler::Marker startMatch = re_compiler.compileRE(makeStart());
-    PabloAST * const allStarts = startMatch.stream();
-
-    cast<NamedPabloAST>(allStarts)->setName(pb.makeName("AllStarts"));
-
-    const auto & fields = mSchema.FieldValidatorIndex;
-
-    PabloAST * currentPos = allStarts;
-    PabloAST * allSeparatorsMatches = nullptr;
-
-    PabloAST * const nonSeparators = pb.createInFile(pb.createNot(allSeperators), "nonSeperators");
-    PabloAST * const fieldSeparators = pb.createXor(allSeperators, recordSeperators, "fieldSeparators");
-
-    const auto n = fields.size();
-
-    // I expect to see at most one UID (since databases only really support a single primary/composite key)
-    // but since the logic here doesn't depend on it, I permit it for multiple independent keys.
-
-    std::vector<bool> usedInSchemaUID(n, false);
-    for (const auto k : mSchema.UIDFields) {
-        usedInSchemaUID[k] = true;
-    }
-
-    FixedArray<PabloAST *, 2> args;
-    args[0] = nullptr;
-
-    // TODO: this will fail on a blank line; should probably ignore them
-
-    // If we go through all non separators, we'll go past any trailing ", which we want to skip. But if we don't,
-    // we need another scanthru per field to reach the same position
-
-  //  pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {allStarts});
-
-    for (unsigned i = 0; i < n; ++i) {
-        PabloAST * const fieldStart = currentPos;
-        currentPos = pb.createAdvanceThenScanThru(fieldStart, nonSeparators, "currentPos" + std::to_string(i + 1));
-        currentPos = pb.createAnd(currentPos, matches[fields[i]], "field" + std::to_string(fields[i]) + "." + std::to_string(i + 1));
-
-        if (i < (n - 1)) {
-            currentPos = pb.createAnd(currentPos, fieldSeparators, "matchedFieldSep" + std::to_string(i + 1));
-        } else {
-            currentPos = pb.createAnd(currentPos, recordSeperators, "matchedRecSep");
-        }
-
-        PabloAST * const fieldEnd = currentPos;
-
-        if (LLVM_UNLIKELY(usedInSchemaUID[i])) {
-
-            if (args[0] == nullptr) {
-                args[0] = fieldStart;
-                args[1] = fieldEnd;
-            } else {
-                args[0] = pb.createOr(args[0], fieldStart);
-                args[1] = pb.createOr(args[1], fieldEnd);
-            }
-
-        }
-
-        if (allSeparatorsMatches) {
-            allSeparatorsMatches = pb.createOr(allSeparatorsMatches, currentPos);
-        } else {
-            allSeparatorsMatches = currentPos;
-        }
-    }
-
-    PabloAST * result = pb.createXor(allSeparatorsMatches, allSeperators, "result");
-    pb.createAssign(pb.createExtract(getOutputStreamVar("invalid"), pb_ZERO), result);
-
-    if (mSchema.UIDFields.size() > 0) {
-        PabloAST * const keyMarkers = pb.createOr(args[0], args[1]);
-        pb.createAssign(pb.createExtract(getOutputStreamVar("hashKeyMarkers"), pb_ZERO), keyMarkers);
-
-        PabloAST * const run = pb.createIntrinsicCall(pablo::Intrinsic::SpanUpTo, args, "run");
-        PabloAST * const hashableFieldData = pb.createAnd(run, nonSeparators);
-        pb.createAssign(pb.createExtract(getOutputStreamVar("hashKeyRuns"), pb_ZERO), hashableFieldData);
-    }
-
-
-}
 
 static bool foundError = false;
 
@@ -619,252 +373,6 @@ void ExtractCoordinateSequence::generateMultiBlockLogic(BuilderRef b, Value * co
     b->SetInsertPoint(strideCoordinatesDone);
 }
 
-class HashArrayMappedTrie {
-
-    using ValueType = size_t;
-
-    struct DataNode {
-        const char *    Start;
-        size_t          Length;
-        ValueType       Value;
-        DataNode *      Next;
-    };
-
-public:
-
-    std::pair<bool, ValueType> findOrAdd(const uint32_t hashKey, const char * start, const char * end, ValueType value) {
-
-        const auto mask = (1ULL << HashBitsPerTrie) - 1ULL;
-        void ** current = Root;
-        auto key = hashKey;
-        for (size_t i = 1; i < NumOfHashTrieLevels; ++i) {
-           void ** node = current + (key & mask);
-           if (*node == nullptr) {
-               void ** newNode = mInternalAllocator.allocate<void *>(1ULL << HashBitsPerTrie);
-               for (unsigned i = 0; i < (1ULL << HashBitsPerTrie); ++i) {
-                   newNode[i] = nullptr;
-               }
-               *node = newNode;
-           }
-           key >>= HashBitsPerTrie;
-           current = node;
-        }
-
-
-
-        DataNode ** data = (DataNode **)current;
-
-        DataNode * prior = nullptr;
-
-        assert (*end == '\n');
-
-        const size_t length = end - start;
-
-        for (;;) {
-
-            if (LLVM_LIKELY(*data == nullptr)) {
-                DataNode * newNode = mInternalAllocator.allocate<DataNode>(1);
-                char * string = mInternalAllocator.allocate<char>(length);
-                std::strncpy(string, start, length);
-                newNode->Start = string;
-                newNode->Length = length;
-                newNode->Value = value;
-                newNode->Next = prior;
-                *((DataNode **)current) = newNode;
-                return std::make_pair(true, value);
-            }
-
-            prior = *data;
-
-            if (prior->Length == length) {
-                if (std::strncmp(prior->Start, start, length) == 0) {
-                    return std::make_pair(false, prior->Value);
-                }
-            }
-
-            data = &(prior->Next);
-
-        }
-
-
-    }
-
-    HashArrayMappedTrie() = default;
-
-    void reset() {
-        mInternalAllocator.Reset();
-        Root = mInternalAllocator.allocate<void *>(1ULL << HashBitsPerTrie);
-        for (unsigned i = 0; i < (1ULL << HashBitsPerTrie); ++i) {
-            Root[i] = nullptr;
-        }
-    }
-
-private:
-
-    SlabAllocator<char> mInternalAllocator;
-    void ** Root;
-};
-
-static HashArrayMappedTrie SingleFieldSet;
-static HashArrayMappedTrie MultiFieldSet;
-
-bool check_singleton_keyset(const size_t numOfFields, const uint32_t * const hashCode, const char ** pointers, const size_t lineNum) {
-    assert (numOfFields == 1);
-    return SingleFieldSet.findOrAdd(hashCode[0], pointers[0], pointers[1], lineNum).first;
-}
-
-bool check_composite_keyset(const size_t numOfFields, const uint32_t * const hashCode, const char ** pointers, const size_t lineNum) {
-
-    // when using the composite keyset, we store each field independently rather than the full composite key
-    // and then use the ids of those keys as our "string" for the composite key.
-
-    SmallVector<size_t, 8> subKeys(numOfFields);
-    uint32_t combinedHashCode = 5381;
-    for (size_t i = 0; i < numOfFields; ++i) {
-        const auto h = hashCode[i];
-        auto f = MultiFieldSet.findOrAdd(h, pointers[i * 2], pointers[i * 2 + 1], lineNum);
-        combinedHashCode = (combinedHashCode * 33) + h; // using djb2 as combiner
-        subKeys[i] = f.second;
-    }
-    const auto s = (const char *)(subKeys.data());
-    return SingleFieldSet.findOrAdd(combinedHashCode, s, s + numOfFields * sizeof(uint32_t), lineNum).first;
-}
-
-class CheckKeyUniqueness : public SegmentOrientedKernel {
-public:
-    CheckKeyUniqueness(BuilderRef b, StreamSet * ByteStream, StreamSet * const HashVals, StreamSet * keyMarkers,
-                       const unsigned fieldsPerKey);
-    void linkExternalMethods(BuilderRef b) override;
-private:
-    void generateDoSegmentMethod(BuilderRef b) override;
-private:
-    const unsigned FieldsPerKey;
-};
-
-CheckKeyUniqueness::CheckKeyUniqueness(BuilderRef b, StreamSet * ByteStream, StreamSet * const hashCodes, StreamSet * coordinates,
-                                       const unsigned fieldsPerKey)
-: SegmentOrientedKernel(b, "CheckKeyUniqueness" + std::to_string(fieldsPerKey),
-// inputs
-{Binding{"InputStream", ByteStream, GreedyRate(), Deferred()}
-, Binding{"HashCodes", hashCodes, FixedRate(fieldsPerKey)}
-, Binding{"Coordinates", coordinates, FixedRate(fieldsPerKey * 2)}},
-// outputs
-{},
-// input scalars
-{},
-// output scalars
-{},
-// kernel state
-{})
-, FieldsPerKey(fieldsPerKey) {
-    setStride(1);
-    addAttribute(SideEffecting());
-    addAttribute(MayFatallyTerminate());
-}
-
-/** ------------------------------------------------------------------------------------------------------------- *
- * @brief linkExternalMethods
- ** ------------------------------------------------------------------------------------------------------------- */
-void CheckKeyUniqueness::linkExternalMethods(BuilderRef b) {
-    // bool check_unique_keyset(UniqueKeySets & sets, const size_t hashCode, const size_t numOfFields, const char ** keys)
-
-    FixedArray<Type *, 4> paramTys;
-    paramTys[0] = b->getInt32Ty();
-    paramTys[1] = b->getSizeTy()->getPointerTo();
-    paramTys[2] = b->getInt8PtrTy()->getPointerTo();
-    paramTys[3] = b->getSizeTy();
-    FunctionType * fty = FunctionType::get(b->getInt1Ty(), paramTys, false);
-    if (FieldsPerKey == 1) {
-        b->LinkFunction("checkSingleKey", fty, (void*)check_singleton_keyset);
-    } else {
-        b->LinkFunction("checkCompositeKey", fty, (void*)check_composite_keyset);
-    }
-}
-
-void CheckKeyUniqueness::generateDoSegmentMethod(BuilderRef b) {
-
-    BasicBlock * const entry = b->GetInsertBlock();
-    BasicBlock * const loopStart = b->CreateBasicBlock("strideCoordinateVecLoop");
-    BasicBlock * const foundDuplicate = b->CreateBasicBlock("foundDuplicate");
-    BasicBlock * const continueToNext = b->CreateBasicBlock("continueToNext");
-    BasicBlock * const loopEnd = b->CreateBasicBlock("strideCoordinateElemLoop");
-
-    Constant * const sz_ZERO = b->getSize(0);
-    Constant * const sz_ONE = b->getSize(1);
-    IntegerType * sizeTy = b->getSizeTy();
-
-    Value * const hashCodesProcessed = b->getProcessedItemCount("HashCodes");
-    Value * const baseHashCodePtr = b->getRawInputPointer("HashCodes", sz_ZERO);
-    Value * const baseCoordinatePtr = b->getRawInputPointer("Coordinates", sz_ZERO);
-    Value * const baseInputPtr = b->getRawInputPointer("InputStream", sz_ZERO);
-
-
-    ArrayType * const hashCodeArrayTy = ArrayType::get(b->getInt32Ty(), FieldsPerKey);
-    Value * const hashCodeArray = b->CreateAllocaAtEntryPoint(hashCodeArrayTy);
-
-    ArrayType * const coordTy = ArrayType::get(b->getInt8PtrTy(), FieldsPerKey * 2);
-    Value * const coordArray = b->CreateAllocaAtEntryPoint(coordTy);
-
-
-    Value * const numOfUnprocessedHashCodes = b->getAccessibleItemCount("HashCodes");
-    Value * const totalHashCodeProcessed = b->CreateAdd(hashCodesProcessed, numOfUnprocessedHashCodes);
-
-    Value * const initial = b->getProcessedItemCount("InputStream");
-
-    b->CreateLikelyCondBr(b->CreateICmpNE(numOfUnprocessedHashCodes, sz_ZERO), loopStart, loopEnd);
-
-    b->SetInsertPoint(loopStart);
-    PHINode * const hashCodesProcessedPhi = b->CreatePHI(sizeTy, 2);
-    hashCodesProcessedPhi->addIncoming(hashCodesProcessed, entry);
-
-    Value * pos = nullptr;
-    FixedArray<Value *, 2> offset;
-    offset[0] = sz_ZERO;
-    Value * const baseCoordinate = b->CreateShl(hashCodesProcessedPhi, sz_ONE);
-    for (unsigned i = 0; i < (FieldsPerKey * 2); ++i) {
-        Constant * sz_I = b->getSize(i);
-        pos = b->CreateLoad(b->CreateGEP(baseCoordinatePtr, b->CreateAdd(baseCoordinate, sz_I)));
-        assert (pos->getType() == sizeTy);
-        Value * const ptr = b->CreateGEP(baseInputPtr, pos);
-        offset[1] = sz_I;
-        b->CreateStore(ptr, b->CreateGEP(coordArray, offset));
-    }
-
-    ConstantInt * sz_STEP = b->getSize(mStride);
-
-    FixedArray<Value *, 4> args;
-    args[0] = sz_STEP;
-    args[1] = b->CreateGEP(baseHashCodePtr, hashCodesProcessedPhi);
-    args[2] = b->CreateBitCast(coordArray, b->getInt8PtrTy()->getPointerTo());
-    args[3] = b->CreateExactUDiv(hashCodesProcessedPhi, sz_STEP);
-
-    Function * callbackFn = nullptr;
-    if (FieldsPerKey == 1) {
-        callbackFn = b->getModule()->getFunction("checkSingleKey");
-    } else {
-        callbackFn = b->getModule()->getFunction("checkCompositeKey");
-    }
-    Value * const retVal = b->CreateCall(callbackFn->getFunctionType(), callbackFn, args);
-    b->CreateUnlikelyCondBr(b->CreateIsNull(retVal), foundDuplicate, continueToNext);
-
-    b->SetInsertPoint(foundDuplicate);
-    b->setFatalTerminationSignal();
-    b->CreateBr(continueToNext);
-
-    b->SetInsertPoint(continueToNext);
-
-
-    Value * const nextHashCodesProcessed = b->CreateAdd(hashCodesProcessedPhi, sz_STEP);
-    hashCodesProcessedPhi->addIncoming(nextHashCodesProcessed, entry);
-    Value * const notDone = b->CreateICmpULT(nextHashCodesProcessed, totalHashCodeProcessed);
-    b->CreateCondBr(notDone, loopStart, loopEnd);
-
-    b->SetInsertPoint(loopEnd);
-    PHINode * const finalPos = b->CreatePHI(sizeTy, 2);
-    finalPos->addIncoming(initial, entry);
-    finalPos->addIncoming(pos, continueToNext);
-    b->setProcessedItemCount("InputStream", finalPos);
-}
 
 class CSVErrorIdentifier : public MultiBlockKernel {
 public:
@@ -1234,20 +742,16 @@ CSVValidatorFunctionType wcPipelineGen(CPUDriver & pxDriver) {
 
     P->CreateKernelCall<CSVDataParser>(csvCCs, fieldData, recordSeparators, allSeparators);
 
-    const auto schemaFile = parseSchemaFile();
+    const auto schemaFile = csv::CSVSchemaParser::load(inputSchema);
 
     StreamSet * u8index = P->CreateStreamSet();
     P->CreateKernelCall<UTF8_index>(BasisBits, u8index);
 
     StreamSet * errors = P->CreateStreamSet(1);
 
-    StreamSet * duplicateKeys = nullptr;
+    if (schemaFile.CompositeKey.empty()) {
 
-    const auto uniqueFields = schemaFile.UIDFields.size();
-
-    if (uniqueFields == 0) {
-
-        P->CreateKernelFamilyCall<CSVSchemaValidatorKernel>(schemaFile, BasisBits, u8index, fieldData, recordSeparators, allSeparators, errors);
+        P->CreateKernelFamilyCall<csv::CSVSchemaValidatorKernel>(schemaFile, BasisBits, u8index, fieldData, recordSeparators, allSeparators, errors);
 
     } else {
         StreamSet * keyMarkers = P->CreateStreamSet(1);
@@ -1258,7 +762,7 @@ CSVValidatorFunctionType wcPipelineGen(CPUDriver & pxDriver) {
         // a loop to combine the data. But how can we prevent the data from one record from being combined with
         // another? We could scan through and iterate over each record individually?
 
-        P->CreateKernelFamilyCall<CSVSchemaValidatorKernel>(schemaFile, BasisBits, u8index, fieldData, recordSeparators, allSeparators, errors, keyMarkers, keyRuns);
+        P->CreateKernelFamilyCall<csv::CSVSchemaValidatorKernel>(schemaFile, BasisBits, u8index, fieldData, recordSeparators, allSeparators, errors, keyMarkers, keyRuns);
 
         StreamSet * hashes = P->CreateStreamSet(NumOfHashBits);
 
@@ -1294,7 +798,7 @@ CSVValidatorFunctionType wcPipelineGen(CPUDriver & pxDriver) {
             P->CreateKernelCall<P2S32Kernel>(outputs, hashVals);
         }
 
-        P->CreateKernelFamilyCall<CheckKeyUniqueness>(ByteStream, hashVals, markerSeq, uniqueFields);
+        P->CreateKernelFamilyCall<CheckKeyUniqueness>(schemaFile, ByteStream, hashVals, markerSeq);
 
     }
 
@@ -1359,8 +863,8 @@ int main(int argc, char *argv[]) {
     NumOfHashBits = HashBitsPerTrie * NumOfHashTrieLevels;
 
     for (auto & file : allFiles) {
-        SingleFieldSet.reset();
-        MultiFieldSet.reset();
+//        SingleFieldSet.reset();
+//        MultiFieldSet.reset();
         wc(wordCountFunctionPtr, file);
     }
 

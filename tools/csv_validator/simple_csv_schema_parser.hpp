@@ -7,21 +7,13 @@
 #ifndef SIMPLE_CSV_SCHEMA_PARSER_H
 #define SIMPLE_CSV_SCHEMA_PARSER_H
 
-#include <re/parse/parser.h>
+#include "csv_schema_validator.h"
 
-namespace re {
-    class SimpleCSVSchemaParser : public RE_Parser {
+namespace csv {
+
+    class CSVSchemaParser {
     public:
-        SimpleCSVSchemaParser(const std::string & regular_expression) : RE_Parser(regular_expression) {
-            mReSyntax = RE_Syntax::PCRE;
-        }
-
-        re::RE * parse() {
-            return parse_RE();
-        }
-
-    protected:
-        virtual bool isSetEscapeChar(char c) override;
+        static CSVSchema load(const llvm::StringRef fileName);
     };
 }
 

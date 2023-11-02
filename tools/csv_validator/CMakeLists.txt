@@ -8,6 +8,8 @@ NAME
     csv_validator
 SRC
     csv_validator.cpp
+    csv_schema_validator.cpp
+    simple_csv_schema_parser.cpp
 DEPS
     fileselect
     kernel.basis
