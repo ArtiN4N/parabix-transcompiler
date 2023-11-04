@@ -12,6 +12,8 @@ public:
     void linkExternalMethods(BuilderRef b) override;
     llvm::StringRef getSignature() const override;
     bool hasSignature() const override { return true; }
+    void generateInitializeMethod(BuilderRef b) override;
+    void generateFinalizeMethod(BuilderRef b) override;
 protected:
 
     struct Config {
