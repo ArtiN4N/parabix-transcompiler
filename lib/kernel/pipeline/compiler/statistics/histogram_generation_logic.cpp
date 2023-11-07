@@ -429,7 +429,7 @@ void PipelineCompiler::updateTransferredItemsForHistogramData(BuilderRef b) {
             b->CreateCondBr(b->CreateICmpEQ(currentItemCount, itemCount), updateEntry, insertNewEntry);
 
             b->SetInsertPoint(insertNewEntry);
-            Value * const size = ConstantExpr::getSizeOf(entryPtrTy->getPointerElementType());
+            Value * const size = b->getTypeSize(entryPtrTy->getPointerElementType());
             Value * const newEntry = b->CreatePointerCast(b->CreateAlignedMalloc(size, sizeof(uint64_t)), entryPtrTy);
             offset[1] = i32_ZERO;
             b->CreateStore(itemCount, b->CreateGEP(newEntry, offset));

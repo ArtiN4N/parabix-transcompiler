@@ -9,6 +9,7 @@ NAME
 SRC
     csv_validator.cpp
     csv_schema_validator.cpp
+    check_hash_table.cpp
     simple_csv_schema_parser.cpp
 DEPS
     fileselect

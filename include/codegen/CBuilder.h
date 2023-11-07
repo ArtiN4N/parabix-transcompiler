@@ -241,7 +241,7 @@ public:
     };
 
     llvm::Value * CreateMProtect(llvm::Value * addr, const Protect protect) {
-        return CreateMProtect(addr, llvm::ConstantExpr::getSizeOf(addr->getType()->getPointerElementType()), protect);
+        return CreateMProtect(addr, getTypeSize(addr->getType()->getPointerElementType()), protect);
     }
 
     llvm::Value * CreateMProtect(llvm::Value * addr, llvm::Value * size, const Protect protect);
@@ -272,6 +272,8 @@ public:
     llvm::PointerType * LLVM_READNONE getVoidPtrTy(const unsigned AddressSpace = 0) const;
 
     llvm::PointerType * LLVM_READNONE getFILEptrTy();
+
+    llvm::ConstantInt * LLVM_READNONE getTypeSize(llvm::Type * type, llvm::IntegerType * valType = nullptr) const;
 
     inline unsigned getCacheAlignment() const {
         return mCacheLineAlignment;

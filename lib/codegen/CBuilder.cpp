@@ -456,13 +456,16 @@ Value * CBuilder::CreateCacheAlignedMalloc(Value * const size) {
 }
 
 Value * CBuilder::CreateAlignedMalloc(Type * const type, Value * const ArraySize, const unsigned addressSpace, const unsigned alignment) {
-    Value * size = ConstantExpr::getSizeOf(type);
+
+    IntegerType * const sizeTy = getSizeTy();
+
+    Value * size = getTypeSize(type);
     if (ArraySize) {
-        size = CreateMul(size, CreateZExtOrTrunc(ArraySize, size->getType()));
+        size = CreateMul(size, CreateZExtOrTrunc(ArraySize, sizeTy));
     }
-    Constant * align = ConstantInt::get(size->getType(), alignment);
-    Value * const alignedSize = CreateRoundUp(size, align);
-    return CreatePointerCast(CreateAlignedMalloc(alignedSize, alignment), type->getPointerTo(addressSpace));
+    ConstantInt * const align = ConstantInt::get(sizeTy, alignment);
+    size = CreateRoundUp(size, align);
+    return CreatePointerCast(CreateAlignedMalloc(size, alignment), type->getPointerTo(addressSpace));
 }
 
 Value * CBuilder::CreateAlignedMalloc(Value * size, const unsigned alignment) {
@@ -530,7 +533,7 @@ inline bool CBuilder::hasPosixMemalign() const {
 }
 
 Value * CBuilder::CreateRealloc(Type * const type, Value * const base, Value * const ArraySize) {
-    Value * size = ConstantExpr::getSizeOf(type);
+    Value * size = getTypeSize(type);
     if (ArraySize) {
         size = CreateMul(size, CreateZExtOrTrunc(ArraySize, size->getType()));
     }
@@ -826,7 +829,7 @@ PointerType * LLVM_READNONE CBuilder::getVoidPtrTy(const unsigned AddressSpace) 
 
 Value * CBuilder::CreateAtomicFetchAndAdd(Value * const val, Value * const ptr) {
     if (LLVM_UNLIKELY(codegen::DebugOptionIsSet(codegen::EnableAsserts))) {
-        Constant * const Size = ConstantExpr::getSizeOf(val->getType());
+        Constant * const Size = getTypeSize(val->getType());
         CheckAddress(ptr, Size, "CreateAtomicFetchAndAdd: ptr");
     }
 #if LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(13, 0, 0)
@@ -838,7 +841,7 @@ Value * CBuilder::CreateAtomicFetchAndAdd(Value * const val, Value * const ptr) 
 
 Value * CBuilder::CreateAtomicFetchAndSub(Value * const val, Value * const ptr) {
     if (LLVM_UNLIKELY(codegen::DebugOptionIsSet(codegen::EnableAsserts))) {
-        Constant * const Size = ConstantExpr::getSizeOf(val->getType());
+        Constant * const Size = getTypeSize(val->getType());
         CheckAddress(ptr, Size, "CreateAtomicFetchAndSub: ptr");
     }
 #if LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(13, 0, 0)
@@ -1184,7 +1187,7 @@ void CBuilder::__CreateAssert(Value * const assertion, const Twine format, std::
         CreateCall(vaFuncTy, vaEnd, vaList);
 
         Function * alloc_exception = getAllocateException();
-        Value * const exception = CreateCall(alloc_exception->getFunctionType(), alloc_exception, { ConstantExpr::getSizeOf(int8PtrTy) } );
+        Value * const exception = CreateCall(alloc_exception->getFunctionType(), alloc_exception, { getTypeSize(int8PtrTy) } );
         Constant * const nil = ConstantPointerNull::get(int8PtrTy);
         IRBuilder<>::CreateStore(nil, CreateBitCast(exception, int8PtrPtrTy));
         // NOTE: the second argument is supposed to point to a std::type_info object.
@@ -1448,28 +1451,28 @@ Function * CBuilder::LinkFunction(StringRef name, FunctionType * type, void * fu
 
 LoadInst * CBuilder::CreateLoad(Value *Ptr, const char * Name) {
     if (LLVM_UNLIKELY(codegen::DebugOptionIsSet(codegen::EnableAsserts))) {
-        CheckAddress(Ptr, ConstantExpr::getSizeOf(Ptr->getType()->getPointerElementType()), "CreateLoad");
+        CheckAddress(Ptr, getTypeSize(Ptr->getType()->getPointerElementType()), "CreateLoad");
     }
     return IRBuilder<>::CreateLoad(Ptr, Name);
 }
 
 LoadInst * CBuilder::CreateLoad(Value * Ptr, const Twine Name) {
     if (LLVM_UNLIKELY(codegen::DebugOptionIsSet(codegen::EnableAsserts))) {
-        CheckAddress(Ptr, ConstantExpr::getSizeOf(Ptr->getType()->getPointerElementType()), "CreateLoad");
+        CheckAddress(Ptr, getTypeSize(Ptr->getType()->getPointerElementType()), "CreateLoad");
     }
     return IRBuilder<>::CreateLoad(Ptr, Name);
 }
 
 LoadInst * CBuilder::CreateLoad(Type * Ty, Value *Ptr, const Twine Name) {
     if (LLVM_UNLIKELY(codegen::DebugOptionIsSet(codegen::EnableAsserts))) {
-        CheckAddress(Ptr, ConstantExpr::getSizeOf(Ty), "CreateLoad");
+        CheckAddress(Ptr, getTypeSize(Ty), "CreateLoad");
     }
     return IRBuilder<>::CreateLoad(Ty, Ptr, Name);
 }
 
 LoadInst * CBuilder::CreateLoad(Value * Ptr, bool isVolatile, const Twine Name) {
     if (LLVM_UNLIKELY(codegen::DebugOptionIsSet(codegen::EnableAsserts))) {
-        CheckAddress(Ptr, ConstantExpr::getSizeOf(Ptr->getType()->getPointerElementType()), "CreateLoad");
+        CheckAddress(Ptr, getTypeSize(Ptr->getType()->getPointerElementType()), "CreateLoad");
     }
     return IRBuilder<>::CreateLoad(Ptr, isVolatile, Name);
 }
@@ -1480,7 +1483,7 @@ StoreInst * CBuilder::CreateStore(Value * Val, Value * Ptr, bool isVolatile) {
     assert ("Ptr (Arg2) is not a pointer type for Val (Arg1)" &&
             Val->getType() == Ptr->getType()->getPointerElementType());
     if (LLVM_UNLIKELY(codegen::DebugOptionIsSet(codegen::EnableAsserts))) {
-        CheckAddress(Ptr, ConstantExpr::getSizeOf(Val->getType()), "CreateStore");
+        CheckAddress(Ptr, getTypeSize(Val->getType()), "CreateStore");
     }
     return IRBuilder<>::CreateStore(Val, Ptr, isVolatile);
 }
@@ -1876,7 +1879,7 @@ void CBuilder::CheckAddress(Value * const Ptr, Value * const Size, Constant * co
     if (AllocaInst * Base = resolveStackAddress(Ptr)) {
         DataLayout DL(getModule());
         IntegerType * const intPtrTy = cast<IntegerType>(DL.getIntPtrType(Ptr->getType()));
-        Value * sz = ConstantExpr::getBitCast(ConstantExpr::getSizeOf(Base->getAllocatedType()), intPtrTy);
+        Value * sz = getTypeSize(Base->getAllocatedType(), intPtrTy);
         if (notConstantZeroArraySize(Base)) {
             sz = CreateMul(sz, CreateZExtOrTrunc(Base->getArraySize(), intPtrTy));
         }
@@ -2215,6 +2218,24 @@ bool RemoveRedundantAssertionsPass::runOnModule(Module & M) {
     }
 
     return modified;
+}
+
+llvm::ConstantInt * LLVM_READNONE CBuilder::getTypeSize(llvm::Type * type, IntegerType * valType) const {
+    // ConstantExpr::getSizeOf was creating an infinite(?) loop when folding the value for some complex structs
+    // until replaced with this in LLVM 12.
+    DataLayout dl(getModule());
+    size_t size = 0;
+    if (LLVM_LIKELY(type != nullptr)) {
+        #if LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(11, 0, 0)
+        size = dl.getTypeAllocSize(type);
+        #else
+        size = dl.getTypeAllocSize(type).getFixedSize();
+        #endif
+    }
+    if (valType == nullptr) {
+        valType = getSizeTy();
+    }
+    return ConstantInt::get(getSizeTy(), size);
 }
 
 std::string CBuilder::getKernelName() const {

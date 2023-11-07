@@ -12,6 +12,7 @@
 #include <pablo/builder.hpp>
 #include <re/adt/adt.h>              // for Seq
 #include <re/alphabet/alphabet.h>
+#include <re/cc/cc_compiler.h>
 
 namespace cc { class CC_Compiler; class Alphabet;}
 namespace pablo { class PabloAST; }

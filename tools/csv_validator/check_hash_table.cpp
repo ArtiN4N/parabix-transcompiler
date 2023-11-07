@@ -6,6 +6,8 @@
 #include <llvm/IR/Function.h>
 #include <llvm/Support/raw_ostream.h>
 
+#include "csv_validator_toolchain.h"
+
 inline size_t ceil_udiv(const size_t n, const size_t m) {
     return (n + m - 1) / m;
 }
@@ -16,10 +18,12 @@ using namespace csv;
 #define BEGIN_SCOPED_REGION {
 #define END_SCOPED_REGION }
 
+#define CACHE_LINE_SIZE (64)
+
 namespace kernel {
 
 
-class HashArrayMappedTrie {
+class alignas(CACHE_LINE_SIZE) HashArrayMappedTrie  {
 
     using ValueType = size_t;
 
@@ -51,13 +55,9 @@ public:
            current = node;
         }
 
-
-
         DataNode ** data = (DataNode **)current;
 
         DataNode * prior = nullptr;
-
-        assert (*end == '\n');
 
         const size_t length = end - start;
 
@@ -94,9 +94,7 @@ public:
 
     }
 
-    HashArrayMappedTrie() = default;
-
-    void reset() {
+    HashArrayMappedTrie() {
         mInternalAllocator.Reset();
         Root = mInternalAllocator.allocate<void *>(1ULL << HashBitsPerTrie);
         for (unsigned i = 0; i < (1ULL << HashBitsPerTrie); ++i) {
@@ -114,7 +112,12 @@ private:
 
 
 HashArrayMappedTrie * construct_n_tries(const size_t n) {
-#error make this
+    const auto m = sizeof(HashArrayMappedTrie) * n;
+    HashArrayMappedTrie * const tries = (HashArrayMappedTrie *)aligned_alloc(CACHE_LINE_SIZE, m);
+    for (size_t i = 0; i < n; ++i) {
+        new (tries + i) HashArrayMappedTrie();
+    }
+    return tries;
 }
 
 bool check_hash_code(HashArrayMappedTrie * const table, const uint32_t hashCode, const char * start, const char * end, const size_t lineNum, size_t * out) {
@@ -122,11 +125,14 @@ bool check_hash_code(HashArrayMappedTrie * const table, const uint32_t hashCode,
 }
 
 void report_duplicate_key(HashArrayMappedTrie * const table, const size_t failingLineNum, const size_t originalLineNum) {
-
+    errs() << "duplicate key found on row " << failingLineNum << " (originally observed on " << originalLineNum << ")";
 }
 
 void deconstruct_n_tries(HashArrayMappedTrie * const tables, const size_t n) {
-
+    for (size_t i = 0; i < n; ++i) {
+        (tables + i)->~HashArrayMappedTrie();
+    }
+    std::free(tables);
 }
 
 CheckKeyUniqueness::Config CheckKeyUniqueness::makeCreateHashTableConfig(const csv::CSVSchema & schema, const size_t bitsPerHashCode) {
@@ -181,6 +187,7 @@ CheckKeyUniqueness::Config CheckKeyUniqueness::makeCreateHashTableConfig(const c
     Config C;
     C.FieldsPerKey = fieldsPerKey;
     C.Signature = sig;
+    return C;
 }
 
 
@@ -320,11 +327,7 @@ has_unique_key:
 
     ArrayType * const hashValueArrayTy = ArrayType::get(sizeTy, totalKeys);
     Value * const hashValueArray = b->CreateAllocaAtEntryPoint(hashValueArrayTy);
-
     Value * const outValueArray = b->CreateAllocaAtEntryPoint(hashValueArrayTy);
-
-//    ArrayType * const coordTy = ArrayType::get(b->getInt8PtrTy(), mStride * 2);
-//    Value * const coordArray = b->CreateAllocaAtEntryPoint(coordTy);
 
     Value * const numOfUnprocessedHashCodes = b->getAccessibleItemCount("HashCodes");
     Value * const totalHashCodeProcessed = b->CreateAdd(hashCodesProcessed, numOfUnprocessedHashCodes);
@@ -477,10 +480,6 @@ skip_composite_key:
         failingKey = b->CreateAdd(earliestResultOffset, failingKey);
     }
 
-    // if x < stride
-        // unique key
-    // else composite key?
-
     FixedArray<Value *, 3> reportArgs;
     Value * const sz_Offset = b->CreateMul(b->getSize(sizeof(HashArrayMappedTrie)), failingKey);
     reportArgs[0] = b->CreateGEP(baseHashTableObjects, sz_Offset);
@@ -493,7 +492,6 @@ skip_composite_key:
     // that if all key columns have a warning flag, then do not set the termination signal.
 
     // Have tables contain a friendly name for the key type / fields?
-
 
     b->setFatalTerminationSignal();
     b->CreateBr(continueToNext);

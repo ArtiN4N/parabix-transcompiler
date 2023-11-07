@@ -58,7 +58,7 @@ LLVM_READNONE inline Constant * nullPointerFor(BuilderPtr & b, Type * type, cons
         DataLayout DL(b->getModule());
         Type * const intPtrTy = DL.getIntPtrType(type);
         Constant * const U = ConstantInt::get(intPtrTy, underflow);
-        Constant * const P = ConstantExpr::getSizeOf(type->getPointerElementType());
+        Constant * const P = b->getTypeSize(type->getPointerElementType());
         return ConstantExpr::getIntToPtr(ConstantExpr::getMul(U, P), type);
     }
 }
@@ -691,7 +691,7 @@ Value * StaticBuffer::expandBuffer(BuilderPtr b, Value * produced, Value * consu
             const auto blockSize = blockWidth / 8;
 
             ConstantInt * const BLOCK_WIDTH = b->getSize(blockWidth);
-            Constant * const CHUNK_SIZE = ConstantExpr::getSizeOf(mType);
+            Constant * const CHUNK_SIZE = b->getTypeSize(mType);
 
             FixedArray<Value *, 2> indices;
             indices[0] = b->getInt32(0);
@@ -1053,7 +1053,7 @@ void DynamicBuffer::linearCopyBack(BuilderPtr b, Value * produced, Value * consu
             const auto sizeTyWidth = sizeTy->getBitWidth() / 8;
 
             ConstantInt * const BLOCK_WIDTH = b->getSize(blockWidth);
-            Constant * const CHUNK_SIZE = ConstantExpr::getSizeOf(mType);
+            Constant * const CHUNK_SIZE = b->getTypeSize(mType);
 
             FixedArray<Value *, 2> indices;
             indices[0] = b->getInt32(0);
@@ -1172,7 +1172,7 @@ Value * DynamicBuffer::expandBuffer(BuilderPtr b, Value * const produced, Value 
         const auto blockSize = blockWidth / 8;
 
         ConstantInt * const BLOCK_WIDTH = b->getSize(blockWidth);
-        Constant * const CHUNK_SIZE = ConstantExpr::getSizeOf(mType);
+        Constant * const CHUNK_SIZE = b->getTypeSize(mType);
 
         FixedArray<Value *, 2> indices;
         indices[0] = b->getInt32(0);
@@ -1352,7 +1352,7 @@ void MMapedBuffer::allocateBuffer(BuilderPtr b, Value * const capacityMultiplier
     indices[1] = b->getInt32(BaseAddress);
     Value * const baseAddressField = b->CreateInBoundsGEP(handle, indices);
 
-    Constant * const typeSize = ConstantExpr::getSizeOf(mType);
+    Constant * const typeSize = b->getTypeSize(mType);
     Value * const minCapacity = b->CreateCeilUDiv(b->getSize(ANON_MMAP_SIZE), typeSize);
 
     capacity = b->CreateUMax(capacity, minCapacity);
@@ -1389,7 +1389,7 @@ void MMapedBuffer::allocateBuffer(BuilderPtr b, Value * const capacityMultiplier
 void MMapedBuffer::releaseBuffer(BuilderPtr b) const {
     /* Free the dynamically allocated buffer(s). */
     Value * const handle = getHandle();
-    Constant * const typeSize = ConstantExpr::getSizeOf(mType);
+    Constant * const typeSize = b->getTypeSize(mType);
     FixedArray<Value *, 2> indices;
     indices[0] = b->getInt32(0);
     indices[1] = b->getInt32(BaseAddress);
@@ -1511,7 +1511,7 @@ Value * MMapedBuffer::expandBuffer(BuilderPtr b, Value * const produced, Value *
 
     Value * const handle = getHandle();
 
-    Constant * const typeSize = ConstantExpr::getSizeOf(mType);
+    Constant * const typeSize = b->getTypeSize(mType);
     Value * const expandStepSize = b->CreateCeilUDiv(b->getSize(ANON_MMAP_SIZE), typeSize);
 
     FixedArray<Value *, 2> indices;

@@ -879,7 +879,7 @@ void PipelineCompiler::remapThreadLocalBufferMemory(BuilderRef b) {
             ExternalBuffer * const buffer = cast<ExternalBuffer>(bn.Buffer);
             Value * const produced = mInitiallyProducedItemCount[streamSet];
             PointerType * const ptrTy = buffer->getPointerType();
-            Constant * const bytesPerPack = ConstantExpr::getSizeOf(ptrTy->getElementType());
+            Constant * const bytesPerPack = b->getTypeSize(ptrTy->getElementType());
             Value * const producedBytes = b->CreateMul(b->CreateUDiv(produced, BLOCK_WIDTH), bytesPerPack);
 
             Value * const offset = b->CreateSub(startOffset, producedBytes);
