@@ -836,9 +836,10 @@ Marker RE_Compiler::compileRE(RE * const re, Marker initialMarkers, const unsign
     RE_Block_Compiler blockCompiler(*this, nested);
     Marker m1 = blockCompiler.process(re, initialMarkers);
     //Marker m1 = process(re, initialMarkers, nested);
-    nested.createAssign(m, m1.stream());
+    Marker m2 = blockCompiler.AdvanceMarker(m1, outputpos);
+    nested.createAssign(m, m2.stream());
     pb.createIf(initialMarkers.stream(), nested);
-    return blockCompiler.AdvanceMarker(Marker(m, m1.offset()), outputpos);
+    return Marker(m, m2.offset());
 }
 
 

@@ -196,7 +196,7 @@ bool GrepEngine::hasComponent(Component compon_set, Component c) {
     return (static_cast<component_t>(compon_set) & static_cast<component_t>(c)) != 0;
 }
 
-void GrepEngine::GrepEngine::setComponent(Component & compon_set, Component c) {
+void GrepEngine::setComponent(Component & compon_set, Component c) {
     compon_set = static_cast<Component>(static_cast<component_t>(compon_set) | static_cast<component_t>(c));
 }
 

@@ -7,6 +7,7 @@ NAME
     csv2json
 SRC
     csv2json.cpp
+    csv_util.cpp
 DEPS
     pablo
     kernel.basis
@@ -23,6 +24,7 @@ NAME
     csv_column
 SRC
     csv_column.cpp
+    csv_util.cpp
 DEPS
     pablo
     kernel.basis

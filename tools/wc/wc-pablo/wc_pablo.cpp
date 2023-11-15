@@ -154,7 +154,7 @@ WordCountFunctionType wcPipelineGen(CPUDriver & pxDriver, std::shared_ptr<PabloP
     return reinterpret_cast<WordCountFunctionType>(P->compile());
 }
 
-void wc(WordCountFunctionType fn_ptr, const uint32_t fileIdx) {
+void run(WordCountFunctionType fn_ptr, const uint32_t fileIdx) {
     std::string fileName = allFiles[fileIdx].string();
     struct stat sb;
     const int fd = open(fileName.c_str(), O_RDONLY);
@@ -228,7 +228,7 @@ int main(int argc, char *argv[]) {
     byteCount.resize(fileCount);
 
     for (unsigned i = 0; i < fileCount; ++i) {
-        wc(wordCountFunctionPtr, i);
+        run(wordCountFunctionPtr, i);
     }
     
     size_t maxCount = 0;

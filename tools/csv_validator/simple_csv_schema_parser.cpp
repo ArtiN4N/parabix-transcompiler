@@ -13,6 +13,7 @@
 #include <llvm/Support/raw_ostream.h>
 #include <boost/container/flat_set.hpp>
 #include <re/parse/PCRE_parser.h>
+#include <re/printer/re_printer.h>
 
 using namespace llvm;
 using namespace boost;
@@ -42,16 +43,43 @@ CSVSchema CSVSchemaParser::load(const llvm::StringRef fileName) {
             }
         };
 
+        auto skipSpaceUntilNewLine = [&]() -> bool {
+            while (cur != end) {
+                const auto c = *cur;
+                if (c == '\n') {
+                    ++cur;
+                    return true;
+                } else if (c == '\r') {
+                    if ((cur != end) && (*cur == '\n')) {
+                        ++cur;
+                    }
+                    return true;
+                } else if (!std::isspace(c)) {
+                    break;
+                }
+                ++cur;
+            }
+            return false;
+        };
+
+
+
         auto skipSpaceOrComments = [&]() {
             while (cur != end) {
                 if (std::isspace(*cur)) {
                      ++cur;
-                } else if (LLVM_UNLIKELY(*cur == '\\')) {
+                } else if (LLVM_UNLIKELY(*cur == '/')) {
                     auto p = cur + 1;
-                    if (*p == '\\') {
+                    if (*p == '/') {
                         // in single line comment. parse until new line
                         while (++p != end) {
-                            if (LLVM_UNLIKELY(*p == '\n')) {
+                            const auto c = *p;
+                            if (LLVM_UNLIKELY(c == '\r')) {
+                                if ((++p != end) && (*p == '\n')) {
+                                    ++p;
+                                }
+                                break;
+                            } else if (LLVM_UNLIKELY(c == '\n')) {
                                 ++p;
                                 break;
                             }
@@ -125,6 +153,7 @@ CSVSchema CSVSchemaParser::load(const llvm::StringRef fileName) {
                 size_t v = *cur;
                 if (LLVM_LIKELY(std::isdigit(v))) {
                     v -= '0';
+                    assert (v >= 0 && v < 10);
                     while (LLVM_LIKELY(++cur != end)) {
                         const auto c = *cur;
                         if (std::isdigit(c)) {
@@ -272,21 +301,25 @@ CSVSchema CSVSchemaParser::load(const llvm::StringRef fileName) {
                 if (*cur == '"') {
                     // StringLiteral	::=	"\"" [^"]* "\""
                     for (;;) {
+                        assert (cur != end);
                         if (++cur == end) {
                             reportParsingFailure("unterminated quoted identifier");
                         }
                         // string literal doesn't allow for any double quotes? modified rule
-                        // to permit escaped ones.
+                        // to permit escaped characters.
                         if (*cur == '\\') {
-                            if (++cur == end) {
-                                reportParsingFailure("unterminated escaped character");
+                            auto p = cur + 1;
+                            if (*p == '"') {
+                               cur = p;
                             }
                         } else if (*cur == '"') {
+                            ++cur;
                             break;
                         }
-                        tmp << *cur++;
+                        tmp << *cur;
                     }
                 }
+
                 return tmp.str();
             };
 
@@ -301,15 +334,21 @@ CSVSchema CSVSchemaParser::load(const llvm::StringRef fileName) {
                     // Ident	::=	[A-Za-z0-9\-_\.]+
                     string.clear();
                     raw_svector_ostream tmp(string);
+                    const auto start = cur;
                     for (;;) {
                         const char c = *cur;
-                        if ((c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.') {
+                        if (std::isalnum(c) || c == '-' || c == '_' || c == '.') {
                             tmp << c;
                             ++cur;
                         } else {
                             break;
                         }
                     }
+
+                    if (cur == start) {
+                        reportParsingFailure("identifier expected");
+                    }
+
                     return tmp.str();
                 }
 
@@ -341,6 +380,7 @@ CSVSchema CSVSchemaParser::load(const llvm::StringRef fileName) {
             auto readColumnValidationExprName = [&]() {
                 string.clear();
                 raw_svector_ostream tmp(string);
+                const auto start = cur;
                 for (;;) {
                     if (cur == end) {
                         break;
@@ -351,27 +391,41 @@ CSVSchema CSVSchemaParser::load(const llvm::StringRef fileName) {
                         break;
                     }
                 }
+                if (cur == start) {
+                    reportParsingFailure("expression type expected");
+                }
                 return tmp.str();
             };
 
+            skipSpace();
+            requireChar(':', "expected :");
+
+            // White space is not generally important within a Column Rule, but the whole rule must be on a single line.
+
             for (;;) {
-                skipSpace();
+                if (skipSpaceUntilNewLine()) {
+                    goto done_parsing_column_rule;
+                }
                 if (matchChar('@')) {
                     goto parse_column_directives;
                 }
+
                 const StringRef exprName = readColumnValidationExprName();
+
                 if (exprName.equals("regex")) {
 
                     // 	RegExpExpr	::=	"regex(" StringLiteral ")"
 
                     // A Regular Expression Expression checks the value of the column against the supplied Regular Expression.
 
-                    skipSpace();
+                    skipSpaceUntilNewLine();
                     requireChar('(', "expected (");
-                    skipSpace();
+                    skipSpaceUntilNewLine();
                     const auto re = parseStringLiteral();
                     rule.Expression = re::RE_Parser::parse(re.str());
-                    skipSpace();
+                    errs() << "INPUT RE:\n\n" << re << ":\n\n"
+                           << Printer_RE::PrintRE(rule.Expression) << "\n\n\n";
+                    skipSpaceUntilNewLine();
                     requireChar(')', "expected )");
                 } else if (exprName.equals("unique")) {
                     // 	UniqueExpr	::=	"unique" ("(" ColumnRef ("," ColumnRef)* ")")?
@@ -391,16 +445,16 @@ CSVSchema CSVSchemaParser::load(const llvm::StringRef fileName) {
                     CSVSchemaCompositeKey key;
                     key.Fields.push_back(u);
 
-                    skipSpace();
+                    skipSpaceUntilNewLine();
 
                     if (matchChar('(')) {
                         for (;;) {
-                            skipSpace();
+                            skipSpaceUntilNewLine();
                             requireChar('$', "expected $ before column identifier");
                             auto name = parseQuotedOrNonQuotedColumnIdentifier();
                             const auto v = findOrAddKey(name.str());
                             key.Fields.push_back(v);
-                            skipSpace();
+                            skipSpaceUntilNewLine();
                             if (matchChar(')')) {
                                 break;
                             } else {
@@ -410,13 +464,15 @@ CSVSchema CSVSchemaParser::load(const llvm::StringRef fileName) {
                     }
 
                     schema.CompositeKey.emplace_back(key);
+                } else {
+                    break;
                 }
             }
 
             // ColumnDirectives	::=	OptionalDirective? MatchIsFalseDirective? IgnoreCaseDirective? WarningDirective?	/* xgc:unordered */
 
             for (;;) {
-                skipSpace();
+                skipSpaceUntilNewLine();
                 if (matchChar('@')) {
 parse_column_directives:
                     if (matchString("optional")) {
@@ -434,6 +490,8 @@ parse_column_directives:
                     break;
                 }
             }
+done_parsing_column_rule:
+            continue;
         }
 
         if (LLVM_UNLIKELY(!M.empty())) {

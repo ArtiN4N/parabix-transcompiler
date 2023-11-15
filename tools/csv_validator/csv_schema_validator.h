@@ -4,6 +4,8 @@
 #include <llvm/ADT/StringRef.h>
 #include <vector>
 #include <pablo/pablo_kernel.h>
+#include <re/alphabet/alphabet.h>
+#include <re/alphabet/multiplex_CCs.h>
 
 namespace re { class RE; }
 
@@ -33,11 +35,50 @@ namespace csv {
         std::vector<CSVSchemaCompositeKey> CompositeKey;
     };
 
-#warning work on compiler warnings
+    class CSVSchemaValidatorOptions {
+        friend class CSVSchemaValidatorKernel;
+    public:
+        using Alphabets = std::vector<std::pair<const cc::Alphabet *, kernel::StreamSet *>>;
+        CSVSchemaValidatorOptions(const cc::Alphabet * codeUnitAlphabet = &cc::UTF8);
+//        void setBarrier(kernel::StreamSet * barrierStream);
+        void setIndexing(kernel::StreamSet * indexStream);
+
+        void addExternal(std::string name,
+                         kernel::StreamSet * strm,
+                         unsigned offset = 0,
+                         std::pair<int, int> lengthRange = std::make_pair<int,int>(1, 1));
+        void addAlphabet(const cc::Alphabet * a, kernel::StreamSet * basis);
+
+        void setKeyRunStream(kernel::StreamSet * keyRun) { mKeyRuns = keyRun; }
+
+        void setKeyMarkerStream(kernel::StreamSet * keyMarkers) { mKeyMarkers = keyMarkers; }
+
+//    protected:
+//        kernel::Bindings streamSetInputBindings();
+//        kernel::Bindings streamSetOutputBindings();
+//        kernel::Bindings scalarInputBindings();
+//        kernel::Bindings scalarOutputBindings();
+//        std::string makeSignature();
+
+    private:
+
+        const cc::Alphabet *                mCodeUnitAlphabet = nullptr;
+        kernel::StreamSet *                 mIndexStream = nullptr;
+        kernel::StreamSet *                 mCombiningStream = nullptr;
+
+        kernel::StreamSet *                 mKeyMarkers = nullptr;
+        kernel::StreamSet *                 mKeyRuns = nullptr;
+
+        kernel::Bindings                    mExternalBindings;
+        std::vector<unsigned>               mExternalOffsets;
+        std::vector<std::pair<int, int>>    mExternalLengths;
+        Alphabets                           mAlphabets;
+    };
+
 
     class CSVSchemaValidatorKernel : public pablo::PabloKernel {
     public:
-        CSVSchemaValidatorKernel(BuilderRef b, const csv::CSVSchema & schema, kernel::StreamSet * basisBits, kernel::StreamSet * UTFindex, kernel::StreamSet * fieldData, kernel::StreamSet * recordSeperators, kernel::StreamSet * allSeperators, kernel::StreamSet * invalid, kernel::StreamSet * keyMarkers = nullptr, kernel::StreamSet * keyRuns = nullptr);
+        CSVSchemaValidatorKernel(BuilderRef b, const csv::CSVSchema & schema, kernel::StreamSet * basisBits, kernel::StreamSet * fieldData, kernel::StreamSet * recordSeperators, kernel::StreamSet * allSeperators, kernel::StreamSet * invalid, CSVSchemaValidatorOptions && options);
         llvm::StringRef getSignature() const override;
         bool hasSignature() const override { return true; }
 
@@ -45,12 +86,13 @@ namespace csv {
 
         static std::string makeCSVSchemaSignature(const csv::CSVSchema & schema);
 
-        CSVSchemaValidatorKernel(BuilderRef b, const csv::CSVSchema & schema, std::string && signature, kernel::StreamSet * basisBits, kernel::StreamSet * UTFindex, kernel::StreamSet * fieldData, kernel::StreamSet * recordSeperators, kernel::StreamSet * allSeperators, kernel::StreamSet * invalid, kernel::StreamSet * keyMarkers, kernel::StreamSet * keyRuns);
+        CSVSchemaValidatorKernel(BuilderRef b, const csv::CSVSchema & schema, std::string && signature, kernel::StreamSet * basisBits, kernel::StreamSet * fieldData, kernel::StreamSet * recordSeperators, kernel::StreamSet * allSeperators, kernel::StreamSet * invalid, CSVSchemaValidatorOptions && options);
         void generatePabloMethod() override;
     private:
         static std::string makeSignature(const std::vector<re::RE *> & fields);
     private:
         const csv::CSVSchema &              mSchema;
+        CSVSchemaValidatorOptions           mOptions;
         std::string                         mSignature;
 
     };

@@ -37,6 +37,7 @@ void update1reference(Reference * ref, CapturePostfixMap & cm, ReferenceInfo & i
         llvm::report_fatal_error("reference without capture");
     }
 }
+
 void updateReferenceInfo(RE * re, CapturePostfixMap & cm, ReferenceInfo & info) {
     if (Capture * c = dyn_cast<Capture>(re)) {
         updateReferenceInfo(c->getCapturedRE(), cm, info);
@@ -82,4 +83,5 @@ ReferenceInfo buildReferenceInfo(RE * re) {
     updateReferenceInfo(re, cm, info);
     return info;
 }
+
 }

@@ -130,6 +130,7 @@ bool ExternalStreamTable::hasReferenceTo(StreamIndexCode c, std::string ssname) 
 }
 
 StreamSet * ExternalStreamTable::getStreamSet(ProgBuilderRef b, StreamIndexCode c, std::string ssname) {
+    assert (isDeclared(c, ssname));
     const auto & ext = lookup(c, ssname);
     if (!ext->isResolved()) {
         auto paramNames = ext->getParameters();
