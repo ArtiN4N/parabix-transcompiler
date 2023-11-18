@@ -54,7 +54,7 @@ using namespace kernel;
 
 // TODO: temporary workaround. The system already implicitly "adds" start and end marks
 // to bookend the query for each field but if the user explicitly adds them, the RE compiler
-// treats them as line start/ends and fails to validate the line. However, by stripping them
+// treats them as line start/ends and fails to validate the field. However, by stripping them
 // we cannot correctly validate multiline field values.
 
 class StripStartEndBookEnds : public RE_Transformer {
@@ -322,6 +322,10 @@ CSVValidatorFunctionType CSVMatcherEngine::compile(CPUDriver & pxDriver, const s
 
     auto schemaFile = csv::CSVSchemaParser::load(inputSchema);
 
+    if (!schemaFile.CompositeKey.empty()) {
+        setComponent(mExternalComponents, Component::S2P);
+    }
+
     initRE(schemaFile);
 
     P->CreateKernelCall<MMapSourceKernel>(fileDescriptor, ByteStream);
@@ -353,8 +357,6 @@ CSVValidatorFunctionType CSVMatcherEngine::compile(CPUDriver & pxDriver, const s
         P->CreateKernelFamilyCall<CSVSchemaValidatorKernel>(schemaFile, BasisBits, fieldData, recordSeparators, allSeparators, errors, std::move(options));
 
     } else {
-
-        setComponent(mExternalComponents, Component::S2P);
 
         StreamSet * const keyMarkers = P->CreateStreamSet(1);
 

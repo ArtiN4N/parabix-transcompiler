@@ -893,7 +893,7 @@ Function * PipelineKernel::addOrDeclareMainFunction(BuilderRef b, const MainMeth
     raw_string_ostream name(tmp);
     name << 'P' << Kernel::getStringHash(signature);
     name.flush();
-    return tmp;
+    return annotateKernelNameWithDebugFlags(TypeId::Pipeline, std::move(tmp));
 }
 
 /** ------------------------------------------------------------------------------------------------------------- *
