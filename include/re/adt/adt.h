@@ -10,7 +10,6 @@
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/ErrorHandling.h>
 #include <re/adt/re_re.h>
-
 #include <re/adt/re_alt.h>
 #include <re/adt/re_any.h>
 #include <re/adt/re_assertion.h>
@@ -25,3 +24,4 @@
 #include <re/adt/re_seq.h>
 #include <re/adt/re_start.h>
 #include <re/adt/re_auxfield.h>
+#include <re/adt/re_permute.h>

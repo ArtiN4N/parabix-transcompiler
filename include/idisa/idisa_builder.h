@@ -73,11 +73,13 @@ public:
     }
 
     llvm::LoadInst * CreateBlockAlignedLoad(llvm::Value * const ptr, llvm::Value * const index) {
-        return CreateBlockAlignedLoad(CreateGEP(ptr, index));
+        llvm::Type * elemTy = ptr->getType()->getPointerElementType();
+        return CreateBlockAlignedLoad(CreateGEP(elemTy, ptr, index));
     }
 
     llvm::LoadInst * CreateBlockAlignedLoad(llvm::Value * const ptr, std::initializer_list<llvm::Value *> indices) {
-        return CreateBlockAlignedLoad(CreateGEP(ptr, indices));
+        llvm::Type * elemTy = ptr->getType()->getPointerElementType();
+        return CreateBlockAlignedLoad(CreateGEP(elemTy, ptr, indices));
     }
 
     llvm::StoreInst * CreateBlockAlignedStore(llvm::Value * const value, llvm::Value * const ptr) {
@@ -85,17 +87,29 @@ public:
     }
 
     llvm::StoreInst * CreateBlockAlignedStore(llvm::Value * const value, llvm::Value * const ptr, llvm::Value * const index) {
-        return CreateBlockAlignedStore(value, CreateGEP(ptr, index));
+        llvm::Type * elemTy = ptr->getType()->getPointerElementType();
+        return CreateBlockAlignedStore(value, CreateGEP(elemTy, ptr, index));
     }
 
     llvm::StoreInst * CreateBlockAlignedStore(llvm::Value * const value, llvm::Value * const ptr, std::initializer_list<llvm::Value *> indices) {
-        return CreateBlockAlignedStore(value, CreateGEP(ptr, indices));
+        llvm::Type * elemTy = ptr->getType()->getPointerElementType();
+        return CreateBlockAlignedStore(value, CreateGEP(elemTy, ptr, indices));
     }
 
     llvm::Value * CreateBlockAlignedMalloc(llvm::Value * size) {
         return CreateAlignedMalloc(size, mBitBlockWidth / 8);
     }
 
+    llvm::Value * CreateGEP0(llvm::Value * Ptr, llvm::ArrayRef<llvm::Value *> IdxList, const llvm::Twine &Name = "") {
+        return CreateGEP(Ptr->getType()->getScalarType()->getPointerElementType(),
+                         Ptr, IdxList, Name);
+    }
+    
+    llvm::Value * CreateInBoundsGEP0(llvm::Value * Ptr, llvm::ArrayRef<llvm::Value *> IdxList, const llvm::Twine &Name = "") {
+        return CreateGEP(Ptr->getType()->getScalarType()->getPointerElementType(),
+                         Ptr, IdxList, Name);
+    }
+    
     FixedVectorType * fwVectorType(const unsigned fw);
 
     llvm::Constant * simd_himask(unsigned fw);
@@ -246,7 +260,7 @@ public:
     llvm::CallInst * CallPrintRegister(llvm::StringRef regName, llvm::Value * const value, const STD_FD fd = STD_FD::STD_ERR);
 
 protected:
-    LLVM_ATTRIBUTE_NORETURN void UnsupportedFieldWidthError(const unsigned FieldWidth, std::string op_name);
+    [[noreturn]] void UnsupportedFieldWidthError(const unsigned FieldWidth, std::string op_name);
 
     llvm::Constant * bit_interleave_byteshuffle_table(unsigned fw);  // support function for merge using shuffles.
 

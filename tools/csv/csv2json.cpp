@@ -40,7 +40,9 @@
 #include <fcntl.h>
 #include <iostream>
 #include <kernel/pipeline/driver/cpudriver.h>
+#include <boost/intrusive/detail/math.hpp>
 #include "csv_util.hpp"
+
 #ifdef ENABLE_PAPI
 #include <util/papi_helper.hpp>
 #endif
@@ -52,6 +54,8 @@
 using namespace kernel;
 using namespace llvm;
 using namespace pablo;
+
+using boost::intrusive::detail::ceil_log2;
 
 //  These declarations are for command line processing.
 //  See the LLVM CommandLine Library Manual https://llvm.org/docs/CommandLine.html

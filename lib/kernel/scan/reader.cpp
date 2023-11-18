@@ -34,7 +34,7 @@ void ScanReader::generateMultiBlockLogic(BuilderRef b, Value * const numOfStride
     Value * maxScanIndex = nullptr;
     Value * const index = b->CreateAdd(strideNo, initialStride);
     for (uint32_t i = 0; i < mNumScanStreams; ++i) {
-        Value * const scanItem = b->CreateLoad(b->getRawInputPointer("scan", b->getInt32(i), index));
+        Value * const scanItem = b->CreateLoad(sizeTy, b->getRawInputPointer("scan", b->getInt32(i), index));
         if (maxScanIndex != nullptr) {
             maxScanIndex = b->CreateUMax(maxScanIndex, scanItem);
         } else {
@@ -48,14 +48,15 @@ void ScanReader::generateMultiBlockLogic(BuilderRef b, Value * const numOfStride
     Value * const nextIndex = b->CreateAdd(nextStrideNo, initialStride);
     b->setProcessedItemCount("scan", nextIndex);
     for (auto const & name : mAdditionalStreamNames) {
-        Value * const item = b->CreateLoad(b->getRawInputPointer(name, b->getInt32(0), index));
+        Value * const ptr = b->getRawInputPointer(name, b->getInt32(0), index);
+        Value * const item = b->CreateLoad(ptr->getType()->getPointerElementType(), ptr);
         callbackParams.push_back(item);
         b->setProcessedItemCount(name, nextIndex);
     }
     Function * const callback = module->getFunction(mCallbackName);
     FunctionType * fTy = callback->getFunctionType();
     if (callback == nullptr) {
-        llvm::report_fatal_error(mKernelName + ": failed to get function: " + mCallbackName);
+        llvm::report_fatal_error(llvm::StringRef(mKernelName) + ": failed to get function: " + mCallbackName);
     }
     b->CreateCall(fTy, callback, ArrayRef<Value *>(callbackParams));
     b->CreateCondBr(b->CreateICmpNE(nextStrideNo, numOfStrides), readItem, exitBlock);
@@ -65,7 +66,7 @@ void ScanReader::generateMultiBlockLogic(BuilderRef b, Value * const numOfStride
         Function * const callback = module->getFunction(mDoneCallbackName);
         FunctionType * fTy = callback->getFunctionType();
         if (callback == nullptr) {
-            llvm::report_fatal_error(mKernelName + ": failed to get function: " + mDoneCallbackName);
+            llvm::report_fatal_error(llvm::StringRef(mKernelName) + ": failed to get function: " + mDoneCallbackName);
         }
         b->CreateCall(fTy, callback, ArrayRef<Value *>({}));
         b->CreateBr(exitBlock);
@@ -88,7 +89,7 @@ static std::string ScanReader_GenerateName(StreamSet * scan, std::string const &
 
 ScanReader::ScanReader(BuilderRef b, StreamSet * source, StreamSet * scanIndices, std::string const & callbackName)
 : MultiBlockKernel(b, ScanReader_GenerateName(scanIndices, callbackName), {
-    {"scan", scanIndices, BoundedRate(0, 1), Principal()},
+    {"scan", scanIndices, BoundedRate(0, 1)},
     {"source", source, BoundedRate(0, 1)}
   }, {}, {}, {}, {})
 , mCallbackName(callbackName)
@@ -109,7 +110,7 @@ ScanReader::ScanReader(BuilderRef b, StreamSet * source, StreamSet * scanIndices
 
 ScanReader::ScanReader(BuilderRef b, StreamSet * source, StreamSet * scanIndices, std::string const & callbackName, std::initializer_list<StreamSet *> additionalStreams)
 : MultiBlockKernel(b, ScanReader_GenerateName(scanIndices, callbackName, additionalStreams), {
-    {"scan", scanIndices, BoundedRate(0, 1), Principal()},
+    {"scan", scanIndices, BoundedRate(0, 1)},
     {"source", source, BoundedRate(0, 1)}
   }, {}, {}, {}, {})
 , mCallbackName(callbackName)

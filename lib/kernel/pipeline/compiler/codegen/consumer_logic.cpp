@@ -155,15 +155,15 @@ Value * PipelineCompiler::readConsumedItemCount(BuilderRef b, const size_t strea
         }
         itemCount = produced;
     } else {
-        const auto e = in_edge(streamSet, mConsumerGraph);
-        const ConsumerEdge & c = mConsumerGraph[e];
-        const auto producer = source(e, mConsumerGraph);
+//        const auto e = in_edge(streamSet, mConsumerGraph);
+//        const ConsumerEdge & c = mConsumerGraph[e];
+//        const auto producer = source(e, mConsumerGraph);
 //        if (LLVM_LIKELY(producer != PipelineInput || mTraceIndividualConsumedItemCounts)) {
             const auto id = getTruncatedStreamSetSourceId(streamSet);
             Value * ptr = b->getScalarFieldPtr(CONSUMED_ITEM_COUNT_PREFIX + std::to_string(id));
             if (LLVM_UNLIKELY(mTraceIndividualConsumedItemCounts)) {
                 Constant * const ZERO = b->getInt32(0);
-                ptr = b->CreateInBoundsGEP(ptr, { ZERO, ZERO } );
+                ptr = b->CreateInBoundsGEP0(ptr, { ZERO, ZERO } );
             }
             itemCount = b->CreateLoad(ptr, true);
 //        } else {
@@ -268,7 +268,7 @@ void PipelineCompiler::setConsumedItemCount(BuilderRef b, const size_t streamSet
 
     Value * ptr = b->getScalarFieldPtr(CONSUMED_ITEM_COUNT_PREFIX + std::to_string(id));
     if (LLVM_UNLIKELY(mTraceIndividualConsumedItemCounts)) {
-        ptr = b->CreateInBoundsGEP(ptr, { b->getInt32(0), b->getInt32(slot) });
+        ptr = b->CreateInBoundsGEP0(ptr, { b->getInt32(0), b->getInt32(slot) });
     }
 
     // if we skipped over a partition, we don't want to update the

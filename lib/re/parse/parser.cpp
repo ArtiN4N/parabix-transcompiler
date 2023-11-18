@@ -609,6 +609,7 @@ RE * RE_Parser::parse_bracketed_items () {
             if (accept('=')) items.push_back(parse_equivalence_class());
             else if (accept('.')) items.push_back(range_extend(parse_collation_element()));
             else if (accept(':')) items.push_back(parse_Posix_class());
+            else if (accept('|')) items.push_back(parse_permute_class());
             else items.push_back(parse_extended_bracket_expression());
         } else if (accept('\\')) {
             if (at('N') || !isSetEscapeChar(*mCursor)) items.push_back(range_extend(parse_escaped_char_item()));
@@ -665,6 +666,16 @@ RE * RE_Parser::parse_Posix_class() {
     require(":]");
     if (negated) return makeComplement(posixSet);
     else return posixSet;
+}
+
+RE * RE_Parser::parse_permute_class() {
+    std::vector<RE *> elems;
+    while (mCursor.more() && !at('|')) {
+        auto cp = parse_literal_codepoint();
+        elems.push_back(makeCC(cp));
+    }
+    require("|]");
+    return makePermute(elems.begin(), elems.end());
 }
 
 RE * RE_Parser::parse_escaped_char_item() {
@@ -809,15 +820,15 @@ RE_Parser::RE_Parser(const std::string & regular_expression)
 
 }
 
-LLVM_ATTRIBUTE_NORETURN void RE_Parser::InvalidUTF8Encoding() {
+[[noreturn]] void RE_Parser::InvalidUTF8Encoding() {
     ParseFailure("Invalid UTF-8 encoding!");
 }
 
-LLVM_ATTRIBUTE_NORETURN void RE_Parser::Cursor::IncompleteRegularExpression() {
+[[noreturn]] void RE_Parser::Cursor::IncompleteRegularExpression() {
     ParseFailure("Incomplete regular expression!");
 }
 
-LLVM_ATTRIBUTE_NORETURN void RE_Parser::Cursor::ParseFailure(const std::string & errmsg) {
+[[noreturn]] void RE_Parser::Cursor::ParseFailure(const std::string & errmsg) {
 #if 0
     // TODO: this ought to check if the cursor position is on a UTF-8 character
     raw_fd_ostream out(STDERR_FILENO, false);
@@ -829,7 +840,7 @@ LLVM_ATTRIBUTE_NORETURN void RE_Parser::Cursor::ParseFailure(const std::string &
     out.write(mCursor.base() + 1, mEnd - mCursor - 1);
     out << "\n\n";
 #endif
-    llvm::report_fatal_error(errmsg);
+    llvm::report_fatal_error(llvm::StringRef(errmsg));
 }
 
 }

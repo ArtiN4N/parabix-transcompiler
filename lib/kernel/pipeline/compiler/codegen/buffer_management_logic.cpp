@@ -58,14 +58,14 @@ void PipelineCompiler::addBufferHandlesToPipelineKernel(BuilderRef b, const unsi
             raw_svector_ostream msg(tmp);
             msg << "Pipeline " << mTarget->getName() << " is not marked as allocating internal streamsets"
             << " but must do so to support " << kernelObj->getName() << ".";
-            report_fatal_error(msg.str());
+            report_fatal_error(StringRef(msg.str()));
         }
         if (LLVM_UNLIKELY(kernelObj->allocatesInternalStreamSets())) {
             SmallVector<char, 1024> tmp;
             raw_svector_ostream msg(tmp);
             msg << "Pipeline " << mTarget->getName() << " is not marked as allocating internal streamsets"
             << " but " << kernelObj->getName() << " must do so to be correctly initialized.";
-            report_fatal_error(msg.str());
+            report_fatal_error(StringRef(msg.str()));
         }
     }
 }
@@ -417,8 +417,7 @@ void PipelineCompiler::writeUpdatedItemCounts(BuilderRef b) {
 //            continue;
 //        }
 
-        const auto streamSet = source(e, mBufferGraph);
-        const BufferNode & bn = mBufferGraph[streamSet];
+//        const auto streamSet = source(e, mBufferGraph);
 
         Value * ptr = nullptr;
         if (mCurrentKernelIsStateFree) {
@@ -454,8 +453,7 @@ void PipelineCompiler::writeUpdatedItemCounts(BuilderRef b) {
 //            continue;
 //        }
 
-        const auto streamSet = target(e, mBufferGraph);
-        const BufferNode & bn = mBufferGraph[streamSet];
+//        const auto streamSet = target(e, mBufferGraph);
 
         Value * ptr = nullptr;
         if (mCurrentKernelIsStateFree) {
@@ -767,8 +765,8 @@ void PipelineCompiler::copy(BuilderRef b, const CopyMode mode, Value * cond,
 
     if (mode == CopyMode::LookBehind || mode == CopyMode::Delay) {
         Value * const offset = b->CreateNeg(totalBytesPerStreamSetBlock);
-        source = b->CreateInBoundsGEP(source, offset);
-        target = b->CreateInBoundsGEP(target, offset);
+        source = b->CreateInBoundsGEP0(source, offset);
+        target = b->CreateInBoundsGEP0(target, offset);
     }
 
     if (mode == CopyMode::LookAhead || mode == CopyMode::Delay) {
@@ -792,8 +790,8 @@ void PipelineCompiler::copy(BuilderRef b, const CopyMode mode, Value * cond,
         PHINode * const idx = b->CreatePHI(b->getSizeTy(), 2);
         idx->addIncoming(b->getSize(0), copyStart);
         Value * const offset = b->CreateMul(idx, bytesPerStream);
-        Value * const sourcePtr = b->CreateGEP(source, offset);
-        Value * const targetPtr = b->CreateGEP(target, offset);
+        Value * const sourcePtr = b->CreateGEP0(source, offset);
+        Value * const targetPtr = b->CreateGEP0(target, offset);
 
         #ifdef PRINT_DEBUG_MESSAGES
         debugPrint(b, prefix + "_copying %" PRIu64 " bytes from %" PRIx64 " to %" PRIx64 " (align=%" PRIu64 ")", bytesToCopy, sourcePtr, targetPtr, b->getSize(align));
@@ -845,18 +843,6 @@ void PipelineCompiler::copy(BuilderRef b, const CopyMode mode, Value * cond,
  ** ------------------------------------------------------------------------------------------------------------- */
 void PipelineCompiler::remapThreadLocalBufferMemory(BuilderRef b) {
 
-    DataLayout DL(b->getModule());
-
-    IntegerType * const int8Ty = b->getInt8Ty();
-
-    auto getTypeSize = [&](Type * const type) -> uint64_t {
-        #if LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(11, 0, 0)
-        return DL.getTypeAllocSize(type);
-        #else
-        return DL.getTypeAllocSize(type).getFixedSize();
-        #endif
-    };
-
     ConstantInt * const BLOCK_WIDTH = b->getSize(b->getBitBlockWidth());
 
     for (const auto e : make_iterator_range(out_edges(mKernelId, mBufferGraph))) {
@@ -866,7 +852,7 @@ void PipelineCompiler::remapThreadLocalBufferMemory(BuilderRef b) {
             assert (!bn.isTruncated());
             assert (RequiredThreadLocalStreamSetMemory > 0);
             assert (mThreadLocalStreamSetBaseAddress);
-            assert (mThreadLocalStreamSetBaseAddress->getType()->getPointerElementType() == int8Ty);
+            assert (mThreadLocalStreamSetBaseAddress->getType()->getPointerElementType() == b->getInt8Ty());
             auto start = bn.BufferStart;
             assert ((start % b->getCacheAlignment()) == 0);
             #ifdef THREADLOCAL_BUFFER_CAPACITY_MULTIPLIER
@@ -883,7 +869,7 @@ void PipelineCompiler::remapThreadLocalBufferMemory(BuilderRef b) {
             Value * const producedBytes = b->CreateMul(b->CreateUDiv(produced, BLOCK_WIDTH), bytesPerPack);
 
             Value * const offset = b->CreateSub(startOffset, producedBytes);
-            Value * ba = b->CreateGEP(mThreadLocalStreamSetBaseAddress, offset);
+            Value * ba = b->CreateGEP0(mThreadLocalStreamSetBaseAddress, offset);
             ba = b->CreatePointerCast(ba, ptrTy);
             buffer->setBaseAddress(b, ba);
 
@@ -965,7 +951,7 @@ void PipelineCompiler::prefetchAtLeastThreeCacheLinesFrom(BuilderRef b, Value * 
     const auto toFetch = round_up_to<unsigned>(cl * 3, typeSize);
     Value * const baseAddr = b->CreatePointerCast(addr, b->getInt8PtrTy());
     for (unsigned i = 0; i < toFetch; i += cl) {
-        args[0] = b->CreateGEP(baseAddr, b->getSize(i));
+        args[0] = b->CreateGEP0(baseAddr, b->getSize(i));
         b->CreateCall(prefetchFunc->getFunctionType(), prefetchFunc, args);
     }
 #endif

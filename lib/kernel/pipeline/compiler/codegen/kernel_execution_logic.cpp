@@ -156,12 +156,12 @@ void PipelineCompiler::writeKernelCall(BuilderRef b) {
 
         for (const auto e : make_iterator_range(in_edges(mKernelId, mBufferGraph))) {
             const BufferPort & br = mBufferGraph[e];
-            linearInputItems[br.Port.Number] = calculateNumOfLinearItems(b, br, sz_ONE);
+            linearInputItems[br.Port.Number] = calculateNumOfLinearItems(b, br, sz_ONE, "writeKernelCall");
         }
 
         for (const auto e : make_iterator_range(out_edges(mKernelId, mBufferGraph))) {
             const BufferPort & br = mBufferGraph[e];
-            linearOutputItems[br.Port.Number] = calculateNumOfLinearItems(b, br, sz_ONE);
+            linearOutputItems[br.Port.Number] = calculateNumOfLinearItems(b, br, sz_ONE, "writeKernelCall");
         }
 
         Value * const nextStrideIndex = b->CreateAdd(currentIndividualStrideIndexPhi, b->getSize(1));
@@ -352,7 +352,7 @@ void PipelineCompiler::buildKernelCallArgumentList(BuilderRef b, ArgVec & args) 
             argTy->print(out);
             out << " but got ";
             arg->getType()->print(out);
-            report_fatal_error(out.str().str());
+            report_fatal_error(StringRef(out.str()).str());
         }
         #endif
         args.push_back(arg);
@@ -396,7 +396,7 @@ void PipelineCompiler::buildKernelCallArgumentList(BuilderRef b, ArgVec & args) 
             offset[0] = i32_ZERO;
             offset[1] = i32_ZERO;
             offset[2] = i32_ZERO;
-            Value * const branchTypePtr = b->CreateGEP(mKernelThreadLocalHandle, offset);
+            Value * const branchTypePtr = b->CreateGEP0(mKernelThreadLocalHandle, offset);
             assert (branchTypePtr->getType()->getPointerElementType() == mOptimizationBranchSelectedBranch->getType());
             b->CreateStore(mOptimizationBranchSelectedBranch, branchTypePtr);
         }
@@ -522,6 +522,19 @@ void PipelineCompiler::updateProcessedAndProducedItemCounts(BuilderRef b) {
         rejectedTermSignal = b->CreateAnd(b->CreateIsNull(mCurrentNumOfLinearStrides), b->CreateIsNull(mTerminatedExplicitly));
     }
 
+    size_t principalProducerPartId = 0;
+
+    if (LLVM_UNLIKELY(mHasPrincipalInput)) {
+        for (auto e : make_iterator_range(in_edges(mKernelId, mBufferGraph))) {
+            const BufferPort & port = mBufferGraph[e];
+            if (LLVM_UNLIKELY(port.isPrincipal())) {
+                const auto streamSet = source(e, mBufferGraph);
+                principalProducerPartId = KernelPartitionId[parent(streamSet, mBufferGraph)];
+                break;
+            }
+        }
+    }
+
     // calculate or read the item counts (assuming this kernel did not terminate)
     for (unsigned i = 0; i < numOfInputs; ++i) {
         Value * processed = nullptr;
@@ -537,6 +550,21 @@ void PipelineCompiler::updateProcessedAndProducedItemCounts(BuilderRef b) {
                 inputItems = revertTransitiveAddCalculation(b, rate, inputItems, rejectedTermSignal);
             }
             processed = b->CreateAdd(mCurrentProcessedItemCountPhi[inputPort], inputItems);
+
+            // If we have a principal input, that input may be longer than the other fixed rate
+            // streamsets. We need to correct for this to ensure the processed item count is
+            // always less than or equal to the available items.
+
+            // TODO: can we determine whether an input is guaranteed to have more items than
+            // the principal input?
+
+            if (LLVM_UNLIKELY(mHasPrincipalInput && rate.isFixed() && !port.isPrincipal())) {
+                const auto streamSet = source(inputEdge, mBufferGraph);
+                const auto partId = KernelPartitionId[parent(streamSet, mBufferGraph)];
+                if (partId != principalProducerPartId) {
+                    processed = b->CreateUMin(processed, mLocallyAvailableItems[streamSet]);
+                }
+            }
 
             assert (input.isDeferred() ^ (mCurrentProcessedDeferredItemCountPhi[inputPort] == nullptr));
             if (mCurrentProcessedDeferredItemCountPhi[inputPort]) {
@@ -572,7 +600,7 @@ void PipelineCompiler::updateProcessedAndProducedItemCounts(BuilderRef b) {
             raw_svector_ostream out(tmp);
             out << "Kernel " << mKernel->getName() << ":" << input.getName()
                 << " has an " << "input" << " rate that is not properly handled by the PipelineKernel";
-            report_fatal_error(out.str());
+            report_fatal_error(StringRef(out.str()));
         }
 
         mProcessedItemCount[inputPort] = processed; assert (processed);
@@ -637,7 +665,7 @@ void PipelineCompiler::updateProcessedAndProducedItemCounts(BuilderRef b) {
             raw_svector_ostream out(tmp);
             out << "Kernel " << mKernel->getName() << ":" << output.getName()
                 << " has an " << "output" << " rate that is not properly handled by the PipelineKernel";
-            report_fatal_error(out.str());
+            report_fatal_error(StringRef(out.str()));
         }
 
         #ifdef PRINT_DEBUG_MESSAGES

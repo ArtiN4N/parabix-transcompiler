@@ -158,7 +158,7 @@ void PabloCompiler::examineBlock(BuilderRef b, const PabloBlock * const block) {
                         raw_string_ostream out(tmp);
                         array->print(out);
                         out << " must have a lookahead attribute of at least " << la->getAmount();
-                        report_fatal_error(out.str());
+                        report_fatal_error(StringRef(out.str()));
                     }
                     notFound = false;
                     break;
@@ -183,7 +183,7 @@ void PabloCompiler::addBranchCounter(BuilderRef b) {
     if (CompileOptionIsSet(PabloCompilationFlags::EnableProfiling)) {
         Value * ptr = b->getScalarFieldPtr("profile");
         assert (mBasicBlock.size() < ptr->getType()->getPointerElementType()->getArrayNumElements());
-        ptr = b->CreateGEP(ptr, {b->getInt32(0), b->getInt32(mBasicBlock.size())});
+        ptr = b->CreateGEP0(ptr, {b->getInt32(0), b->getInt32(mBasicBlock.size())});
         const auto alignment = getPointerElementAlignment(ptr);
         Value * value = b->CreateAlignedLoad(ptr, alignment, false, "branchCounter");
         value = b->CreateAdd(value, ConstantInt::get(cast<IntegerType>(value->getType()), 1));
@@ -251,7 +251,7 @@ void PabloCompiler::compileIf(BuilderRef b, const If * const ifStatement) {
                 var->print(out);
                 out << " is uninitialized prior to entering ";
                 ifStatement->print(out);
-                report_fatal_error(out.str());
+                report_fatal_error(StringRef(out.str()));
             }
             incoming.emplace_back(var, f->second);
         }
@@ -296,7 +296,7 @@ void PabloCompiler::compileIf(BuilderRef b, const If * const ifStatement) {
             out << "PHINode creation error: ";
             var->print(out);
             out << " was not assigned an outgoing value.";
-            report_fatal_error(out.str());
+            report_fatal_error(StringRef(out.str()));
         }
 
         Value * const outgoing = f->second;
@@ -315,7 +315,7 @@ void PabloCompiler::compileIf(BuilderRef b, const If * const ifStatement) {
             outgoing->getType()->print(out);
             out << ") within ";
             ifStatement->print(out);
-            report_fatal_error(out.str());
+            report_fatal_error(StringRef(out.str()));
         }
         SmallVector<char, 64> tmp;
         raw_svector_ostream name(tmp);
@@ -385,7 +385,7 @@ void PabloCompiler::compileWhile(BuilderRef b, const While * const whileStatemen
                 var->print(out);
                 out << " is uninitialized prior to entering ";
                 whileStatement->print(out);
-                report_fatal_error(out.str());
+                report_fatal_error(StringRef(out.str()));
             }
             Value * entryValue = f->second;
             SmallVector<char, 64> tmp;
@@ -436,7 +436,7 @@ void PabloCompiler::compileWhile(BuilderRef b, const While * const whileStatemen
             out << "PHINode creation error: ";
             var->print(out);
             out << " is no longer assigned a value.";
-            report_fatal_error(out.str());
+            report_fatal_error(StringRef(out.str()));
         }
 
         Value * const outgoingValue = f->second;
@@ -452,7 +452,7 @@ void PabloCompiler::compileWhile(BuilderRef b, const While * const whileStatemen
             outgoingValue->getType()->print(out);
             out << ") within ";
             whileStatement->print(out);
-            report_fatal_error(out.str());
+            report_fatal_error(StringRef(out.str()));
         }
 
         // update the final outgoing value for the loop
@@ -720,14 +720,14 @@ void PabloCompiler::compileStatement(BuilderRef b, const Statement * const stmt)
             }
             Constant * const ZERO = b->getInt32(0);
             for (unsigned i = 0; i < result_packs; ++i) {
-                Value * A = b->CreateLoad(b->CreateGEP(base, {ZERO, b->getInt32(i * 2)}));
-                Value * B = b->CreateLoad(b->CreateGEP(base, {ZERO, b->getInt32(i * 2 + 1)}));
+                Value * A = b->CreateLoad(b->CreateGEP0(base, {ZERO, b->getInt32(i * 2)}));
+                Value * B = b->CreateLoad(b->CreateGEP0(base, {ZERO, b->getInt32(i * 2 + 1)}));
                 Value * P = b->bitCast(b->hsimd_packh(packWidth, A, B));
                 if (LLVM_UNLIKELY(result_packs == 1)) {
                     value = P;
                     break;
                 }
-                b->CreateStore(P, b->CreateGEP(value, {ZERO, b->getInt32(i)}));
+                b->CreateStore(P, b->CreateGEP0(value, {ZERO, b->getInt32(i)}));
             }
         } else if (const PackL * const p = dyn_cast<PackL>(stmt)) {
             const auto sourceWidth = cast<FixedVectorType>(p->getValue()->getType())->getElementType()->getIntegerBitWidth();
@@ -740,14 +740,14 @@ void PabloCompiler::compileStatement(BuilderRef b, const Statement * const stmt)
             }
             Constant * const ZERO = b->getInt32(0);
             for (unsigned i = 0; i < result_packs; ++i) {
-                Value * A = b->CreateLoad(b->CreateGEP(base, {ZERO, b->getInt32(i * 2)}));
-                Value * B = b->CreateLoad(b->CreateGEP(base, {ZERO, b->getInt32(i * 2 + 1)}));
+                Value * A = b->CreateLoad(b->CreateGEP0(base, {ZERO, b->getInt32(i * 2)}));
+                Value * B = b->CreateLoad(b->CreateGEP0(base, {ZERO, b->getInt32(i * 2 + 1)}));
                 Value * P = b->bitCast(b->hsimd_packl(packWidth, A, B));
                 if (LLVM_UNLIKELY(result_packs == 1)) {
                     value = P;
                     break;
                 }
-                b->CreateStore(P, b->CreateGEP(value, {ZERO, b->getInt32(i)}));
+                b->CreateStore(P, b->CreateGEP0(value, {ZERO, b->getInt32(i)}));
             }
         } else if (const DebugPrint * const d = dyn_cast<DebugPrint>(stmt)) {
           SmallVector<char, 64> tmp;
@@ -782,7 +782,7 @@ void PabloCompiler::compileStatement(BuilderRef b, const Statement * const stmt)
                         << "invlaid number of arguments, "
                         << "expected " << expectedArgCount << ","
                         << "got " << argv.size();
-                    report_fatal_error(out.str());
+                    report_fatal_error(StringRef(out.str()));
                 }
             };
 
@@ -826,7 +826,7 @@ void PabloCompiler::compileStatement(BuilderRef b, const Statement * const stmt)
                         out << "PabloCompiler: intrinsic id "
                             << (uint32_t) call->getIntrinsic()
                             << " was not recognized by the compiler";
-                        report_fatal_error(out.str());
+                        report_fatal_error(StringRef(out.str()));
                     }
                     break;
             }
@@ -837,7 +837,7 @@ void PabloCompiler::compileStatement(BuilderRef b, const Statement * const stmt)
             out << "PabloCompiler: ";
             stmt->print(out);
             out << " was not recognized by the compiler";
-            report_fatal_error(out.str());
+            report_fatal_error(StringRef(out.str()));
         }
         assert (expr);
         assert (value);
@@ -901,7 +901,7 @@ Value * PabloCompiler::compileExpression(BuilderRef b, const PabloAST * const ex
                 out << "PabloCompiler: ";
                 expr->print(out);
                 out << " is not a scalar value or was used before definition";
-                report_fatal_error(out.str());
+                report_fatal_error(StringRef(out.str()));
             }
         } else if (LLVM_UNLIKELY(isa<Operator>(expr))) {
             const Operator * const op = cast<Operator>(expr);
@@ -971,7 +971,7 @@ Value * PabloCompiler::compileExpression(BuilderRef b, const PabloAST * const ex
                         } else { // if (typeId == TypeId::Subtract) {
                             result = b->CreateSub(lhv, rhv);
                         }
-                        b->CreateAlignedStore(result, b->CreateGEP(value, {b->getInt32(0), b->getInt32(i)}), getAlignment(result));
+                        b->CreateAlignedStore(result, b->CreateGEP0(value, {b->getInt32(0), b->getInt32(i)}), getAlignment(result));
                     }
 
                 } else {
@@ -1055,7 +1055,7 @@ Value * PabloCompiler::compileExpression(BuilderRef b, const PabloAST * const ex
             out << "PabloCompiler: ";
             expr->print(out);
             out << " was used before definition";
-            report_fatal_error(out.str());
+            report_fatal_error(StringRef(out.str()));
         }
         assert (value);
         // mMarker.insert({expr, value});
@@ -1081,7 +1081,7 @@ Value * PabloCompiler::getPointerToVar(BuilderRef b, const Var * var, Value * in
             out << mKernel->getName();
             out << ": cannot index scalar value ";
             var->print(out);
-            report_fatal_error(out.str());
+            report_fatal_error(StringRef(out.str()));
         } else if (var->isReadOnly()) {
             if (index2) {
                 ptr = b->getInputStreamPackPtr(var->getName(), index1, index2);
@@ -1101,7 +1101,7 @@ Value * PabloCompiler::getPointerToVar(BuilderRef b, const Var * var, Value * in
             out << ": stream ";
             var->print(out);
             out << " cannot be read from or written to";
-            report_fatal_error(out.str());
+            report_fatal_error(StringRef(out.str()));
         }
         if (inst) {
             b->restoreIP(ip);
@@ -1113,7 +1113,7 @@ Value * PabloCompiler::getPointerToVar(BuilderRef b, const Var * var, Value * in
         offsets.push_back(ConstantInt::getNullValue(index1->getType()));
         offsets.push_back(index1);
         if (index2) offsets.push_back(index2);
-        return b->CreateGEP(ptr, offsets);
+        return b->CreateGEP0(ptr, offsets);
     }
 }
 

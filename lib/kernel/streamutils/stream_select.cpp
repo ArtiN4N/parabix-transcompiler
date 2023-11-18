@@ -199,7 +199,8 @@ void IStreamSelect::generateMultiBlockLogic(BuilderRef b, Value * const numOfStr
     for (auto const & binding : mOperation.bindings) {
         auto const & name = binding.first;
         for (auto const & idx : binding.second) {
-            Value * const val = b->CreateLoad(b->getRawInputPointer(name, b->getInt32(idx), absPos));
+            Value * const ptr = b->getRawInputPointer(name, b->getInt32(idx), absPos);
+            Value * const val = b->CreateLoad(ptr->getType()->getPointerElementType(), ptr);
             b->CreateStore(val, b->getRawOutputPointer("output", b->getInt32(outIdx), absPos));
             outIdx++;
         }
@@ -254,7 +255,7 @@ uint32_t resultStreamFieldWidth(SelectOperation const & selop) {
 
         uint32_t x = binding.first->getFieldWidth();
         if (x != fw) {
-            llvm::report_fatal_error("StreamSelect: mismatched field widths: " + std::to_string(x) + " vs " + std::to_string(fw));
+            llvm::report_fatal_error(llvm::StringRef("StreamSelect: mismatched field widths: ") + std::to_string(x) + " vs " + std::to_string(fw));
         }
     }
     return fw;

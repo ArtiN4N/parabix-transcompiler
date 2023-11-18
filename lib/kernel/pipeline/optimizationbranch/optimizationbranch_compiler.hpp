@@ -272,7 +272,7 @@ RelationshipGraph OptimizationBranchCompiler::makeRelationshipGraph(const Relati
                         << kernel->getName()
                         << '.'
                         << binding.getName();
-                    report_fatal_error(msg.str());
+                    report_fatal_error(StringRef(msg.str()));
                 }
             }
             return f->second;
@@ -498,13 +498,6 @@ Value * OptimizationBranchCompiler::loadThreadLocalHandle(BuilderRef b, const un
  ** ------------------------------------------------------------------------------------------------------------- */
 void OptimizationBranchCompiler::generateKernelMethod(BuilderRef b) {
 
-
-    IntegerType * const sizeTy = b->getSizeTy();
-    Constant * const ZERO = b->getSize(0);
-    Constant * const ONE = b->getSize(1);
-
-    BasicBlock * const entry = b->GetInsertBlock();
-
     Value * const selectedBranch = b->getScalarField(CONTROL_CODE);
 
     BasicBlock * const optimizationBranch = b->CreateBasicBlock("optimizationBranch");
@@ -600,8 +593,6 @@ void OptimizationBranchCompiler::executeBranch(BuilderRef b, const unsigned bran
             addNextArg(getAccessibleInputItems(host.Index));
         }
     }
-
-    PointerType * const voidPtrPtrTy = voidPtrTy->getPointerTo();
 
     const auto canTerminate = kernel->canSetTerminateSignal();
 
@@ -874,7 +865,7 @@ inline std::array<const Kernel *, 4> makeBranches(const OptimizationBranch * con
             out << "Branch " << kernel->getName() << " of "
                    "OptimizationBranch " << branch->getName() <<
                    " must be InternallySynchronized.";
-            report_fatal_error(out.str());
+            report_fatal_error(StringRef(out.str()));
         }
     }
 

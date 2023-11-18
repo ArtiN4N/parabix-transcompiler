@@ -62,6 +62,7 @@
 #include <re/transforms/remove_nullable.h>
 #include <re/transforms/replaceCC.h>
 #include <re/transforms/re_multiplex.h>
+#include <re/transforms/expand_permutes.h>
 #include <re/transforms/name_intro.h>
 #include <re/transforms/reference_transform.h>
 #include <re/transforms/variable_alt_promotion.h>
@@ -270,7 +271,8 @@ void GrepEngine::initRE(re::RE * re) {
     if ((mEngineKind != EngineKind::EmitMatches) || mInvertMatches) {
         mColoring = false;
     }
-    mRE = resolveModesAndExternalSymbols(re, mCaseInsensitive);
+    mRE = expandPermutes(re);
+    mRE = resolveModesAndExternalSymbols(mRE, mCaseInsensitive);
     // Determine the unit of length for the RE.  If the RE involves
     // fixed length UTF-8 sequences only, then UTF-8 can be used
     // for most efficient processing.   Otherwise we must use full
@@ -1179,7 +1181,7 @@ uint64_t EmitMatchesEngine::doGrep(const std::vector<std::string> & fileNames, s
 
         accum.mBatchBuffer = alloc.allocate(aligned_size, 0);
         if (accum.mBatchBuffer == nullptr) {
-            llvm::report_fatal_error("Unable to allocate batch buffer of size: " + std::to_string(aligned_size));
+            llvm::report_fatal_error(llvm::StringRef("Unable to allocate batch buffer of size: ") + std::to_string(aligned_size));
         }
         char * current_base = accum.mBatchBuffer;
 
@@ -1274,12 +1276,13 @@ void * DoGrepThreadFunction(void *args) {
 }
 
 bool GrepEngine::searchAllFiles() {
+
     std::vector<pthread_t> threads(codegen::TaskThreads);
 
     for(unsigned long i = 1; i < codegen::TaskThreads; ++i) {
         const int rc = pthread_create(&threads[i], nullptr, DoGrepThreadFunction, (void *)this);
         if (rc) {
-            llvm::report_fatal_error("Failed to create thread: code " + std::to_string(rc));
+            llvm::report_fatal_error(llvm::StringRef("Failed to create thread: code ") + std::to_string(rc));
         }
     }
     // Main thread also does the work;
@@ -1288,7 +1291,7 @@ bool GrepEngine::searchAllFiles() {
         void * status = nullptr;
         const int rc = pthread_join(threads[i], &status);
         if (rc) {
-            llvm::report_fatal_error("Failed to join thread: code " + std::to_string(rc));
+            llvm::report_fatal_error(llvm::StringRef("Failed to join thread: code ") + std::to_string(rc));
         }
     }
     return grepMatchFound;
@@ -1299,6 +1302,7 @@ void * GrepEngine::DoGrepThreadMethod() {
 
     unsigned fileIdx = mNextFileToGrep++;
     while (fileIdx < mFileGroups.size()) {
+
         const auto grepResult = doGrep(mFileGroups[fileIdx], mResultStrs[fileIdx]);
         mFileStatus[fileIdx] = FileStatus::GrepComplete;
         if (grepResult > 0) {

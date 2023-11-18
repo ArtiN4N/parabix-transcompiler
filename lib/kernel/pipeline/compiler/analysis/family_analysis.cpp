@@ -33,8 +33,6 @@ void PipelineAnalysis::scanFamilyKernelBindings(BuilderRef b) {
                 const auto & ref = N[i];
                 Kernel * const obj = ref.Object;
 
-                size_t k = 0;
-
                 const auto m = obj->getNumOfNestedKernelFamilyCalls();
 
                 if (ref.isFamilyCall()) {
@@ -70,8 +68,6 @@ void PipelineAnalysis::scanFamilyKernelBindings(BuilderRef b) {
 
             const auto & ref = V[i];
             Kernel * const obj = ref.Object;
-
-            size_t k = 0;
 
             const auto m = obj->getNumOfNestedKernelFamilyCalls();
 
@@ -133,7 +129,7 @@ found_kernel_in_graph:
             << " invokes a kernel with a family call but getNumOfNestedKernelFamilyCalls()"
                " returns 0. This flag cannot be reliably set by the PipelineCompiler"
                " since it is instantiated only for non-cached pipelines.";
-        report_fatal_error(out.str());
+        report_fatal_error(StringRef(out.str()));
     }
 #endif
 

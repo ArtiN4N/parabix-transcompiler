@@ -6,7 +6,6 @@ std::vector<std::string> get_CSV_headers(std::string filename);
 
 std::vector<std::string> JSONfieldPrefixes(std::vector<std::string> fieldNames);
 
-
 constexpr char charLF = 0xA;
 constexpr char charCR = 0xD;
 constexpr char charDQ = 0x22;
