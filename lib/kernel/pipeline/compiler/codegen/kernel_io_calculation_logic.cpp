@@ -1592,7 +1592,7 @@ Value * PipelineCompiler::getMaximumNumOfPartialSumStrides(BuilderRef b,
     Value * const notDone = b->CreateICmpNE(strideIndex, sz_ZERO);
     Value * const repeat = b->CreateAnd(notDone, notEnough);
 
-    Value * availNumOfStrides = b->CreateSelect(notEnough, strideIndex, numOfStrides);
+ //   Value * availNumOfStrides = b->CreateSelect(notEnough, strideIndex, numOfStrides);
 
     if (LLVM_UNLIKELY(CheckAssertions)) {
         const Binding & input = getInputBinding(ref);
@@ -1611,7 +1611,8 @@ Value * PipelineCompiler::getMaximumNumOfPartialSumStrides(BuilderRef b,
     b->SetInsertPoint(popCountLoopExit);
     PHINode * const numOfStridesPhi = b->CreatePHI(sizeTy, 2);
     numOfStridesPhi->addIncoming(sz_ZERO, popCountEntry);
-    numOfStridesPhi->addIncoming(availNumOfStrides, popCountLoop);
+//    numOfStridesPhi->addIncoming(availNumOfStrides, popCountLoop);
+    numOfStridesPhi->addIncoming(numOfStrides, popCountLoop);
     PHINode * const requiredItemsPhi = b->CreatePHI(sizeTy, 2);
     requiredItemsPhi->addIncoming(sz_ZERO, popCountEntry);
     requiredItemsPhi->addIncoming(requiredItems, popCountLoop);
