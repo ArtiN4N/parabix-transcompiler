@@ -1465,7 +1465,7 @@ Function * CBuilder::LinkFunction(StringRef name, FunctionType * type, void * fu
 LoadInst * CBuilder::CreateLoad(Value * Ptr, const char * Name) {
     Type * ptrTy = Ptr->getType()->getPointerElementType();
     if (LLVM_UNLIKELY(codegen::DebugOptionIsSet(codegen::EnableAsserts))) {
-        CheckAddress(Ptr, getTypeSize(Ptr->getType()->getPointerElementType()), "CreateLoad");
+        CheckAddress(Ptr, getTypeSize(ptrTy), "CreateLoad");
     }
     return IRBuilder<>::CreateLoad(ptrTy, Ptr, Name);
 }
@@ -1473,7 +1473,7 @@ LoadInst * CBuilder::CreateLoad(Value * Ptr, const char * Name) {
 LoadInst * CBuilder::CreateLoad(Value * Ptr, const Twine Name) {
     Type * ptrTy = Ptr->getType()->getPointerElementType();
     if (LLVM_UNLIKELY(codegen::DebugOptionIsSet(codegen::EnableAsserts))) {
-        CheckAddress(Ptr, getTypeSize(Ptr->getType()->getPointerElementType()), "CreateLoad");
+        CheckAddress(Ptr, getTypeSize(ptrTy), "CreateLoad");
     }
     return IRBuilder<>::CreateLoad(ptrTy, Ptr, Name);
 }
@@ -1488,7 +1488,7 @@ LoadInst * CBuilder::CreateLoad(Type * Ty, Value *Ptr, const Twine Name) {
 LoadInst * CBuilder::CreateLoad(Value * Ptr, bool isVolatile, const Twine Name) {
     Type * ptrTy = Ptr->getType()->getPointerElementType();
     if (LLVM_UNLIKELY(codegen::DebugOptionIsSet(codegen::EnableAsserts))) {
-        CheckAddress(Ptr, getTypeSize(Ptr->getType()->getPointerElementType()), "CreateLoad");
+        CheckAddress(Ptr, getTypeSize(ptrTy), "CreateLoad");
     }
     return IRBuilder<>::CreateLoad(ptrTy, Ptr, isVolatile, Name);
 }
