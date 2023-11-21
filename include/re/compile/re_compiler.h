@@ -124,6 +124,10 @@ class RE_Compiler {
 
     void setIndexing(const cc::Alphabet * indexingAlphabet, pablo::PabloAST * idxStream);
     
+    pablo::PabloAST * getIndexStream() {
+        return mIndexStream;
+    }
+
     //
     // The CCs (character classes) within a regular expression are generally
     // expressed using a single alphabet.   But multiple alphabets may be

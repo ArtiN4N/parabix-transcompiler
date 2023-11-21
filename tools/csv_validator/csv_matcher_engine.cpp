@@ -336,11 +336,10 @@ CSVValidatorFunctionType CSVMatcherEngine::compile(CPUDriver & pxDriver, const s
 
     StreamSet * csvCCs = P->CreateStreamSet(5);
     P->CreateKernelCall<CSVlexer>(BasisBits, csvCCs);
-    StreamSet * fieldData = P->CreateStreamSet(1);
-    StreamSet * recordSeparators = P->CreateStreamSet(1);
+    StreamSet * fieldData = P->CreateStreamSet(3);
     StreamSet * allSeparators = P->CreateStreamSet(1);
 
-    P->CreateKernelCall<CSVDataParser>(csvCCs, fieldData, recordSeparators, allSeparators);
+    P->CreateKernelCall<CSVDataParser>(csvCCs, fieldData, allSeparators);
 
     StreamSet * errors = P->CreateStreamSet(1);
 
@@ -354,7 +353,7 @@ CSVValidatorFunctionType CSVMatcherEngine::compile(CPUDriver & pxDriver, const s
 
     if (schemaFile.CompositeKey.empty()) {
 
-        P->CreateKernelFamilyCall<CSVSchemaValidatorKernel>(schemaFile, BasisBits, fieldData, recordSeparators, allSeparators, errors, std::move(options));
+        P->CreateKernelFamilyCall<CSVSchemaValidatorKernel>(schemaFile, BasisBits, fieldData, allSeparators, errors, std::move(options));
 
     } else {
 
@@ -370,7 +369,7 @@ CSVValidatorFunctionType CSVMatcherEngine::compile(CPUDriver & pxDriver, const s
         // a loop to combine the data. But how can we prevent the data from one record from being combined with
         // another? We could scan through and iterate over each record individually?
 
-        P->CreateKernelFamilyCall<CSVSchemaValidatorKernel>(schemaFile, BasisBits, fieldData, recordSeparators, allSeparators, errors, std::move(options));
+        P->CreateKernelFamilyCall<CSVSchemaValidatorKernel>(schemaFile, BasisBits, fieldData, allSeparators, errors, std::move(options));
 
         StreamSet * hashes = P->CreateStreamSet(NumOfHashBits);
 

@@ -2,6 +2,9 @@
 
 #include <pablo/builder.hpp>
 #include <pablo/pe_zeroes.h>
+#include <pablo/pe_ones.h>
+#include <pablo/pe_var.h>
+
 
 #include <re/parse/PCRE_parser.h>
 #include <re/transforms/re_memoizing_transformer.h>
@@ -21,6 +24,8 @@
 #include <kernel/core/streamset.h>
 #include <kernel/core/kernel_builder.h>
 #include <llvm/IR/Function.h>
+
+#include "csv_validator_util.h"
 
 using namespace kernel;
 using namespace re;
@@ -73,17 +78,18 @@ std::string CSVSchemaValidatorKernel::makeCSVSchemaSignature(const csv::CSVSchem
     return tmp;
 }
 
-CSVSchemaValidatorKernel::CSVSchemaValidatorKernel(BuilderRef b, const csv::CSVSchema & schema, StreamSet * basisBits, StreamSet * fieldData, StreamSet * recordSeperators, StreamSet * allSeperators, StreamSet * invalid, CSVSchemaValidatorOptions && options)
-: CSVSchemaValidatorKernel(b, schema, makeCSVSchemaSignature(schema), basisBits, fieldData, recordSeperators, allSeperators, invalid, std::move(options)) {
+CSVSchemaValidatorKernel::CSVSchemaValidatorKernel(BuilderRef b, const csv::CSVSchema & schema, StreamSet * basisBits, StreamSet * fieldData, StreamSet * allSeperators, StreamSet * invalid, CSVSchemaValidatorOptions && options)
+: CSVSchemaValidatorKernel(b, schema, makeCSVSchemaSignature(schema), basisBits, fieldData, allSeperators, invalid, std::move(options)) {
 
 }
 
 
 
-CSVSchemaValidatorKernel::CSVSchemaValidatorKernel(BuilderRef b, const csv::CSVSchema & schema, std::string && signature, StreamSet * basisBits, StreamSet * fieldData, StreamSet * recordSeperators, StreamSet * allSeperators, StreamSet * invalid, CSVSchemaValidatorOptions && options)
+CSVSchemaValidatorKernel::CSVSchemaValidatorKernel(BuilderRef b, const csv::CSVSchema & schema, std::string && signature, StreamSet * basisBits, StreamSet * fieldData, StreamSet * allSeperators, StreamSet * invalid, CSVSchemaValidatorOptions && options)
 : PabloKernel(b, "csvv" + getStringHash(signature),
-    {Binding{"basisBits", basisBits}, Binding{"fieldData", fieldData}, // Binding{"UTFindex", UTFindex},
-     Binding{"allSeperators", allSeperators}, Binding{"recordSeperators", recordSeperators}},
+    {Binding{"basisBits", basisBits},
+     Binding{"fieldData", fieldData, FixedRate(), LookAhead(1)},
+     Binding{"allSeperators", allSeperators}},
     {Binding{"invalid", invalid}})
 , mSchema(schema)
 , mOptions(std::move(options))
@@ -113,6 +119,8 @@ StringRef CSVSchemaValidatorKernel::getSignature() const {
 
 void CSVSchemaValidatorKernel::generatePabloMethod() {
 
+    using Mark = RE_Compiler::Marker;
+
     const auto & columns = mSchema.Column;
     const auto n = columns.size();
     std::vector<RE *> fieldExpr(n);
@@ -121,105 +129,69 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
     for (unsigned i = 0; i < columns.size(); ++i) {
         const auto & col = columns[i];
         re::RE * expr = col.Expression; assert (expr);
-        fieldExpr[i] = memo.transformRE(minimizeRE(expr));
-
-        errs() << "COLUMN " << i << ":\n\n"
-               << Printer_RE::PrintRE(fieldExpr[i])
-               << "\n\n\n";
+        expr = minimizeRE(expr);
+        fieldExpr[i] = expr;
     }
+
+
 
     PabloBuilder pb(getEntryScope());
 
     Integer * const pb_ZERO = pb.getInteger(0);
 
-    Var * const fieldDataMask = pb.createExtract(getInputStreamVar("fieldData"), pb_ZERO);
-   // pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {fieldDataMask });
-    assert (fieldDataMask->getType() == getStreamTy());
+    Var * fd = getInputStreamVar("fieldData");
 
-    Var * const recordSeperators = pb.createExtract(getInputStreamVar("recordSeperators"), pb.getInteger(0));
+    PabloAST * fieldData = pb.createExtract(fd, pb.getInteger(CSVDataParserFieldData::FieldData));
+
+
+    Var * const allSeperators = pb.createExtract(getInputStreamVar("allSeperators"), pb_ZERO);
+
+    Var * const recordSeperators = pb.createExtract(fd, pb.getInteger(CSVDataParserFieldData::RecordSeperator));
 
    // pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {recordSeperators });
 
-    RE_Compiler re_compiler(getEntryScope(), recordSeperators, mOptions.mCodeUnitAlphabet);
+ //   PabloAST * const barrier = pb.createOr(allSeperators, pb.createNot(fieldDataMask));
+
+//    pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {barrier});
+
+    RE_Compiler re_compiler(getEntryScope(), allSeperators, mOptions.mCodeUnitAlphabet);
 
     for (unsigned i = 0; i < mOptions.mAlphabets.size(); i++) {
         auto & alpha = mOptions.mAlphabets[i].first;
         auto basis = getInputStreamSet(alpha->getName() + "_basis");
         re_compiler.addAlphabet(alpha, basis);
     }
-
-    PabloAST * indexStream = nullptr;
     if (mOptions.mIndexStream) {
-        indexStream = pb.createExtract(getInputStreamVar("mIndexing"), pb.getInteger(0));
-        re_compiler.setIndexing(&cc::Unicode, indexStream);
+        PabloAST *  indexStream = pb.createExtract(getInputStreamVar("mIndexing"), pb.getInteger(0));
+        fieldData = pb.createAnd(fieldData, indexStream);
     }
+
+    re_compiler.setIndexing(&cc::Unicode, fieldData);
+
     for (unsigned i = 0; i < mOptions.mExternalBindings.size(); i++) {
         auto extName = mOptions.mExternalBindings[i].getName();
         PabloAST * extStrm = pb.createExtract(getInputStreamVar(extName), pb.getInteger(0));
         unsigned offset = mOptions.mExternalOffsets[i];
         std::pair<int, int> lgthRange = mOptions.mExternalLengths[i];
-        re_compiler.addPrecompiled(extName, RE_Compiler::ExternalStream(RE_Compiler::Marker(extStrm, offset), lgthRange));
+        re_compiler.addPrecompiled(extName, RE_Compiler::ExternalStream(Mark(extStrm, offset), lgthRange));
     }
+
 
     auto basisBits = getInputStreamSet("basisBits");
 
- //   Var * const UTFindex = pb.createExtract(getInputStreamVar("UTFindex"), pb_ZERO);
- //   pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {UTFindex });
-
-
-    PabloAST * textIndex = fieldDataMask;
-    if (indexStream) {
-        textIndex = pb.createAnd(fieldDataMask, indexStream, "textIndex");
-    }
-
-    pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {textIndex });
-
-    re_compiler.setIndexing(mOptions.mCodeUnitAlphabet, textIndex);
-
     re_compiler.addAlphabet(mOptions.mCodeUnitAlphabet, basisBits);
-
-    Var * const allSeperators = pb.createExtract(getInputStreamVar("allSeperators"), pb_ZERO);
-
-    pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {allSeperators });
 
     // TODO: if the number of validators equals the number of fields, just scan sequentially? We expect everything to be valid but if the
     // total schema length is "long", we won't necessarily be starting a new record every block. Can we "break up" the validation checks to
     // test if we should scan through a chunk of them based on the current position?
 
-    using Mark = RE_Compiler::Marker;
+//    Mark startMatch = re_compiler.compileRE(makeStart(), Mark{fieldDataMask, 1}, 1);
+//    PabloAST * const allStarts = startMatch.stream();
 
-    std::vector<PabloAST *> matches(n, nullptr);
-    for (unsigned i = 0; i < n; ++i) {
-        assert (columns[i].Expression);
-        if (matches[i] == nullptr) {
+//    PabloAST * const allStarts = pb.createAnd(pb.createNot(pb.createAdvance(barrier, 1)), fieldDataMask, "allStarts");
+//    pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {fieldDataMask });
+//    pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {allStarts} );
 
-            Mark match = re_compiler.compileRE(fieldExpr[i], Mark{textIndex, 1}, 1);
-            matches[i] = match.stream();
-
-         //   pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {matches[i]  });
-
-            for (unsigned j = i + 1; j < n; ++j) {
-                if (fieldExpr[j] == fieldExpr[i]) {
-                    assert (matches[j] == nullptr);
-                    matches[j] = matches[i];
-                }
-            }
-
-        }
-    }
-
-
-
-    RE_Compiler::Marker startMatch = re_compiler.compileRE(makeStart());
-    PabloAST * const allStarts = startMatch.stream();
-
-    PabloAST * currentPos = allStarts;
-    PabloAST * allSeparatorsMatches = nullptr;
-
-    PabloAST * const nonSeparators = pb.createInFile(pb.createNot(allSeperators), "nonSeperators");
-    PabloAST * const fieldSeparators = pb.createXor(allSeperators, recordSeperators, "fieldSeparators");
-
-    pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {fieldSeparators} );
 
     // I expect to see at most one UID (since databases only really support a single primary/composite key)
     // but since the logic here doesn't depend on it, I permit it for multiple independent keys.
@@ -239,24 +211,53 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
     // If we go through all non separators, we'll go past any trailing ", which we want to skip. But if we don't,
     // we need another scanthru per field to reach the same position
 
-  //  pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {allStarts});
+//    PabloAST * starts = pb.createExtract(fd, pb.getInteger(CSVDataParserFieldData::StartPositions));
+//    starts = pb.createLookahead(starts, 1);
+
+//    PabloAST * const nonEnds = pb.createInFile(pb.createNot(endPositions), "nonStarts");
+    PabloAST * const nonSeperators = pb.createInFile(pb.createNot(allSeperators), "nonSeparators");
+    PabloAST * const fieldSeparators = pb.createAnd(allSeperators, pb.createNot(recordSeperators), "fieldSeparators");
+
+//    pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {fieldSeparators} );
+
+//    pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {allStarts});
+
+    std::vector<PabloAST *> matches(n, nullptr);
+    for (unsigned i = 0; i < n; ++i) {
+        assert (columns[i].Expression);
+        if (matches[i] == nullptr) {
+
+            RE * expr = makeSeq({fieldExpr[i], makeEnd()});
+
+            Mark match = re_compiler.compileRE(expr, Mark(fieldSeparators, 1), 1);
+            matches[i] = match.stream();
+
+            for (unsigned j = i + 1; j < n; ++j) {
+                if (fieldExpr[j] == fieldExpr[i]) {
+                    assert (matches[j] == nullptr);
+                    matches[j] = matches[i];
+                }
+            }
+
+        }
+    }
+
 
     PabloAST * warning = nullptr;
+
+    PabloAST * currentPos = recordSeperators;
+    PabloAST * allSeparatorsMatches = nullptr;
 
     for (unsigned i = 0; i < n; ++i) {
         PabloAST * const fieldStart = currentPos;
 
-        pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {fieldStart });
-
-
-        currentPos = pb.createAdvanceThenScanThru(fieldStart, nonSeparators);
-
-        pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {currentPos });
+        currentPos = pb.createAdvanceThenScanThru(fieldStart, nonSeperators);
 
         PabloAST * match = matches[i];
 
-        pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {match });
+        pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {match});
 
+        pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {currentPos});
 
         const auto & col = columns[i];
         if (col.MatchIsFalse) {
@@ -269,14 +270,21 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
             } else {
                 warning = nextWarning;
             }
+            assert (false);
         } else {
             currentPos = pb.createAnd(currentPos, match);
         }
+
+        currentPos = pb.createScanThru(currentPos, nonSeperators);
+
         if (i < (n - 1)) {
             currentPos = pb.createAnd(currentPos, fieldSeparators, "matchedFieldSep" + std::to_string(i + 1));
         } else {
             currentPos = pb.createAnd(currentPos, recordSeperators, "matchedRecSep");
         }
+
+         pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {currentPos });
+
 
         if (LLVM_UNLIKELY(usedInSchemaUID[i])) {
             if (args[0] == nullptr) {
@@ -295,7 +303,7 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
         }
     }
 
-    PabloAST * result = pb.createXor(allSeparatorsMatches, allSeperators, "result");
+    PabloAST * result = pb.createXor(allSeparatorsMatches, nonSeperators, "result");
     Var * invalid = getOutputStreamVar("invalid");
     pb.createAssign(pb.createExtract(invalid, pb_ZERO), result);
 
@@ -311,7 +319,7 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
         pb.createAssign(pb.createExtract(getOutputStreamVar("hashKeyMarkers"), pb_ZERO), keyMarkers);
 
         PabloAST * const run = pb.createIntrinsicCall(pablo::Intrinsic::SpanUpTo, args, "run");
-        PabloAST * const hashableFieldData = pb.createAnd(run, nonSeparators);
+        PabloAST * const hashableFieldData = pb.createAnd(run, nonSeperators);
         pb.createAssign(pb.createExtract(getOutputStreamVar("hashKeyRuns"), pb_ZERO), hashableFieldData);
     }
 

@@ -15,16 +15,22 @@ protected:
     void generatePabloMethod() override;
 };
 
+enum CSVDataParserFieldData {
+    FieldData = 0
+    , StartPositions = 1
+    , RecordSeperator = 2
+};
+
 
 class CSVDataParser : public pablo::PabloKernel {
 
     static std::string makeNameFromOptions();
 public:
     CSVDataParser(BuilderRef kb, StreamSet * csvMarks,
-                  StreamSet * fieldData, StreamSet * recordSeparators, StreamSet * allSeperators)
+                  StreamSet * fieldData, StreamSet * allSeperators)
         : PabloKernel(kb, makeNameFromOptions(),
                       {Binding{"csvMarks", csvMarks, FixedRate(), LookAhead(1)}},
-                      {Binding{"fieldData", fieldData}, Binding{"recordSeparators", recordSeparators}, Binding{"allSeperators", allSeperators}}) {
+                      {Binding{"fieldData", fieldData}, Binding{"allSeperators", allSeperators}}) {
         addAttribute(SideEffecting());
         assert (csvMarks->getNumElements() == 5);
     }

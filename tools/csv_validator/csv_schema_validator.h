@@ -78,7 +78,7 @@ namespace csv {
 
     class CSVSchemaValidatorKernel : public pablo::PabloKernel {
     public:
-        CSVSchemaValidatorKernel(BuilderRef b, const csv::CSVSchema & schema, kernel::StreamSet * basisBits, kernel::StreamSet * fieldData, kernel::StreamSet * recordSeperators, kernel::StreamSet * allSeperators, kernel::StreamSet * invalid, CSVSchemaValidatorOptions && options);
+        CSVSchemaValidatorKernel(BuilderRef b, const csv::CSVSchema & schema, kernel::StreamSet * basisBits, kernel::StreamSet * fieldData, kernel::StreamSet * allSeperators, kernel::StreamSet * invalid, CSVSchemaValidatorOptions && options);
         llvm::StringRef getSignature() const override;
         bool hasSignature() const override { return true; }
 
@@ -86,7 +86,7 @@ namespace csv {
 
         static std::string makeCSVSchemaSignature(const csv::CSVSchema & schema);
 
-        CSVSchemaValidatorKernel(BuilderRef b, const csv::CSVSchema & schema, std::string && signature, kernel::StreamSet * basisBits, kernel::StreamSet * fieldData, kernel::StreamSet * recordSeperators, kernel::StreamSet * allSeperators, kernel::StreamSet * invalid, CSVSchemaValidatorOptions && options);
+        CSVSchemaValidatorKernel(BuilderRef b, const csv::CSVSchema & schema, std::string && signature, kernel::StreamSet * basisBits, kernel::StreamSet * fieldData, kernel::StreamSet * allSeperators, kernel::StreamSet * invalid, CSVSchemaValidatorOptions && options);
         void generatePabloMethod() override;
     private:
         static std::string makeSignature(const std::vector<re::RE *> & fields);

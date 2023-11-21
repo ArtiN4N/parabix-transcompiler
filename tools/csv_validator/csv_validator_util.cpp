@@ -91,16 +91,41 @@ void CSVDataParser::generatePabloMethod() {
     PabloAST * formattingQuotes = pb.createXor(dquote, escaped_quote, "formattingQuotes");
 
     // If we remove the separators from the text, the RE cannot match the Sep terminator
-    PabloAST * nonText = pb.createOr(CRofCRLF, formattingQuotes); // allSeparators,
+    PabloAST * nonText = pb.createOr3(CRofCRLF, formattingQuotes, allSeparators);
     PabloAST * fieldData = pb.createNot(nonText);
-    if (!noHeaderLine) {
+
+    PabloAST * gaps = pb.createOr(nonText, allSeparators);
+    PabloAST * start = pb.createScanThru(allSeparators, gaps);
+    PabloAST * ends = pb.createAnd(gaps, pb.createNot(pb.createAdvance(gaps, 1)));
+
+    if (noHeaderLine) {
+
+//        PabloAST * const leading = pb.createNot(pb.createAdvance(pb.createOnes()), 1);
+//        recordSeparators = pb.createOr(recordSeparators, leading);
+
+    } else {
+
         PabloAST * afterHeader = pb.createSpanAfterFirst(recordSeparators, "afterHeader");
+        start = pb.createAnd(start, afterHeader, "starts");
+        ends = pb.createAnd(ends, afterHeader, "ends");
+
         fieldData = pb.createAnd(fieldData, afterHeader);
         allSeparators = pb.createAnd(allSeparators, afterHeader);
         recordSeparators = pb.createAnd(recordSeparators, afterHeader);
+
     }
-    pb.createAssign(pb.createExtract(getOutputStreamVar("fieldData"), pb.getInteger(0)), fieldData);
-    pb.createAssign(pb.createExtract(getOutputStreamVar("recordSeparators"), pb.getInteger(0)), recordSeparators);
+
+
+    pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {start});
+
+    pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {ends});
+
+    Var * fd = getOutputStreamVar("fieldData");
+
+    pb.createAssign(pb.createExtract(fd, pb.getInteger(CSVDataParserFieldData::FieldData)), fieldData);
+    pb.createAssign(pb.createExtract(fd, pb.getInteger(CSVDataParserFieldData::RecordSeperator)), recordSeparators);
+    pb.createAssign(pb.createExtract(fd, pb.getInteger(CSVDataParserFieldData::StartPositions)), start);
+
     pb.createAssign(pb.createExtract(getOutputStreamVar("allSeperators"), pb.getInteger(0)), allSeparators);
 
 }
