@@ -604,7 +604,7 @@ std::string GrepKernelOptions::makeSignature() {
     std::string tmp;
     std::vector<std::string> externals;
     std::set<std::string> canon_externals;
-    raw_string_ostream sig(tmp);
+    raw_string_ostream sig(mSignature);
     std::string alpha_prefix = "";
     for (const auto & a: mAlphabets) {
         sig << alpha_prefix << a.second->getNumElements() << "xi" << a.second->getFieldWidth();
@@ -629,7 +629,7 @@ std::string GrepKernelOptions::makeSignature() {
     RE * canonRE = canonicalizeExternals(mRE, externals);
     sig << ':' << Printer_RE::PrintRE(canonRE, canon_externals);
     sig.flush();
-    return tmp;
+    return mSignature;
 }
 
 ICGrepKernel::ICGrepKernel(BuilderRef b, std::unique_ptr<GrepKernelOptions> && options)
@@ -639,7 +639,7 @@ options->streamSetOutputBindings(),
 options->scalarInputBindings(),
 options->scalarOutputBindings()),
 mOptions(std::move(options)),
-mSignature(mOptions->makeSignature()) {
+mSignature(mOptions->getSignature()) {
     addAttribute(InfrequentlyUsed());
     mOffset = grepOffset(mOptions->mRE);
     if (grep::ShowExternals) {
@@ -909,9 +909,12 @@ void AbortOnNull::generateMultiBlockLogic(BuilderRef b, Value * const numOfStrid
     baseBlockIndex->addIncoming(ConstantInt::get(baseBlockIndex->getType(), 0), entry);
     PHINode * const blocksRemaining = b->CreatePHI(b->getSizeTy(), 2);
     blocksRemaining->addIncoming(numOfBlocks, entry);
+    FixedArray<Value *, 2> indices;
+    indices[0] = baseBlockIndex;
     for (unsigned i = 0; i < 8; i++) {
-        Value * next = b->CreateBlockAlignedLoad(b->CreateGEP(blockTy, byteStreamBasePtr, {baseBlockIndex, b->getSize(i)}));
-        b->CreateBlockAlignedStore(next, b->CreateGEP(blockTy, outputStreamBasePtr, {baseBlockIndex, b->getSize(i)}));
+        indices[1] = b->getSize(i);
+        Value * next = b->CreateBlockAlignedLoad(blockTy, b->CreateGEP(blockTy, byteStreamBasePtr, indices));
+        b->CreateBlockAlignedStore(next, b->CreateGEP(blockTy, outputStreamBasePtr, indices));
         next = b->fwCast(8, next);
         blockMin[i] = b->CreateSelect(b->CreateICmpULT(next, blockMin[i]), next, blockMin[i]);
     }

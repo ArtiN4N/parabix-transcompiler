@@ -2,7 +2,7 @@
 
 namespace kernel {
 
-void PipelineAnalysis::scanFamilyKernelBindings(BuilderRef b) {
+void PipelineAnalysis::scanFamilyKernelBindings() {
 
     // Any non-call-by-family kernel K initialization (termination) function ought to be compiled into the
     // initialization (termination) of its parent pipeline P but when K contains call-by-family kernels itself,
@@ -35,25 +35,27 @@ void PipelineAnalysis::scanFamilyKernelBindings(BuilderRef b) {
 
                 const auto m = obj->getNumOfNestedKernelFamilyCalls();
 
-                if (ref.isFamilyCall()) {
+                if (ref.isFamilyCall() || m > 0) {
+                    if (ref.isFamilyCall()) {
 
-                    obj->ensureLoaded();
+                        obj->ensureLoaded();
 
-                    unsigned flags = 0;
-                    if (LLVM_LIKELY(obj->isStateful())) {
-                        flags |= FamilyScalarData::CaptureSharedStateObject;
-                    }
-                    if (obj->hasThreadLocal()) {
-                        flags |= FamilyScalarData::CaptureThreadLocal;
-                    }
-                    if (obj->allocatesInternalStreamSets()) {
-                        flags |= FamilyScalarData::CaptureAllocateInternal;
-                    }
+                        unsigned flags = 0;
+                        if (LLVM_LIKELY(obj->isStateful())) {
+                            flags |= FamilyScalarData::CaptureSharedStateObject;
+                        }
+                        if (obj->hasThreadLocal()) {
+                            flags |= FamilyScalarData::CaptureThreadLocal;
+                        }
+                        if (obj->allocatesInternalStreamSets()) {
+                            flags |= FamilyScalarData::CaptureAllocateInternal;
+                        }
 
-                    add_edge(PipelineInput, root, FamilyScalarData{inputNum++, j++, flags}, G);
-                }
-                if (m > 0) {
-                    mapPipeline(cast<PipelineKernel>(obj)->getKernels(), root);
+                        add_edge(PipelineInput, root, FamilyScalarData{inputNum++, j++, flags}, G);
+                    }
+                    if (m > 0) {
+                        mapPipeline(cast<PipelineKernel>(obj)->getKernels(), root);
+                    }
                 }
             }
 
@@ -61,8 +63,6 @@ void PipelineAnalysis::scanFamilyKernelBindings(BuilderRef b) {
 
 
         const Kernels & V = mPipelineKernel->getKernels();
-
-
 
         for (unsigned i = 0, j = 0; i < V.size(); ++i) {
 
@@ -92,6 +92,7 @@ void PipelineAnalysis::scanFamilyKernelBindings(BuilderRef b) {
                 } else {
                     out << " and contains family kernel calls";
                 }
+
                 out << " but it was removed from the pipeline due to having no returned or"
                        " internally read outputs nor being marked as side effecting.\n";
                 errs() << out.str();

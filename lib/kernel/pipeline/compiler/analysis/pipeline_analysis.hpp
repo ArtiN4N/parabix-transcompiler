@@ -100,7 +100,7 @@ public:
         P.determineInitialThreadLocalBufferLayout(b, rng);
         P.addStreamSetsToBufferGraph(b);
 
-        P.scanFamilyKernelBindings(b);
+        P.scanFamilyKernelBindings();
 
         P.gatherInfo();
 
@@ -240,7 +240,7 @@ private:
     void makeInputTruncationGraph();
 
     // Family analysis functions
-    void scanFamilyKernelBindings(BuilderRef b);
+    void scanFamilyKernelBindings();
 
     // Internally generated streamsets
 

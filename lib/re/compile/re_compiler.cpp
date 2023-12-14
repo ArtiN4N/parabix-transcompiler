@@ -164,7 +164,7 @@ Marker RE_Block_Compiler::compileExternalPropertyName(ExternalPropertyName * con
     }
     auto f = mMain.mExternalNameMap.find(af->getPrecompiledName());
     if (LLVM_UNLIKELY(f == mMain.mExternalNameMap.end())) {
-        report_fatal_error("Cannot find external " + std::string{af->getPrecompiledName()});
+        llvm::report_fatal_error(StringRef{"Cannot find external " + std::string{af->getPrecompiledName()}});
     }
 
     return Marker(mPB.createAnd(nextPos, mMain.mMatchable));
@@ -840,10 +840,6 @@ Marker RE_Compiler::compileRE(RE * const re, Marker initialMarkers, const unsign
     nested.createAssign(m, m2.stream());
     pb.createIf(initialMarkers.stream(), nested);
     return Marker(m, m2.offset());
-}
-
-LLVM_ATTRIBUTE_NORETURN void RE_Compiler::UnsupportedRE(std::string errmsg) {
-    llvm::report_fatal_error(errmsg);
 }
 
 RE_Compiler::RE_Compiler(PabloBlock * scope,

@@ -46,9 +46,12 @@
 #else
 #include <llvm/IR/PassTimingInfo.h>
 #endif
-#if LLVM_VERSION_INTEGER >= LLVM_VERSION_CODE(11, 0, 0)
+#if LLVM_VERSION_INTEGER >= LLVM_VERSION_CODE(17, 0, 0)
+#include <llvm/TargetParser/Host.h>
+#elif LLVM_VERSION_INTEGER >= LLVM_VERSION_CODE(11, 0, 0)
 #include <llvm/Support/Host.h>
 #endif
+
 #ifndef NDEBUG
 #define IN_DEBUG_MODE true
 #else
@@ -210,6 +213,9 @@ inline void CPUDriver::preparePassManager() {
             report_fatal_error("LLVM error: could not add emit assembly pass");
         }
     }
+    if (IN_DEBUG_MODE || LLVM_UNLIKELY(codegen::DebugOptionIsSet(codegen::VerifyIR))) {
+        mPassManager->add(createVerifierPass());
+    }
     #endif
 }
 
@@ -310,7 +316,7 @@ void * CPUDriver::finalizeObject(kernel::Kernel * const pk) {
     // better "wrapper" method for that that allows easier access to the output scalars.
 
     const auto e = true; // pk->containsKernelFamilyCalls() || pk->generatesDynamicRepeatingStreamSets();
-    const auto method = e ? Kernel::AddInternal : Kernel::DeclareExternal;    
+    const auto method = e ? Kernel::AddInternal : Kernel::DeclareExternal;
     Function * const main = pk->addOrDeclareMainFunction(mBuilder, method);
 
     // NOTE: the pipeline kernel is destructed after calling clear unless this driver preserves kernels!

@@ -190,6 +190,8 @@ void ExtractCoordinateSequence::generateMultiBlockLogic(BuilderRef b, Value * co
     BasicBlock * const strideCoordinatesDone = b->CreateBasicBlock("strideCoordinatesDone");
 
     Value * const processedMarkers = b->getProcessedItemCount("markers");
+    StreamSet * const coordinates = b->getOutputStreamSet("Coordinates");
+    IntegerType * const coordinateTy = b->getIntNTy(coordinates->getFieldWidth());
     Value * const coordinatePtr = b->getRawOutputPointer("Coordinates", b->getProducedItemCount("Coordinates"));
     b->CreateBr(stridePrologue);
 
@@ -226,7 +228,7 @@ void ExtractCoordinateSequence::generateMultiBlockLogic(BuilderRef b, Value * co
     pos = b->CreateAdd(pos, currentProcessed);
     b->CreateStore(pos, innerCoordinatePtrPhi);
 
-    Value * const nextCoordPtr = b->CreateGEP(innerCoordinatePtrPhi, sz_ONE);
+    Value * const nextCoordPtr = b->CreateGEP(coordinateTy, innerCoordinatePtrPhi, sz_ONE);
     innerCoordinatePtrPhi->addIncoming(nextCoordPtr, strideCoordinateElemLoop);
     Value * const nextRemaining = b->CreateResetLowestBit(remaining);
     remaining->addIncoming(nextRemaining, strideCoordinateElemLoop);

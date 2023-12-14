@@ -5,7 +5,7 @@
 #include <kernel/core/kernel_builder.h>
 #include <llvm/IR/Function.h>
 #include <llvm/Support/raw_ostream.h>
-
+#include <llvm/ADT/BitVector.h>
 #include "csv_validator_toolchain.h"
 
 inline size_t ceil_udiv(const size_t n, const size_t m) {
@@ -282,9 +282,17 @@ void CheckKeyUniqueness::generateDoSegmentMethod(BuilderRef b) {
     IntegerType *  const sizeTy = b->getSizeTy();
     IntegerType * const i32Ty = b->getInt32Ty();
 
+    StreamSet * const hashCodes = b->getInputStreamSet("HashCodes");
+    IntegerType * const hashCodesTy = b->getIntNTy(hashCodes->getFieldWidth());
     Value * const hashCodesProcessed = b->getProcessedItemCount("HashCodes");
     Value * const baseHashCodePtr = b->getRawInputPointer("HashCodes", sz_ZERO);
+
+    StreamSet * const coordinates = b->getInputStreamSet("Coordinates");
+    IntegerType * const coordinatesTy = b->getIntNTy(coordinates->getFieldWidth());
     Value * const baseCoordinatePtr = b->getRawInputPointer("Coordinates", sz_ZERO);
+
+    StreamSet * const inputStream = b->getInputStreamSet("InputStream");
+    IntegerType * const baseInputTy = b->getIntNTy(inputStream->getFieldWidth());
     Value * const baseInputPtr = b->getRawInputPointer("InputStream", sz_ZERO);
 
     boost::container::flat_set<size_t> SetOfKeyColumns;
@@ -370,21 +378,23 @@ has_unique_key:
         resultArray[index] = result;
     };
 
+    IntegerType * int8Ty = b->getInt8Ty();
+
     Value * const baseHashTableObjects = b->CreatePointerCast(b->getScalarField("hashTableObjects"), b->getInt8PtrTy());
 
     for (unsigned i = 0; i < mStride; ++i) {
 
         ConstantInt * const sz_Offset = b->getSize(i * sizeof(HashArrayMappedTrie));
-        args[0] = b->CreateGEP(baseHashTableObjects, sz_Offset);
-        Value * const hashCodePtr = b->CreateGEP(baseHashCodePtr, b->CreateAdd(hashCodesProcessedPhi, b->getSize(i)));
-        args[1] = b->CreateZExt(b->CreateLoad(hashCodePtr), i32Ty);
-        Value * const startPtr = b->CreateGEP(baseCoordinatePtr, b->CreateAdd(hashCodesProcessedPhi, b->getSize(i * 2)));
-        args[2] = b->CreateGEP(baseInputPtr, b->CreateLoad(startPtr));
-        Value * const endPtr = b->CreateGEP(baseCoordinatePtr, b->CreateAdd(hashCodesProcessedPhi, b->getSize(i * 2 + 1)));
-        endOfLastSymbol = b->CreateLoad(endPtr);
-        args[3] = b->CreateGEP(baseInputPtr, endOfLastSymbol);
+        args[0] = b->CreateGEP(int8Ty, baseHashTableObjects, sz_Offset);
+        Value * const hashCodePtr = b->CreateGEP(hashCodesTy, baseHashCodePtr, b->CreateAdd(hashCodesProcessedPhi, b->getSize(i)));
+        args[1] = b->CreateZExt(b->CreateLoad(hashCodesTy, hashCodePtr), i32Ty);
+        Value * const startPtr = b->CreateGEP(coordinatesTy, baseCoordinatePtr, b->CreateAdd(hashCodesProcessedPhi, b->getSize(i * 2)));
+        args[2] = b->CreateGEP(baseInputTy, baseInputPtr, b->CreateLoad(coordinatesTy, startPtr));
+        Value * const endPtr = b->CreateGEP(coordinatesTy, baseCoordinatePtr, b->CreateAdd(hashCodesProcessedPhi, b->getSize(i * 2 + 1)));
+        endOfLastSymbol = b->CreateLoad(coordinatesTy, endPtr);
+        args[3] = b->CreateGEP(baseInputTy, baseInputPtr, endOfLastSymbol);
 
-        args[5] = b->CreateGEP(hashValueArray, b->getSize(i));
+        args[5] = b->CreateGEP(sizeTy, hashValueArray, b->getSize(i));
 
         Value * result = b->CreateCall(checkHashCodeFn->getFunctionType(), checkHashCodeFn, args);
 
@@ -427,25 +437,25 @@ has_unique_key:
 
                     const auto f = SetOfKeyColumns.find(*itr++);
                     const auto k = std::distance(SetOfKeyColumns.begin(), f);
-                    Value * const inPtr = b->CreateGEP(hashValueArray, b->getSize(k));
-                    Value * const outPtr = b->CreateGEP(outValueArray, b->getSize(j));
-                    b->CreateStore(b->CreateLoad(inPtr), outPtr);
+                    Value * const inPtr = b->CreateGEP(sizeTy, hashValueArray, b->getSize(k));
+                    Value * const outPtr = b->CreateGEP(sizeTy, outValueArray, b->getSize(j));
+                    b->CreateStore(b->CreateLoad(sizeTy, inPtr), outPtr);
 
-                    Value * const hashCodePtr = b->CreateGEP(baseHashCodePtr, b->CreateAdd(hashCodesProcessedPhi, b->getSize(k)));
-                    Value * const hashVal = b->CreateZExt(b->CreateLoad(hashCodePtr), i32Ty);
+                    Value * const hashCodePtr = b->CreateGEP(hashCodesTy, baseHashCodePtr, b->CreateAdd(hashCodesProcessedPhi, b->getSize(k)));
+                    Value * const hashVal = b->CreateZExt(b->CreateLoad(hashCodesTy, hashCodePtr), i32Ty);
 
                     hashCode = b->CreateAdd(b->CreateMul(hashCode, i32_33), hashVal); // using djb2 as combiner
 
                 }
 
                 ConstantInt * const sz_Offset = b->getSize(compositeKeyIndex * sizeof(HashArrayMappedTrie));
-                args[0] = b->CreateGEP(baseHashTableObjects, sz_Offset);
+                args[0] = b->CreateGEP(int8Ty, baseHashTableObjects, sz_Offset);
 
                 args[1] = hashCode;
                 args[2] = startBasePtr;
-                args[3] = b->CreateGEP(startBasePtr, b->getSize(n * sizeof(size_t)));
+                args[3] = b->CreateGEP(int8Ty, startBasePtr, b->getSize(n * sizeof(size_t)));
 
-                args[5] = b->CreateGEP(hashValueArray, b->getSize(compositeKeyIndex));
+                args[5] = b->CreateGEP(sizeTy, hashValueArray, b->getSize(compositeKeyIndex));
 
                 Value *  result = b->CreateCall(checkHashCodeFn->getFunctionType(), checkHashCodeFn, args);
 
@@ -482,9 +492,9 @@ skip_composite_key:
 
     FixedArray<Value *, 3> reportArgs;
     Value * const sz_Offset = b->CreateMul(b->getSize(sizeof(HashArrayMappedTrie)), failingKey);
-    reportArgs[0] = b->CreateGEP(baseHashTableObjects, sz_Offset);
+    reportArgs[0] = b->CreateGEP(int8Ty, baseHashTableObjects, sz_Offset);
     reportArgs[1] = args[4];
-    reportArgs[2] = b->CreateLoad(b->CreateGEP(hashValueArray, failingKey));
+    reportArgs[2] = b->CreateLoad(sizeTy, b->CreateGEP(sizeTy, hashValueArray, failingKey));
     Function * reportDuplicateKeyFn = m->getFunction("report_duplicate_key");
     b->CreateCall(reportDuplicateKeyFn, reportArgs);
 

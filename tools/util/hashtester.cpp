@@ -64,7 +64,7 @@
 #include <pablo/bixnum/bixnum.h>
 #include "murmur3/MurmurHash3.h"
 #include <boost/intrusive/detail/math.hpp>
-
+#include <llvm/ADT/BitVector.h>
 #include <util/slab_allocator.h>
 
 using boost::intrusive::detail::ceil_log2;
@@ -735,7 +735,9 @@ void PopulateHashTable::generateMultiBlockLogic(BuilderRef b, llvm::Value * cons
     FixedArray<Value *, 3> args;
     Value * const hashPtr = b->getRawInputPointer("HashValues", innerHashProcessedPhi);
 
-    args[0] = b->CreateZExt(b->CreateLoad(hashPtr), sizeTy);
+    StreamSet * const ss = b->getInputStreamSet("HashValues");
+    IntegerType * const hashValTy = b->getIntNTy(ss->getFieldWidth());
+    args[0] = b->CreateZExt(b->CreateLoad(hashValTy, hashPtr), sizeTy);
     args[1] = b->getRawInputPointer("codeUnitStream", innerProcessedPhi);
     args[2] = b->getRawInputPointer("codeUnitStream", pos);
 
@@ -1147,7 +1149,7 @@ std::vector<char> readFileData(const std::vector<fs::path> & fileNames, bixhash_
         if (LLVM_LIKELY(stat(fileName.c_str(), &st) == 0)) {
             requiredSize += st.st_size;
         } else {
-            report_fatal_error("cannot determine size of " + fileName.string());
+            report_fatal_error(StringRef{"cannot determine size of " + fileName.string()});
         }
     }
 
@@ -1164,7 +1166,7 @@ std::vector<char> readFileData(const std::vector<fs::path> & fileNames, bixhash_
 
         FILE * const fp = fopen(fileName.c_str(), "r");
         if (LLVM_UNLIKELY(fp == nullptr)) {
-            report_fatal_error("cannot open " + fileName.string() + ".");
+            report_fatal_error(StringRef{"cannot open " + fileName.string() + "."});
         }
 
         for (;;) {

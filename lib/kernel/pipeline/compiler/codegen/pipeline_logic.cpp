@@ -392,7 +392,7 @@ void PipelineCompiler::generateFinalizeMethod(BuilderRef b) {
         // get the last segment # used by any kernel in case any reports require it.
         const auto type = isDataParallel(FirstKernel) ? SYNC_LOCK_PRE_INVOCATION : SYNC_LOCK_FULL;
         Value * const ptr = getSynchronizationLockPtrForKernel(b, FirstKernel, type);
-        mSegNo = b->CreateLoad(ptr);
+        mSegNo = b->CreateLoad(b->getSizeTy(), ptr);
 
         printOptionalCycleCounter(b);
         #ifdef ENABLE_PAPI
@@ -455,7 +455,7 @@ void PipelineCompiler::generateFinalizeThreadLocalMethod(BuilderRef b) {
             args.push_back(mKernelThreadLocalHandle);
             callKernelFinalizeThreadLocalFunction(b, args);
             if (LLVM_UNLIKELY(isKernelFamilyCall(i))) {
-                b->CreateFree(mKernelThreadLocalHandle);
+              //  b->CreateFree(mKernelThreadLocalHandle);
             }
         }
     }

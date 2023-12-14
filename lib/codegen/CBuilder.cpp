@@ -522,7 +522,7 @@ Value * CBuilder::CreateAlignedMalloc(Value * size, const unsigned alignment) {
         if (LLVM_UNLIKELY(codegen::DebugOptionIsSet(codegen::EnableAsserts))) {
             __CreateAssert(CreateIsNull(success), "CreateAlignedMalloc: posix_memalign reported bad allocation (%d)", {success});
         }
-        ptr = CreateLoad(handle);
+        ptr = IRBuilder<>::CreateLoad(voidPtrTy, handle);
     } else {
         report_fatal_error("stdlib.h does not contain either aligned_alloc or posix_memalign");
     }
@@ -839,39 +839,43 @@ PointerType * LLVM_READNONE CBuilder::getVoidPtrTy(const unsigned AddressSpace) 
 }
 
 
-Value * CBuilder::CreateAtomicFetchAndAdd(Value * const val, Value * const ptr) {
+Value * CBuilder::CreateAtomicFetchAndAdd(Value * const val, Value * const ptr, MaybeAlign align) {
     if (LLVM_UNLIKELY(codegen::DebugOptionIsSet(codegen::EnableAsserts))) {
         Constant * const Size = getTypeSize(val->getType());
         CheckAddress(ptr, Size, "CreateAtomicFetchAndAdd: ptr");
     }
 #if LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(13, 0, 0)
     return CreateAtomicRMW(AtomicRMWInst::Add, ptr, val, AtomicOrdering::AcquireRelease);
-#else
+#elif LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(16, 0, 0)
     return CreateAtomicRMW(AtomicRMWInst::Add, ptr, val, None, AtomicOrdering::AcquireRelease);
+#else
+    return CreateAtomicRMW(AtomicRMWInst::Add, ptr, val, align, AtomicOrdering::AcquireRelease);
 #endif
 }
 
-Value * CBuilder::CreateAtomicFetchAndSub(Value * const val, Value * const ptr) {
+Value * CBuilder::CreateAtomicFetchAndSub(Value * const val, Value * const ptr, MaybeAlign align) {
     if (LLVM_UNLIKELY(codegen::DebugOptionIsSet(codegen::EnableAsserts))) {
         Constant * const Size = getTypeSize(val->getType());
         CheckAddress(ptr, Size, "CreateAtomicFetchAndSub: ptr");
     }
 #if LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(13, 0, 0)
     return CreateAtomicRMW(AtomicRMWInst::Sub, ptr, val, AtomicOrdering::AcquireRelease);
+#elif LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(16, 0, 0)
+    return CreateAtomicRMW(AtomicRMWInst::Add, ptr, val, None, AtomicOrdering::AcquireRelease);
 #else
-    return CreateAtomicRMW(AtomicRMWInst::Sub, ptr, val, None, AtomicOrdering::AcquireRelease);
+    return CreateAtomicRMW(AtomicRMWInst::Sub, ptr, val, align, AtomicOrdering::AcquireRelease);
 #endif
 }
 
-LoadInst * CBuilder::CreateAtomicLoadAcquire(Value * ptr) {
-    const auto alignment = ptr->getType()->getPointerElementType()->getPrimitiveSizeInBits() / 8;
-    LoadInst * inst = CreateAlignedLoad(ptr, alignment, true);
+LoadInst * CBuilder::CreateAtomicLoadAcquire(Type * type, Value * ptr) {
+    const auto alignment = type->getPrimitiveSizeInBits() / 8;
+    LoadInst * inst = CreateAlignedLoad(type, ptr, alignment, true);
     inst->setOrdering(AtomicOrdering::Acquire);
     return inst;
 }
 
 StoreInst * CBuilder::CreateAtomicStoreRelease(Value * val, Value * ptr) {
-    const auto alignment = ptr->getType()->getPointerElementType()->getPrimitiveSizeInBits() / 8;
+    const auto alignment = val->getType()->getPrimitiveSizeInBits() / 8;
     StoreInst * inst = CreateAlignedStore(val, ptr, alignment, true);
     inst->setOrdering(AtomicOrdering::Release);
     return inst;
@@ -979,29 +983,30 @@ Value * CBuilder::CreateRemoveCall(Value * path) {
 struct __backtrace_data {
     const char * FileName = nullptr;
     const char * FunctionName = nullptr;
-    uint32_t LineNo = 0;
+    size_t LineNo = 0;
 } __attribute__((packed));
 
 extern "C"
 BOOST_NOINLINE
-void __report_failure_v(const char * name, const char * fmt, const __backtrace_data * trace, const uint32_t traceLength, va_list & args) {
+void __report_failure_v(const char * name, const char * fmt, const __backtrace_data * const trace[], const uint32_t traceLength, va_list & args) {
     // colourize the output if and only if stderr is piped to the terminal
     const auto colourize = isatty(STDERR_FILENO) == 1;
     raw_fd_ostream out(STDERR_FILENO, false);
+
     if (trace) {
+
         SmallVector<char, 4096> tmp;
         raw_svector_ostream trace_string(tmp);
-//        for (uint32_t i = 0; i < traceLength; ++i) {
-//            const auto & T = trace[i];
-//            if (T.FunctionName) {
-//                trace_string << T.FunctionName;
-//            }
-//            if (T.FileName) {
-//                trace_string << '(' << T.FileName << ':' << T.LineNo << ')';
-//            }
-//            trace_string << '\n';
-
-//        }
+        for (uint32_t i = 0; i < traceLength; ++i) {
+            const __backtrace_data * const T = trace[i];
+            if (T->FunctionName) {
+                trace_string << StringRef{T->FunctionName} << ' ';
+            }
+            if (T->FileName) {
+                trace_string << '(' << StringRef{T->FileName} << ':' << T->LineNo << ")";
+            }
+            trace_string << '\n';
+        }
         if (colourize) {
             out.changeColor(raw_fd_ostream::WHITE, true);
         }
@@ -1046,7 +1051,7 @@ void __report_failure_v(const char * name, const char * fmt, const __backtrace_d
 
 extern "C"
 BOOST_NOINLINE
-void __report_failure(const char * name, const char * fmt, const __backtrace_data * trace, const uint32_t traceLength, ...) {
+void __report_failure(const char * name, const char * fmt, const __backtrace_data * const trace[], const uint32_t traceLength, ...) {
     va_list args;
     va_start(args, traceLength);
     __report_failure_v(name, fmt, trace, traceLength, args);
@@ -1082,11 +1087,10 @@ void __backtrace_ignored_error_callback(void *data, const char *msg, int errnum)
     pc_data->FunctionName = nullptr;
     pc_data->LineNo = 0;
 }
-#endif
 
 using CallStack = SmallVector<uintptr_t, 64>;
 
-#if HAS_LIBUNWIND
+#ifdef HAS_LIBUNWIND
 static _Unwind_Reason_Code
 __unwind_callback (struct _Unwind_Context *context, void *data) {
     CallStack * callstack = static_cast<CallStack *>(data);
@@ -1103,7 +1107,11 @@ __unwind_callback (struct _Unwind_Context *context, void *data) {
     callstack->push_back(pc);
     return _URC_NO_REASON;
 }
-#endif
+#endif // HAS_LIBUNWIND
+
+#endif // ENABLE_LIBBACKTRACE
+
+constexpr StringRef __BACKTRACE_STRUCT_NAME{"__bkstruct"};
 
 void CBuilder::__CreateAssert(Value * const assertion, const Twine format, std::initializer_list<Value *> params) {
 
@@ -1132,8 +1140,10 @@ void CBuilder::__CreateAssert(Value * const assertion, const Twine format, std::
         FixedArray<Type *, 3> fields;
         fields[0] = int8PtrTy;
         fields[1] = int8PtrTy;
-        fields[2] = int32Ty;
-        StructType * const structTy = StructType::create(C, fields);
+        fields[2] = getSizeTy();
+        StructType * const structTy = StructType::create(C, fields, __BACKTRACE_STRUCT_NAME, true);
+        assert (getTypeSize(structTy)->getLimitedValue() == sizeof(__backtrace_data));
+
         PointerType * const structPtrTy = structTy->getPointerTo();
 
         FixedArray<Type *, 5> params;
@@ -1163,8 +1173,11 @@ void CBuilder::__CreateAssert(Value * const assertion, const Twine format, std::
         arg->setName("depth");
         Value * depth = &*arg++;
         SetInsertPoint(entry);
-
+        #if LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(15, 0, 0)
         assertFunc->setHasUWTable();
+        #else
+        assertFunc->setUWTableKind(UWTableKind::Default);
+        #endif
         assertFunc->setPersonalityFn(getDefaultPersonalityFunction());
 
         Value * const vaList = CreatePointerCast(CreateAlignedAlloca(vaListTy, mCacheLineAlignment), int8PtrTy);
@@ -1227,78 +1240,88 @@ void CBuilder::__CreateAssert(Value * const assertion, const Twine format, std::
         // TODO: implement a tree structure and traverse from the bottom up, stopping when it
         // determines the correct parent?
 
-        CallStack callstack;
+
         #ifdef HAS_LIBUNWIND
+        CallStack callstack;
         _Unwind_Backtrace (__unwind_callback, &callstack);
+        const auto n = callstack.size();
         #endif
         #ifdef HAS_BACKTRACE
+        CallStack callstack(64);
+        size_t n = 0;
         for (;;) {
-            const size_t n = backtrace(reinterpret_cast<void **>(callstack.data()), callstack.capacity());
+            n = backtrace(reinterpret_cast<void **>(callstack.data()), callstack.size());
             if (LLVM_LIKELY(n < callstack.capacity())) {
-                callstack.set_size(n);
                 break;
             }
             callstack.resize(n * 2);
         }
         #endif
-        const auto n = callstack.size();
 
         SmallVector<Constant *, 64> traceArray(n);
         const auto state = reinterpret_cast<backtrace_state *>(mBacktraceState);
 
+
+        #if LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(15, 0, 0)
         StructType * const structTy = cast<StructType>(structPtrTy->getPointerElementType());
-        for (unsigned p = 0; p < n; ++p) {
-            const auto pc = callstack[p];
-            const auto f = mBacktraceSymbols.find(pc);
-            if (f == mBacktraceSymbols.end()) {
+        #else
+        StructType * const structTy = StructType::getTypeByName(getContext(), __BACKTRACE_STRUCT_NAME);
+        #endif
+        assert (getTypeSize(structTy)->getLimitedValue() == sizeof(__backtrace_data));
+
+        char * demangled = nullptr;
+        size_t bufferLength = 0;
+
+        for (unsigned i = 0; i < n; ++i) {
+            const auto pc = callstack[i];
+
+            SmallVector<char, 16> tmp;
+            raw_svector_ostream nm(tmp);
+            nm << "__sym_" << pc;
+
+            GlobalVariable * symbol = m->getGlobalVariable(nm.str(), true);
+
+            if (symbol == nullptr) {
+
                 __backtrace_data data;
                 auto r = backtrace_pcinfo(state, pc, &__backtrace_callback, &__backtrace_ignored_error_callback, &data);
                 if (LLVM_UNLIKELY(r == 0)) {
                     r = backtrace_syminfo(state, pc, &__backtrace_syminfo_callback, &__backtrace_ignored_error_callback, &data);
                 }
                 FixedArray<Constant *, 3> values;
-//                if (data.FileName) {
-//                    __FILE__
-
-
-
-//                }
-
-
-                values[0] = GetString(data.FileName ? data.FileName : "");
+                if (data.FileName) {
+                    values[0] = GetString(data.FileName);
+                } else {
+                    values[0] = ConstantPointerNull::get(getInt8PtrTy());
+                }
                 Constant * funcName = nullptr;
                 if (data.FunctionName) {
                     int status;
-                    char *demangled = abi::__cxa_demangle(data.FunctionName, nullptr, nullptr, &status);
+                    demangled = abi::__cxa_demangle(data.FunctionName, demangled, &bufferLength, &status);
                     if (LLVM_LIKELY(status == 0)) {
                         funcName = GetString(demangled);
-                        free(demangled);
                     } else {
                         funcName = GetString(data.FunctionName);
                     }
                 } else {
-                    funcName = GetString("");
+                    funcName = ConstantPointerNull::get(getInt8PtrTy());
                 }
                 values[1] = funcName;
-                values[2] = getInt32(data.LineNo);
-                Constant * symbol = ConstantStruct::get(structTy, values);
-                Constant * symbolPtr = new GlobalVariable(*m, structTy, true, GlobalVariable::InternalLinkage, symbol);
-                assert (symbolPtr->getType() == structPtrTy);
-                mBacktraceSymbols.insert(std::make_pair(pc, symbolPtr));
-                traceArray[p] = symbolPtr;
-            } else {
-                Constant * const symbolPtr = f->second;
-                assert (symbolPtr);
-                assert (symbolPtr->getType() == structPtrTy);
-                traceArray[p] = symbolPtr;
+                values[2] = getSize(data.LineNo);
+                Constant * const symbolStruct = ConstantStruct::get(structTy, values);
+                assert (getTypeSize(symbolStruct->getType())->getLimitedValue() == sizeof(__backtrace_data));
+                symbol = new GlobalVariable(*m, structTy, true, GlobalVariable::PrivateLinkage, symbolStruct, nm.str());
             }
+            traceArray[i] = symbol;
         }
 
         ArrayType * traceTy = ArrayType::get(structPtrTy, n);
+        assert (getTypeSize(traceTy)->getLimitedValue() == sizeof(__backtrace_data *) * n);
         trace = ConstantArray::get(traceTy, traceArray);
-        trace = new GlobalVariable(*m, trace->getType(), true, GlobalVariable::InternalLinkage, trace);
+        trace = new GlobalVariable(*m, trace->getType(), true, GlobalVariable::PrivateLinkage, trace);
         trace = ConstantExpr::getPointerCast(trace, structPtrTy);
         depth = getInt32(n);
+        free(demangled);
     } else {
     #endif
         trace = ConstantPointerNull::get(structPtrTy);
@@ -1306,6 +1329,9 @@ void CBuilder::__CreateAssert(Value * const assertion, const Twine format, std::
     #ifdef ENABLE_LIBBACKTRACE
     }
     #endif
+
+
+
     Value * const name = GetString(getKernelName());
     SmallVector<char, 1024> tmp;
     const StringRef fmt = format.toStringRef(tmp);
@@ -1319,12 +1345,6 @@ void CBuilder::__CreateAssert(Value * const assertion, const Twine format, std::
     args.append(params);
     IRBuilder<>::CreateCall(assertFunc->getFunctionType(), assertFunc, args);
 }
-
-#ifdef ENABLE_LIBBACKTRACE
-void CBuilder::resetAssertionTraces() {
-    mBacktraceSymbols.clear();
-}
-#endif
 
 void CBuilder::CreateExit(const int exitCode) {
     Module * const m = getModule();
@@ -1342,17 +1362,16 @@ AllocaInst * CBuilder::CreateAllocaAtEntryPoint(Type * Ty, Value * ArraySize, co
 
     auto BB = GetInsertBlock();
     auto F = BB->getParent();
-    auto & BL = F->getBasicBlockList();
-    if (LLVM_UNLIKELY(BL.empty())) {
+    auto entryBlock = F->begin();
+    if (LLVM_UNLIKELY(entryBlock == F->end())) {
         report_fatal_error("CreateAllocaAtEntryPoint cannot create a value in an empty function");
     }
-    auto & entryBlock = BL.front();
-    auto const first = entryBlock.getFirstNonPHIOrDbgOrLifetime();
+    auto const first = entryBlock->getFirstNonPHIOrDbgOrLifetime();
     #if LLVM_VERSION_INTEGER >= LLVM_VERSION_CODE(4, 0, 0)
     const auto & DL = F->getParent()->getDataLayout();
     const auto addrSize = DL.getAllocaAddrSpace();
     if (LLVM_UNLIKELY(first == nullptr)) {
-        return new AllocaInst(Ty, addrSize, ArraySize, Name, &entryBlock);
+        return new AllocaInst(Ty, addrSize, ArraySize, Name, &*entryBlock);
     } else {
         return new AllocaInst(Ty, addrSize, ArraySize, Name, first);
     }
@@ -1462,45 +1481,71 @@ Function * CBuilder::LinkFunction(StringRef name, FunctionType * type, void * fu
     return mDriver->addLinkFunction(getModule(), name, type, functionPtr);
 }
 
-LoadInst * CBuilder::CreateLoad(Value * Ptr, const char * Name) {
-    Type * ptrTy = Ptr->getType()->getPointerElementType();
-    if (LLVM_UNLIKELY(codegen::DebugOptionIsSet(codegen::EnableAsserts))) {
-        CheckAddress(Ptr, getTypeSize(ptrTy), "CreateLoad");
+#if LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(15, 0, 0)
+Value * CBuilder::CreateGEP(Type * Ty, Value * Ptr, ArrayRef<Value *> IdxList, const Twine & Name, bool IsInBounds) {
+    assert (Ty->canLosslesslyBitCastTo(Ptr->getType()->getPointerElementType()));
+    if (IsInBounds) {
+        return IRBuilder<>::CreateInBoundsGEP(Ty, CreatePointerCast(Ptr, Ty->getPointerTo()), IdxList, Name);
+    } else {
+        return IRBuilder<>::CreateGEP(Ty, CreatePointerCast(Ptr, Ty->getPointerTo()), IdxList, Name);
     }
-    return IRBuilder<>::CreateLoad(ptrTy, Ptr, Name);
+}
+#endif
+
+LoadInst * CBuilder::CreateLoad(Type * type, Value * Ptr, const char * Name) {
+    #if LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(15, 0, 0)
+    assert (type->canLosslesslyBitCastTo(Ptr->getType()->getPointerElementType()));
+    #endif
+    if (LLVM_UNLIKELY(codegen::DebugOptionIsSet(codegen::EnableAsserts))) {
+        CheckAddress(Ptr, getTypeSize(type), "CreateLoad");
+    }
+    #if LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(15, 0, 0)
+    return IRBuilder<>::CreateLoad(IRBuilder<>::CreatePointerCast(Ptr, type->getPointerTo()), Name);
+    #else
+    return IRBuilder<>::CreateLoad(type, Ptr, Name);
+    #endif
 }
 
-LoadInst * CBuilder::CreateLoad(Value * Ptr, const Twine Name) {
-    Type * ptrTy = Ptr->getType()->getPointerElementType();
+LoadInst * CBuilder::CreateLoad(Type * type, Value *Ptr, const Twine Name) {
+    #if LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(15, 0, 0)
+    assert (type->canLosslesslyBitCastTo(Ptr->getType()->getPointerElementType()));
+    #endif
     if (LLVM_UNLIKELY(codegen::DebugOptionIsSet(codegen::EnableAsserts))) {
-        CheckAddress(Ptr, getTypeSize(ptrTy), "CreateLoad");
+        CheckAddress(Ptr, getTypeSize(type), "CreateLoad");
     }
-    return IRBuilder<>::CreateLoad(ptrTy, Ptr, Name);
+    #if LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(15, 0, 0)
+    return IRBuilder<>::CreateLoad(IRBuilder<>::CreatePointerCast(Ptr, type->getPointerTo()), Name);
+    #else
+    return IRBuilder<>::CreateLoad(type, Ptr, Name);
+    #endif
 }
 
-LoadInst * CBuilder::CreateLoad(Type * Ty, Value *Ptr, const Twine Name) {
+LoadInst * CBuilder::CreateLoad(Type * type, Value * Ptr, bool isVolatile, const Twine Name) {
+    #if LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(15, 0, 0)
+    assert (type->canLosslesslyBitCastTo(Ptr->getType()->getPointerElementType()));
+    #endif
     if (LLVM_UNLIKELY(codegen::DebugOptionIsSet(codegen::EnableAsserts))) {
-        CheckAddress(Ptr, getTypeSize(Ty), "CreateLoad");
+        CheckAddress(Ptr, getTypeSize(type), "CreateLoad");
     }
-    return IRBuilder<>::CreateLoad(Ty, Ptr, Name);
-}
-
-LoadInst * CBuilder::CreateLoad(Value * Ptr, bool isVolatile, const Twine Name) {
-    Type * ptrTy = Ptr->getType()->getPointerElementType();
-    if (LLVM_UNLIKELY(codegen::DebugOptionIsSet(codegen::EnableAsserts))) {
-        CheckAddress(Ptr, getTypeSize(ptrTy), "CreateLoad");
-    }
-    return IRBuilder<>::CreateLoad(ptrTy, Ptr, isVolatile, Name);
+    #if LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(15, 0, 0)
+    return IRBuilder<>::CreateLoad(IRBuilder<>::CreatePointerCast(Ptr, type->getPointerTo()), Name);
+    #else
+    return IRBuilder<>::CreateLoad(type, Ptr, isVolatile, Name);
+    #endif
 }
 
 StoreInst * CBuilder::CreateStore(Value * Val, Value * Ptr, bool isVolatile) {
     assert ("Ptr (Arg2) was expected to be a pointer type" &&
             Ptr->getType()->isPointerTy());
-    assert ("Ptr (Arg2) is not a pointer type for Val (Arg1)" &&
-            Val->getType() == Ptr->getType()->getPointerElementType());
+    #if LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(15, 0, 0)
+    assert (Val->getType()->canLosslesslyBitCastTo(Ptr->getType()->getPointerElementType()));
+    #endif
     if (LLVM_UNLIKELY(codegen::DebugOptionIsSet(codegen::EnableAsserts))) {
         CheckAddress(Ptr, getTypeSize(Val->getType()), "CreateStore");
     }
+    #if LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(15, 0, 0)
+    Val = IRBuilder<>::CreateBitCast(Val, Ptr->getType()->getPointerElementType());
+    #endif
     return IRBuilder<>::CreateStore(Val, Ptr, isVolatile);
 }
 
@@ -1508,44 +1553,44 @@ inline bool CBuilder::hasAddressSanitizer() const {
     return mDriver && mDriver->hasExternalFunction("__asan_region_is_poisoned");
 }
 
-LoadInst * CBuilder::CreateAlignedLoad(Value * Ptr, const unsigned Align, const char * Name) {
+LoadInst * CBuilder::CreateAlignedLoad(Type * type, Value * Ptr, const unsigned Align, const char * Name) {
     assert (Align > 0);
     if (LLVM_UNLIKELY(codegen::DebugOptionIsSet(codegen::EnableAsserts))) {
         DataLayout DL(getModule());
-        IntegerType * const intPtrTy = cast<IntegerType>(DL.getIntPtrType(Ptr->getType()));
+        IntegerType * const intPtrTy = DL.getIntPtrType(getContext());
         ConstantInt * align = ConstantInt::get(intPtrTy, Align);
         Value * alignmentOffset = CreateURem(CreatePtrToInt(Ptr, intPtrTy), align);
         CreateAssertZero(alignmentOffset, "CreateAlignedLoad: pointer (%" PRIxsz ") is misaligned (%" PRIdsz ")", Ptr, align);
     }
-    LoadInst * LI = CreateLoad(Ptr, Name);
+    LoadInst * LI = CreateLoad(type, Ptr, Name);
     LI->setAlignment(AlignType{Align});
     return LI;
 }
 
-LoadInst * CBuilder::CreateAlignedLoad(Value * Ptr, const unsigned Align, const Twine Name) {
+LoadInst * CBuilder::CreateAlignedLoad(Type * type, Value * Ptr, const unsigned Align, const Twine Name) {
     assert (Align > 0);
     if (LLVM_UNLIKELY(codegen::DebugOptionIsSet(codegen::EnableAsserts))) {
         DataLayout DL(getModule());
-        IntegerType * const intPtrTy = cast<IntegerType>(DL.getIntPtrType(Ptr->getType()));
+        IntegerType * const intPtrTy = DL.getIntPtrType(getContext());
         ConstantInt * align = ConstantInt::get(intPtrTy, Align);
         Value * alignmentOffset = CreateURem(CreatePtrToInt(Ptr, intPtrTy), align);
         CreateAssertZero(alignmentOffset, "CreateAlignedLoad: pointer (%" PRIxsz ") is misaligned (%" PRIdsz ")", Ptr, align);
     }
-    LoadInst * LI = CreateLoad(Ptr, Name);
+    LoadInst * LI = CreateLoad(type, Ptr, Name);
     LI->setAlignment(AlignType{Align});
     return LI;
 }
 
-LoadInst * CBuilder::CreateAlignedLoad(Value * Ptr, const unsigned Align, bool isVolatile, const Twine Name) {
+LoadInst * CBuilder::CreateAlignedLoad(Type * type, Value * Ptr, const unsigned Align, bool isVolatile, const Twine Name) {
     assert (Align > 0);
     if (LLVM_UNLIKELY(codegen::DebugOptionIsSet(codegen::EnableAsserts))) {
         DataLayout DL(getModule());
-        IntegerType * const intPtrTy = cast<IntegerType>(DL.getIntPtrType(Ptr->getType()));
+        IntegerType * const intPtrTy = DL.getIntPtrType(getContext());
         ConstantInt * align = ConstantInt::get(intPtrTy, Align);
         Value * alignmentOffset = CreateURem(CreatePtrToInt(Ptr, intPtrTy), align);
         CreateAssertZero(alignmentOffset, "CreateAlignedLoad: pointer (%" PRIxsz ") is misaligned (%" PRIdsz ")", Ptr, align);
     }
-    LoadInst * LI = CreateLoad(Ptr, isVolatile, Name);
+    LoadInst * LI = CreateLoad(type, Ptr, isVolatile, Name);
     LI->setAlignment(AlignType{Align});
     return LI;
 }
@@ -1554,12 +1599,12 @@ StoreInst * CBuilder::CreateAlignedStore(Value * Val, Value * Ptr, const unsigne
     assert (Align > 0);
     if (LLVM_UNLIKELY(codegen::DebugOptionIsSet(codegen::EnableAsserts))) {
         DataLayout DL(getModule());
-        IntegerType * const intPtrTy = cast<IntegerType>(DL.getIntPtrType(Ptr->getType()));
+        IntegerType * const intPtrTy = DL.getIntPtrType(getContext());
         ConstantInt * align = ConstantInt::get(intPtrTy, Align);
         Value * alignmentOffset = CreateURem(CreatePtrToInt(Ptr, intPtrTy), align);
         CreateAssertZero(alignmentOffset, "CreateAlignedStore: pointer (%" PRIxsz ") is misaligned (%" PRIdsz ")", Ptr, align);
     }
-    StoreInst *SI = CreateStore(Val, Ptr, isVolatile);
+    StoreInst * SI = CreateStore(Val, Ptr, isVolatile);
     SI->setAlignment(AlignType{Align});
     return SI;
 }
@@ -1966,7 +2011,7 @@ CBuilder::CBuilder(LLVMContext & C)
 , mDriver(nullptr) {
     #ifdef ENABLE_LIBBACKTRACE
     if (LLVM_UNLIKELY(codegen::AnyAssertionOptionIsSet())) {
-        auto p = boost::filesystem::absolute(codegen::ProgramName).normalize().native();
+        auto p = boost::filesystem::absolute(codegen::ProgramName).lexically_normal().native();
         bool error = false;
         mBacktraceState = backtrace_create_state(p.c_str(), 0, __backtrace_set_true_on_error_callback, &error);
         if (error) {
@@ -2039,7 +2084,7 @@ bool RemoveRedundantAssertionsPass::runOnModule(Module & M) {
                         return !(isa<Function>(V) || isa<Constant>(V));
                         #endif
                     };
-                    assert ("null pointer for function call?" && ci.getCalledFunction() || isIndirectCall());
+                    assert ("null pointer for function call?" && (ci.getCalledFunction() || isIndirectCall()));
                     // if we're using address sanitizer, try to determine whether we're
                     // rechecking the same address
                     if (isIndirectCall()) {
@@ -2082,7 +2127,7 @@ bool RemoveRedundantAssertionsPass::runOnModule(Module & M) {
                     #else
                     else if (ci.getOperand(0) == assertFunc) {
                     #endif
-                        assert (ci.getNumArgOperands() >= 5);
+                        assert (ci.getNumOperands() >= 5);
                         bool remove = false;
                         Value * const check = ci.getOperand(0);
                         Constant * static_check = nullptr;
@@ -2109,7 +2154,7 @@ bool RemoveRedundantAssertionsPass::runOnModule(Module & M) {
                                 };
                                 const char * const name = extract(ci.getOperand(1)); assert (name);
                                 const char * const msg = extract(ci.getOperand(2)); assert (msg);
-                                const auto trace = reinterpret_cast<const __backtrace_data *>(extract(ci.getOperand(3))); assert (trace);
+                                const auto trace = reinterpret_cast<const __backtrace_data * const *>(extract(ci.getOperand(3))); assert (trace);
                                 const uint32_t n = cast<ConstantInt>(ci.getOperand(4))->getLimitedValue();
 
                                 // since we may not necessarily be able to statically evaluate every varadic param,
@@ -2244,22 +2289,28 @@ bool RemoveRedundantAssertionsPass::runOnModule(Module & M) {
     return modified;
 }
 
-llvm::ConstantInt * LLVM_READNONE CBuilder::getTypeSize(llvm::Type * type, IntegerType * valType) const {
+ConstantInt * LLVM_READNONE CBuilder::getTypeSize(Type * type, IntegerType * valType) const {
     // ConstantExpr::getSizeOf was creating an infinite(?) loop when folding the value for some complex structs
     // until replaced with this in LLVM 12.
     DataLayout dl(getModule());
-    size_t size = 0;
-    if (LLVM_LIKELY(type != nullptr)) {
-        #if LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(11, 0, 0)
-        size = dl.getTypeAllocSize(type);
-        #else
-        size = dl.getTypeAllocSize(type).getFixedSize();
-        #endif
-    }
     if (valType == nullptr) {
         valType = getSizeTy();
     }
-    return ConstantInt::get(getSizeTy(), size);
+    return ConstantInt::get(valType, getTypeSize(dl, type));
+}
+
+uintptr_t LLVM_READNONE CBuilder::getTypeSize(llvm::DataLayout & DL, llvm::Type * type) {
+    uintptr_t size = 0;
+    if (LLVM_LIKELY(type != nullptr)) {
+        #if LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(11, 0, 0)
+        size = DL.getTypeAllocSize(type);
+        #elif LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(16, 0, 0)
+        size = DL.getTypeAllocSize(type).getFixedSize();
+        #else
+        size = DL.getTypeAllocSize(type).getFixedValue();
+        #endif
+    }
+    return size;
 }
 
 std::string CBuilder::getKernelName() const {

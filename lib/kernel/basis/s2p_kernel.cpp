@@ -611,9 +611,6 @@ S2P_32Kernel::S2P_32Kernel(BuilderRef b, StreamSet * const codeUnitStream, Strea
 void S2P_32Kernel::generateMultiBlockLogic(BuilderRef kb, Value * const numOfStrides) {
     BasicBlock * entry = kb->GetInsertBlock();
     BasicBlock * processBlock = kb->CreateBasicBlock("s2p21_loop");
-
-
-    BasicBlock * finish_s2p = kb->CreateBasicBlock("finish_s2p");
     BasicBlock * s2pDone = kb->CreateBasicBlock("s2p21_done");
     Constant * const ZERO = kb->getSize(0);
     Constant * ZERO_BLOCK = kb->allZeroes();
@@ -632,8 +629,6 @@ void S2P_32Kernel::generateMultiBlockLogic(BuilderRef kb, Value * const numOfStr
     Value * u32byte[4][8];
 
     const auto bitCount = getInputStreamSet(0)->getFieldWidth();
-
-    Value * anyByte = nullptr;
 
     for (unsigned i = 0; i < 8; i++) {
         Value * UTF32units[4];

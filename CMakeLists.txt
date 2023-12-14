@@ -127,9 +127,9 @@ endif()
 IF (CMAKE_BUILD_TYPE MATCHES Debug)
 # MacOS stores debug info in dSYM files but the source of this information is
 # not accessible by libbacktrace without first running dsymutil on the executable.
-    find_package(LIBBACKTRACE)
+    find_package(Libbacktrace REQUIRED)
     if (LIBBACKTRACE_FOUND)
-        find_package(LIBUNWIND)
+        find_package(Libunwind)
         if (NOT LIBUNWIND_FOUND)
             find_package(Backtrace)
         endif()
@@ -158,11 +158,20 @@ endif()
 
 ###   Project Configuration   ###
 
+if(${LLVM_VERSION_MAJOR} GREATER 15)
+# Require that compilers support all features of C17 and C++17.
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_STANDARD 17)
+else()
 # Require that compilers support all features of C14 and C++14.
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 14)
+endif()
+
 
 # Define `CXX_STANDARD` to enable conditional compilation based on standard version.
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCXX_STANDARD=${CMAKE_CXX_STANDARD}")
@@ -322,15 +331,15 @@ function(parabix_add_executable)
     add_executable(${ARG_NAME} ${ARG_SRC})
     target_compile_options(${ARG_NAME} PRIVATE ${NO_RTTI})
     if(ARTIFACT_MODE STREQUAL "Single")
-        target_link_libraries(${ARG_NAME} ${ARG_DEPS} ${PARABIX_MONO_TARGET})
+        target_link_libraries(${ARG_NAME} PUBLIC ${PARABIX_MONO_TARGET})
     else()
-        target_link_libraries(${ARG_NAME} ${ARG_DEPS})
+        target_link_libraries(${ARG_NAME} PUBLIC ${ARG_DEPS})
     endif()
     if(ARTIFACT_MODE STREQUAL "Single")
-        target_link_libraries(${ARG_NAME} ${Z3_LIBRARIES})
+        target_link_libraries(${ARG_NAME} PUBLIC ${Z3_LIBRARIES})
     endif()
-    target_link_libraries(${ARG_NAME} toolchain)
-    target_link_libraries(${ARG_NAME} kernel.pipeline)
+    target_link_libraries(${ARG_NAME} PUBLIC toolchain)
+    target_link_libraries(${ARG_NAME} PUBLIC kernel.pipeline)
 endfunction(parabix_add_executable)
 
 # Creates a pablo source target which copies pablo source files to the parabix
