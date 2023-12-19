@@ -89,41 +89,22 @@ void CSVDataParser::generatePabloMethod() {
     PabloAST * allSeparators = pb.createOrAnd(recordSeparators, csvMarks[markComma], unquoted, "allSeparators");
     PabloAST * CRofCRLF = pb.createAnd3(csvMarks[markCR], pb.createLookahead(csvMarks[markLF], 1), unquoted, "CRofCRLF");
     PabloAST * formattingQuotes = pb.createXor(dquote, escaped_quote, "formattingQuotes");
+    PabloAST * nonText = pb.createOr3(CRofCRLF, formattingQuotes, quote_escape);
 
-    // If we remove the separators from the text, the RE cannot match the Sep terminator
-    PabloAST * nonText = pb.createOr3(CRofCRLF, formattingQuotes, allSeparators);
-    PabloAST * fieldData = pb.createNot(nonText);
-
-    PabloAST * gaps = pb.createOr(nonText, allSeparators);
-    PabloAST * start = pb.createScanThru(allSeparators, gaps);
-    PabloAST * ends = pb.createAnd(gaps, pb.createNot(pb.createAdvance(gaps, 1)));
-
+    PabloAST * recordSeparatorsAndNonText = pb.createOr(recordSeparators, nonText);
+    PabloAST * start = pb.createAdvanceThenScanThru(recordSeparators, nonText);
     if (noHeaderLine) {
-
-//        PabloAST * const leading = pb.createNot(pb.createAdvance(pb.createOnes()), 1);
-//        recordSeparators = pb.createOr(recordSeparators, leading);
-
+        start = pb.createNot(pb.createAdvance(pb.createNot(start), 1));
     } else {
-
-        PabloAST * afterHeader = pb.createSpanAfterFirst(recordSeparators, "afterHeader");
-        start = pb.createAnd(start, afterHeader, "starts");
-        ends = pb.createAnd(ends, afterHeader, "ends");
-
-        fieldData = pb.createAnd(fieldData, afterHeader);
+        PabloAST * const afterHeader = pb.createSpanAfterFirst(recordSeparators, "afterHeader");
         allSeparators = pb.createAnd(allSeparators, afterHeader);
-        recordSeparators = pb.createAnd(recordSeparators, afterHeader);
-
+        recordSeparatorsAndNonText = pb.createOr(recordSeparatorsAndNonText, pb.createNot(afterHeader), "recordSeparatorsAndNonText");
+        start = pb.createAnd(start, afterHeader);
     }
-
-
-    pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {start});
-
-    pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {ends});
 
     Var * fd = getOutputStreamVar("fieldData");
 
-    pb.createAssign(pb.createExtract(fd, pb.getInteger(CSVDataParserFieldData::FieldData)), fieldData);
-    pb.createAssign(pb.createExtract(fd, pb.getInteger(CSVDataParserFieldData::RecordSeperator)), recordSeparators);
+    pb.createAssign(pb.createExtract(fd, pb.getInteger(CSVDataParserFieldData::RecordSeparatorsAndNonText)), recordSeparatorsAndNonText);
     pb.createAssign(pb.createExtract(fd, pb.getInteger(CSVDataParserFieldData::StartPositions)), start);
 
     pb.createAssign(pb.createExtract(getOutputStreamVar("allSeperators"), pb.getInteger(0)), allSeparators);

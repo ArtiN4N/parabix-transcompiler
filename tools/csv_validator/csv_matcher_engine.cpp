@@ -98,17 +98,24 @@ void CSVMatcherEngine::initRE(csv::CSVSchema & schema) {
     RE_MemoizingTransformer MT("memoizer");
     StripStartEndBookEnds ST("removeStartEnds");
 
-    bool nonFixedUTF8 = false;
+    bool nonFixedUTF8 = true; // false;
+
+    RE * emptyString = nullptr;
 
     for (unsigned i = 0; i < schema.Column.size(); ++i) {
         auto & column = schema.Column[i];
+
         RE * expr = ST.transformRE(column.Expression, NameTransformationMode::TransformDefinition);
+
+//        expr = makeSeq({makeStart(), expr, makeEnd()});
 
 //        errs() << "INPUT RE " << i << ":\n\n" << Printer_RE::PrintRE(expr) << "\n\n\n";
 
         if (column.Optional && !matchesEmptyString(expr)) {
             // the Column Rule evaluates to true, or if the column is empty.
-            RE * emptyString = makeSeq({makeStart(), makeEnd()});
+            if (emptyString == nullptr) {
+                emptyString = makeSeq(); // { makeStart(), makeEnd() }
+            }
             expr = makeAlt({expr, emptyString});
         }
 
@@ -198,16 +205,16 @@ void CSVMatcherEngine::initRE(csv::CSVSchema & schema) {
             tmp.push_back(column.Expression);
         }
 
-        const auto UnicodeSets = collectCCs(makeSeq(tmp.begin(), tmp.end()), *mIndexAlphabet);
-        if (!UnicodeSets.empty()) {
-            auto mpx = makeMultiplexedAlphabet("mpx", UnicodeSets);
-            mExternalTable.declareExternal(Unicode, mpx->getName() + "_basis", new MultiplexedExternal(mpx));
-            for (unsigned i = 0; i < schema.Column.size(); ++i) {
-                auto & column = schema.Column[i];
-                RE * re = transformCCs(mpx, column.Expression, NameTransformationMode::None);
-                column.Expression = MT.transformRE(re);
-            }
-        }
+//        const auto UnicodeSets = collectCCs(makeSeq(tmp.begin(), tmp.end()), *mIndexAlphabet);
+//        if (!UnicodeSets.empty()) {
+//            auto mpx = makeMultiplexedAlphabet("mpx", UnicodeSets);
+//            mExternalTable.declareExternal(Unicode, mpx->getName() + "_basis", new MultiplexedExternal(mpx));
+//            for (unsigned i = 0; i < schema.Column.size(); ++i) {
+//                auto & column = schema.Column[i];
+//                RE * re = transformCCs(mpx, column.Expression, NameTransformationMode::None);
+//                column.Expression = MT.transformRE(re);
+//            }
+//        }
     }
 
     auto indexCode = mExternalTable.getStreamIndex(mIndexAlphabet->getCode());
@@ -336,7 +343,7 @@ CSVValidatorFunctionType CSVMatcherEngine::compile(CPUDriver & pxDriver, const s
 
     StreamSet * csvCCs = P->CreateStreamSet(5);
     P->CreateKernelCall<CSVlexer>(BasisBits, csvCCs);
-    StreamSet * fieldData = P->CreateStreamSet(3);
+    StreamSet * fieldData = P->CreateStreamSet(2);
     StreamSet * allSeparators = P->CreateStreamSet(1);
 
     P->CreateKernelCall<CSVDataParser>(csvCCs, fieldData, allSeparators);

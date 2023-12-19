@@ -16,9 +16,10 @@ protected:
 };
 
 enum CSVDataParserFieldData {
-    FieldData = 0
+    RecordSeparatorsAndNonText = 0
     , StartPositions = 1
-    , RecordSeperator = 2
+//
+    , CSVDataParserFieldDataCount = 2
 };
 
 

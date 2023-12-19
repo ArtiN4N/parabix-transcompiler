@@ -794,7 +794,8 @@ RE_Parser::RE_Parser(const std::string & regular_expression)
 , mGroupsOpen(0)
 , mCursor(regular_expression)
 , mCaptureGroupCount(0)
-, mReSyntax(RE_Syntax::PCRE) {
+, mReSyntax(RE_Syntax::PCRE)
+, mRegularExpression(regular_expression) {
 
 }
 

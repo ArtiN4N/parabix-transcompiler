@@ -83,6 +83,10 @@ protected:
             return mEnd - mCursor;
         }
 
+        inline cursor_t::difference_type offset() const {
+            return mCursor - mStart;
+        }
+
         inline cursor_t pos() const {
             return mCursor;
         }
@@ -119,8 +123,8 @@ protected:
     
     inline bool require(char c) {
         if (accept(c)) return true;
-        if (mCursor.noMore()) ParseFailure("Expecting " + std::string(1, c) + " but end of input encountered");
-        ParseFailure("Expecting " + std::string(1, c) + " but " + std::string(1, *mCursor) + " encountered");
+        if (mCursor.noMore()) ParseFailure("Expecting " + std::string(1, c) + " but end of input encountered of " + mRegularExpression);
+        ParseFailure("Expecting " + std::string(1, c) + " but " + std::string(1, *mCursor) + " encountered at position " + std::to_string(mCursor.offset()));
         return false;
     }
     
@@ -153,9 +157,9 @@ protected:
     
     inline bool require(std::string s) {
         if (accept(s)) return true;
-        if (mCursor.noMore()) ParseFailure("Expecting " + s + " but end of input encountered");
+        if (mCursor.noMore()) ParseFailure("Expecting " + s + " but end of input encountered of " + mRegularExpression);
         size_t rem = mCursor.remaining();
-        ParseFailure("Expecting " + s + " but " + std::string(mCursor.pos(), mCursor.pos() + std::min(rem, s.length())) + " encountered");
+        ParseFailure("Expecting " + s + " but " + std::string(mCursor.pos(), mCursor.pos() + std::min(rem, s.length())) + " encountered at position " + std::to_string(mCursor.offset()));
         return false;
     }
     
@@ -249,6 +253,7 @@ protected:
     RE_Syntax                   mReSyntax;
     NameMap                     mNameMap;
     std::map<std::string, std::pair<re::Capture *, unsigned>> mCaptureMap;
+    const std::string &         mRegularExpression;
 };
 
 }

@@ -34,7 +34,7 @@ struct CC_Collector final : public RE_Inspector {
     void inspectCC(CC * cc) final {
         if (mUnionCC->empty()) {
             mUnionCC = cc;
-        } else {
+        } else if (mUnionCC->getAlphabet() == cc->getAlphabet()) {
             mUnionCC = makeCC(cc, mUnionCC);
         }
     }

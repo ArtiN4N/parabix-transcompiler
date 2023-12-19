@@ -411,7 +411,6 @@ CSVSchema CSVSchemaParser::load(const llvm::StringRef fileName) {
                 }
 
                 const StringRef exprName = readColumnValidationExprName();
-
                 if (exprName.equals("regex")) {
 
                     // 	RegExpExpr	::=	"regex(" StringLiteral ")"
@@ -423,8 +422,8 @@ CSVSchema CSVSchemaParser::load(const llvm::StringRef fileName) {
                     skipSpaceUntilNewLine();
                     const auto re = parseStringLiteral();
                     rule.Expression = re::RE_Parser::parse(re.str());
-                    errs() << "INPUT RE:\n\n" << re << ":\n\n"
-                           << Printer_RE::PrintRE(rule.Expression) << "\n\n\n";
+//                    errs() << "INPUT RE:\n\n" << re << ":\n\n"
+//                           << Printer_RE::PrintRE(rule.Expression) << "\n\n\n";
                     skipSpaceUntilNewLine();
                     requireChar(')', "expected )");
                 } else if (exprName.equals("unique")) {
@@ -523,6 +522,8 @@ done_parsing_column_rule:
         } else if (schema.TotalColumns != schema.Column.size()) {
             report_fatal_error("Total columns does not match number of column rules");
         }
+    } else {
+        report_fatal_error("Cannot open " + fileName);
     }
 
     return schema;
