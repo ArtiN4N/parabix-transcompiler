@@ -424,7 +424,7 @@ CSVSchema CSVSchemaParser::load(const llvm::StringRef fileName) {
                     rule.Expression = re::RE_Parser::parse(re.str());
 //                    errs() << "INPUT RE:\n\n" << re << ":\n\n"
 //                           << Printer_RE::PrintRE(rule.Expression) << "\n\n\n";
-                    skipSpaceUntilNewLine();
+                    skipSpace();
                     requireChar(')', "expected )");
                 } else if (exprName.equals("unique")) {
                     // 	UniqueExpr	::=	"unique" ("(" ColumnRef ("," ColumnRef)* ")")?
@@ -442,7 +442,8 @@ CSVSchema CSVSchemaParser::load(const llvm::StringRef fileName) {
                     const auto u = findOrAddKey(rule.Name);
 
                     CSVSchemaCompositeKey key;
-                    key.Fields.push_back(u);
+                    auto & fields = key.Fields;
+                    fields.push_back(u);
 
                     skipSpaceUntilNewLine();
 
@@ -452,7 +453,7 @@ CSVSchema CSVSchemaParser::load(const llvm::StringRef fileName) {
                             requireChar('$', "expected $ before column identifier");
                             auto name = parseQuotedOrNonQuotedColumnIdentifier();
                             const auto v = findOrAddKey(name.str());
-                            key.Fields.push_back(v);
+                            fields.push_back(v);
                             skipSpaceUntilNewLine();
                             if (matchChar(')')) {
                                 break;
@@ -460,6 +461,9 @@ CSVSchema CSVSchemaParser::load(const llvm::StringRef fileName) {
                                 requireChar(',', "expected , or )");
                             }
                         }
+
+                        std::sort(fields.begin(), fields.end());
+                        fields.erase(std::unique( fields.begin(), fields.end()), fields.end() );
                     }
 
                     schema.CompositeKey.emplace_back(key);

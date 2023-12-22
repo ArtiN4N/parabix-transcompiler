@@ -54,7 +54,7 @@ class ExtractCoordinateSequence : public MultiBlockKernel {
 public:
     ExtractCoordinateSequence(BuilderRef b, StreamSet * const Matches, StreamSet * const Coordinates, unsigned strideBlocks = 1);
 private:
-    void generateMultiBlockLogic(BuilderRef iBuilder, llvm::Value * const numOfStrides) override;
+    void generateMultiBlockLogic(BuilderRef b, llvm::Value * const numOfStrides) override;
 };
 
 }

@@ -209,6 +209,14 @@ public:
 };
 template<> class TypeBuilder<double, true> {};
 
+template<> class TypeBuilder<bool, false> {
+public:
+  static Type *get(LLVMContext& C) {
+    return Type::getInt1Ty(C);
+  }
+};
+template<> class TypeBuilder<bool, true> {};
+
 template<bool cross> class TypeBuilder<types::ieee_float, cross> {
 public:
   static Type *get(LLVMContext& C) { return Type::getFloatTy(C); }

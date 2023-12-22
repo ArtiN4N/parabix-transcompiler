@@ -15,8 +15,8 @@ extern "C" void csv_error_identifier_callback(char * fileName, const size_t fiel
     SmallVector<char, 1024> tmp;
     raw_svector_ostream out(tmp);
     out << "Error found in " << fileName << ": Field " << fieldNum << " of Record " << recordNum
-        << '\n'
-        << "start: " << bytePos << " length: " << (end - start)
+     //   << '\n'
+     //   << "start: " << bytePos << " length: " << (end - start)
         << "\n\n";
     for (auto c = start; c < end; ++c) {
         out << *c;
@@ -222,8 +222,11 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
 
     Value * const firstErrorWord = b->CreateExtractElement(errorVec, firstErrorWordIndex);
     Value * const firstErrorWordPos = b->CreateCountForwardZeroes(firstErrorWord, "", true);
-    Value * const firstErrorSeparator = b->CreateAdd(b->CreateMul(firstErrorWordIndex, sz_SIZEWIDTH), firstErrorWordPos);
-    Value * const errorMask = b->CreateNot(b->bitblock_mask_from(firstErrorSeparator));
+    Value * firstErrorSeparator = b->CreateAdd(b->CreateMul(firstErrorWordIndex, sz_SIZEWIDTH), firstErrorWordPos);
+
+    Value * const errorMask = b->CreateNot(b->bitblock_mask_from(firstErrorSeparator));    
+
+    firstErrorSeparator = b->CreateAdd(firstErrorSeparator, b->CreateMul(strideIndexPhi, sz_BITBLOCKWIDTH));
 
     Value * const unmaskedFinalValue = b->loadInputStreamBlock("allSeparators", i32_ZERO, strideIndexPhi);
     Value * const maskedFinalValue = b->CreateAnd(unmaskedFinalValue, errorMask);
@@ -243,7 +246,6 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
 
     Value * const potentialStartBlock = b->loadInputStreamBlock("allSeparators", i32_ZERO, updatedLastSeparatorBeforeErrorPhi);
     Value * const startPositionInFinalValue = b->CreateOr(b->bitblock_any(maskedFinalValue), b->CreateICmpEQ(updatedLastSeparatorBeforeErrorPhi, sz_ZERO));
-
     Value * const priorSeparatorBlock = b->CreateBitCast(b->CreateSelect(startPositionInFinalValue, maskedFinalValue, potentialStartBlock), sizeVecTy);
     Value * priorSeparatorWordIndex = sz_ZERO;
     for (unsigned i = 1; i < partialSumFieldCount; ++i) {
@@ -265,6 +267,7 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
     Value * const priorSeparatorBlockIdx = b->CreateSelect(startPositionInFinalValue, strideIndexPhi, updatedLastSeparatorBeforeErrorPhi);
 
     Value * const priorSeparator = b->CreateAdd(b->CreateMul(priorSeparatorBlockIdx, sz_BITBLOCKWIDTH), priorSeparatorPos);
+
     callbackArgs[3] = priorSeparator;
     callbackArgs[4] = b->getRawInputPointer("InputStream", priorSeparator);
     callbackArgs[5] = b->getRawInputPointer("InputStream", firstErrorSeparator);

@@ -402,13 +402,16 @@ CSVValidatorFunctionType CSVMatcherEngine::compile(CPUDriver & pxDriver, const s
 
         P->CreateKernelCall<StreamCompressKernel>(hash_bit_selector, compressed, outputs, sizeTyWidth);
 
-        StreamSet * const hashVals = P->CreateStreamSet(1, NumOfHashBits);
+        StreamSet * hashVals;
 
         if (NumOfHashBits <= 8) {
+            hashVals = P->CreateStreamSet(1, 8);
             P->CreateKernelCall<P2SKernel>(outputs, hashVals);
         } else if (NumOfHashBits <= 16) {
+            hashVals = P->CreateStreamSet(1, 16);
             P->CreateKernelCall<P2S16Kernel>(outputs, hashVals);
         } else {
+            hashVals = P->CreateStreamSet(1, 32);
             P->CreateKernelCall<P2S32Kernel>(outputs, hashVals);
         }
 

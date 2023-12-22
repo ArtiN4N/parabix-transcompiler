@@ -92,9 +92,9 @@ void CSVDataParser::generatePabloMethod() {
     PabloAST * nonText = pb.createOr3(CRofCRLF, formattingQuotes, quote_escape);
 
     PabloAST * recordSeparatorsAndNonText = pb.createOr(recordSeparators, nonText);
-    PabloAST * start = pb.createAdvanceThenScanThru(recordSeparators, nonText);
+    PabloAST * start = pb.createScanThru(recordSeparators, recordSeparatorsAndNonText);
     if (noHeaderLine) {
-        start = pb.createNot(pb.createAdvance(pb.createNot(start), 1));
+        start = pb.createOr(pb.createNot(pb.createAdvance(pb.createOnes(), 1)), start);
     } else {
         PabloAST * const afterHeader = pb.createSpanAfterFirst(recordSeparators, "afterHeader");
         allSeparators = pb.createAnd(allSeparators, afterHeader);
@@ -154,7 +154,6 @@ void ExtractCoordinateSequence::generateMultiBlockLogic(BuilderRef b, Value * co
 
     Type * const blockTy = b->getBitBlockType();
 
-
     assert ((mStride % sizeTyWidth ) == 0);
 
     const auto vecsPerStride = mStride / sizeTyWidth;
@@ -170,70 +169,83 @@ void ExtractCoordinateSequence::generateMultiBlockLogic(BuilderRef b, Value * co
     BasicBlock * const strideCoordinateVecDone = b->CreateBasicBlock("strideCoordinateVecDone");
     BasicBlock * const strideCoordinatesDone = b->CreateBasicBlock("strideCoordinatesDone");
 
-    Value * const processedMarkers = b->getProcessedItemCount("markers");
+    Value * const markersProcessed = b->getProcessedItemCount("markers");
+
     StreamSet * const coordinates = b->getOutputStreamSet("Coordinates");
     IntegerType * const coordinateTy = b->getIntNTy(coordinates->getFieldWidth());
-    Value * const coordinatePtr = b->getRawOutputPointer("Coordinates", b->getProducedItemCount("Coordinates"));
+    Value * const alreadyProduced = b->getProducedItemCount("Coordinates");
+    Value * const coordinatePtr = b->getRawOutputPointer("Coordinates", sz_ZERO);
     b->CreateBr(stridePrologue);
 
     b->SetInsertPoint(stridePrologue);
     PHINode * const strideNumPhi = b->CreatePHI(sizeTy, 2);
     strideNumPhi->addIncoming(sz_ZERO, entryBlock);
-    PHINode * const currentProcessed = b->CreatePHI(sizeTy, 2);
-    currentProcessed->addIncoming(processedMarkers, entryBlock);
-    PHINode * const outerCoordinatePtrPhi = b->CreatePHI(coordinatePtr->getType(), 2);
-    outerCoordinatePtrPhi->addIncoming(coordinatePtr, entryBlock);
+    PHINode * const currentProcessedPhi = b->CreatePHI(sizeTy, 2);
+    currentProcessedPhi->addIncoming(markersProcessed, entryBlock);
+    PHINode * const outerCoordinatePhi = b->CreatePHI(sizeTy, 2);
+    outerCoordinatePhi->addIncoming(alreadyProduced, entryBlock);
 
     Value * const currentMarks = b->loadInputStreamBlock("markers", sz_ZERO, strideNumPhi);
     FixedVectorType * const sizeVecTy = FixedVectorType::get(sizeTy, vecsPerStride);
-    Value * currentVec = b->CreateBitCast(currentMarks, sizeVecTy);
 
+    Value * a = b->simd_popcount(b->getBitBlockWidth(), currentMarks);
+    a = b->CreateBitCast(a, b->getIntNTy(b->getBitBlockWidth()));
+    a = b->CreateTrunc(a, sizeTy);
+
+    Value * expected = b->CreateAdd(a, outerCoordinatePhi);
+
+    Value * const currentVec = b->CreateBitCast(currentMarks, sizeVecTy);
     b->CreateLikelyCondBr(b->bitblock_any(currentMarks), strideCoordinateVecLoop, strideCoordinateVecDone);
 
     b->SetInsertPoint(strideCoordinateVecLoop);
     PHINode * const elemIdx = b->CreatePHI(sizeTy, 2, "elemIdx");
     elemIdx->addIncoming(sz_ZERO, stridePrologue);
-    PHINode * const incomingOuterCoordinatePtrPhi = b->CreatePHI(coordinatePtr->getType(), 2);
-    incomingOuterCoordinatePtrPhi->addIncoming(outerCoordinatePtrPhi, stridePrologue);
+    PHINode * const incomingOuterCoordinatePhi = b->CreatePHI(sizeTy, 2);
+    incomingOuterCoordinatePhi->addIncoming(outerCoordinatePhi, stridePrologue);
     Value * const elem = b->CreateExtractElement(currentVec, elemIdx);
     b->CreateCondBr(b->CreateICmpNE(elem, sz_ZERO), strideCoordinateElemLoop, strideCoordinateElemDone);
 
     b->SetInsertPoint(strideCoordinateElemLoop);
     PHINode * const remaining = b->CreatePHI(sizeTy, 2);
     remaining->addIncoming(elem, strideCoordinateVecLoop);
-    PHINode * const innerCoordinatePtrPhi = b->CreatePHI(coordinatePtr->getType(), 2);
-    innerCoordinatePtrPhi->addIncoming(incomingOuterCoordinatePtrPhi, strideCoordinateVecLoop);
+    PHINode * const innerCoordinatePhi = b->CreatePHI(sizeTy, 2);
+    innerCoordinatePhi->addIncoming(incomingOuterCoordinatePhi, strideCoordinateVecLoop);
 
-    Value * pos = b->CreateCountForwardZeroes(remaining);
-    pos = b->CreateAdd(pos, b->CreateMul(elemIdx, sz_BITS));
-    pos = b->CreateAdd(pos, currentProcessed);
-    b->CreateStore(pos, innerCoordinatePtrPhi);
+    Value * elempos = b->CreateCountForwardZeroes(remaining);
+    Value * position = b->CreateAdd(elempos, b->CreateMul(elemIdx, sz_BITS));
+    position = b->CreateAdd(position, currentProcessedPhi);
+    b->CreateStore(position, b->CreateGEP(coordinateTy, coordinatePtr, innerCoordinatePhi));
 
-    Value * const nextCoordPtr = b->CreateGEP(coordinateTy, innerCoordinatePtrPhi, sz_ONE);
-    innerCoordinatePtrPhi->addIncoming(nextCoordPtr, strideCoordinateElemLoop);
-    Value * const nextRemaining = b->CreateResetLowestBit(remaining);
+    Value * const nextCoord = b->CreateAdd(innerCoordinatePhi, sz_ONE);
+    innerCoordinatePhi->addIncoming(nextCoord, strideCoordinateElemLoop);
+
+    Value * const nextRemaining = b->CreateXor(remaining, b->CreateShl(sz_ONE, elempos));
     remaining->addIncoming(nextRemaining, strideCoordinateElemLoop);
     b->CreateCondBr(b->CreateICmpNE(nextRemaining, sz_ZERO), strideCoordinateElemLoop, strideCoordinateElemDone);
 
     b->SetInsertPoint(strideCoordinateElemDone);
-    PHINode * const nextCoordinatePtrPhi = b->CreatePHI(coordinatePtr->getType(), 2);
-    nextCoordinatePtrPhi->addIncoming(outerCoordinatePtrPhi, strideCoordinateVecLoop);
-    nextCoordinatePtrPhi->addIncoming(nextCoordPtr, strideCoordinateElemLoop);
-    incomingOuterCoordinatePtrPhi->addIncoming(nextCoordinatePtrPhi, strideCoordinateElemDone);
+    PHINode * const nextCoordinatePhi = b->CreatePHI(sizeTy, 2);
+    nextCoordinatePhi->addIncoming(incomingOuterCoordinatePhi, strideCoordinateVecLoop);
+    nextCoordinatePhi->addIncoming(nextCoord, strideCoordinateElemLoop);
+
+
+    incomingOuterCoordinatePhi->addIncoming(nextCoordinatePhi, strideCoordinateElemDone);
     Value * const nextElemIdx = b->CreateAdd(elemIdx, sz_ONE);
     elemIdx->addIncoming(nextElemIdx, strideCoordinateElemDone);
     Value * const moreVecs = b->CreateICmpNE(nextElemIdx, b->getSize(vecsPerStride));
     b->CreateCondBr(moreVecs, strideCoordinateVecLoop, strideCoordinateVecDone);
 
     b->SetInsertPoint(strideCoordinateVecDone);
-    PHINode * const nextOuterCoordinatePtrPhi = b->CreatePHI(coordinatePtr->getType(), 2);
-    nextOuterCoordinatePtrPhi->addIncoming(outerCoordinatePtrPhi, stridePrologue);
-    nextOuterCoordinatePtrPhi->addIncoming(nextCoordinatePtrPhi, strideCoordinateElemDone);
+    PHINode * const nextOuterCoordinatePhi = b->CreatePHI(sizeTy, 2);
+    nextOuterCoordinatePhi->addIncoming(outerCoordinatePhi, stridePrologue);
+    nextOuterCoordinatePhi->addIncoming(nextCoordinatePhi, strideCoordinateElemDone);
+    outerCoordinatePhi->addIncoming(nextOuterCoordinatePhi, strideCoordinateVecDone);
+
+    Value * nextProcessed = b->CreateAdd(currentProcessedPhi, b->getSize(mStride));
+    currentProcessedPhi->addIncoming(nextProcessed, strideCoordinateVecDone);
+
     Value * const nextStrideNum = b->CreateAdd(strideNumPhi, sz_ONE);
     strideNumPhi->addIncoming(nextStrideNum, strideCoordinateVecDone);
-    currentProcessed->addIncoming(b->CreateAdd(currentProcessed, b->getSize(mStride)), strideCoordinateVecDone);
-    outerCoordinatePtrPhi->addIncoming(nextOuterCoordinatePtrPhi, strideCoordinateVecDone);
-
     b->CreateCondBr(b->CreateICmpULT(nextStrideNum, numOfStrides), stridePrologue, strideCoordinatesDone);
 
     b->SetInsertPoint(strideCoordinatesDone);

@@ -37,7 +37,7 @@ class alignas(CACHE_LINE_SIZE) HashArrayMappedTrie  {
 
 public:
 
-    bool findOrAdd(const uint32_t hashKey, const char * start, const char * end, ValueType value, size_t * hashValue) {
+    bool findOrAdd(const uint32_t hashKey, const char * start, const char * end, ValueType value, size_t & hashValue) {
 
         const auto mask = (1ULL << HashBitsPerTrie) - 1ULL;
         void ** current = Root;
@@ -59,6 +59,8 @@ public:
 
         DataNode * prior = nullptr;
 
+        assert (start <= end);
+
         const size_t length = end - start;
 
         for (;;) {
@@ -70,7 +72,7 @@ public:
                 newNode->Start = string;
                 newNode->Length = length;
                 const auto hv = NodeCount++;
-                *hashValue = hv;
+                hashValue = hv;
                 newNode->HashValue = hv;
                 newNode->DataValue = value;
                 newNode->Next = prior;
@@ -82,7 +84,7 @@ public:
 
             if (prior->Length == length) {
                 if (std::strncmp(prior->Start, start, length) == 0) {
-                    *hashValue = prior->HashValue;
+                    hashValue = prior->HashValue;
                     return true;
                 }
             }
@@ -103,6 +105,7 @@ public:
         NodeCount = 0;
     }
 
+
 private:
 
     SlabAllocator<char> mInternalAllocator;
@@ -120,19 +123,19 @@ HashArrayMappedTrie * construct_n_tries(const size_t n) {
     return tries;
 }
 
-bool check_hash_code(HashArrayMappedTrie * const table, const uint32_t hashCode, const char * start, const char * end, const size_t lineNum, size_t * out) {
+bool check_hash_code(HashArrayMappedTrie * const table, const uint32_t hashCode, const char * start, const char * end, const size_t lineNum, size_t & out) {
     return table->findOrAdd(hashCode, start, end, lineNum, out);
 }
 
-void report_duplicate_key(HashArrayMappedTrie * const table, const size_t failingLineNum, const size_t originalLineNum) {
-    errs() << "duplicate key found on row " << failingLineNum << " (originally observed on " << originalLineNum << ")";
+void report_duplicate_key(void * const table, const size_t failingLineNum, const size_t originalLineNum) {
+    errs() << "duplicate key found on row " << (failingLineNum + 1) << " (originally observed on " << (originalLineNum + 1) << ")";
 }
 
 void deconstruct_n_tries(HashArrayMappedTrie * const tables, const size_t n) {
-    for (size_t i = 0; i < n; ++i) {
-        (tables + i)->~HashArrayMappedTrie();
-    }
-    std::free(tables);
+//    for (size_t i = 0; i < n; ++i) {
+//        (tables + i)->~HashArrayMappedTrie();
+//    }
+//    std::free(tables);
 }
 
 CheckKeyUniqueness::Config CheckKeyUniqueness::makeCreateHashTableConfig(const csv::CSVSchema & schema, const size_t bitsPerHashCode) {
@@ -231,11 +234,13 @@ void CheckKeyUniqueness::linkExternalMethods(BuilderRef b) {
     PointerType * const voidPtrTy = b->getVoidPtrTy();
 
     BEGIN_SCOPED_REGION
-    FixedArray<Type *, 4> paramTys;
-    paramTys[0] = b->getInt32Ty();
-    paramTys[1] = sizeTy->getPointerTo();
-    paramTys[2] = b->getInt8PtrTy()->getPointerTo();
-    paramTys[3] = b->getSizeTy();
+    FixedArray<Type *, 6> paramTys;
+    paramTys[0] = voidPtrTy;
+    paramTys[1] = b->getInt32Ty();
+    paramTys[2] = b->getInt8PtrTy();
+    paramTys[3] = b->getInt8PtrTy();
+    paramTys[4] = sizeTy;
+    paramTys[5] = sizeTy->getPointerTo();
     FunctionType * fty = FunctionType::get(b->getInt1Ty(), paramTys, false);
     b->LinkFunction("check_hash_code", fty, (void*)check_hash_code);
     END_SCOPED_REGION
@@ -279,6 +284,8 @@ void CheckKeyUniqueness::generateDoSegmentMethod(BuilderRef b) {
 
     Constant * const sz_ZERO = b->getSize(0);
     Constant * const sz_ONE = b->getSize(1);
+    Constant * const sz_TWO = b->getSize(2);
+    Constant * const sz_STRIDE = b->getSize(mStride);
     IntegerType *  const sizeTy = b->getSizeTy();
     IntegerType * const i32Ty = b->getInt32Ty();
 
@@ -337,12 +344,12 @@ has_unique_key:
     Value * const hashValueArray = b->CreateAllocaAtEntryPoint(hashValueArrayTy);
     Value * const outValueArray = b->CreateAllocaAtEntryPoint(hashValueArrayTy);
 
-    Value * const numOfUnprocessedHashCodes = b->getAccessibleItemCount("HashCodes");
-    Value * const totalHashCodeProcessed = b->CreateAdd(hashCodesProcessed, numOfUnprocessedHashCodes);
+    Value * const unprocessedHashCodes = b->getAccessibleItemCount("HashCodes");
+    Value * const totalHashCodeProcessed = b->CreateAdd(hashCodesProcessed, unprocessedHashCodes);
 
     Value * const initial = b->getProcessedItemCount("InputStream");
 
-    b->CreateLikelyCondBr(b->CreateICmpNE(numOfUnprocessedHashCodes, sz_ZERO), loopStart, loopEnd);
+    b->CreateLikelyCondBr(b->CreateICmpNE(unprocessedHashCodes, sz_ZERO), loopStart, loopEnd);
 
     b->SetInsertPoint(loopStart);
     PHINode * const hashCodesProcessedPhi = b->CreatePHI(sizeTy, 2);
@@ -350,15 +357,14 @@ has_unique_key:
 
     FixedArray<Value *, 6> args;
 
-    args[4] = b->CreateExactUDiv(hashCodesProcessedPhi, b->getSize(mStride));
-
     Module * const m = b->getModule();
 
     Function * checkHashCodeFn = m->getFunction("check_hash_code");
+    assert (checkHashCodeFn->getFunctionType()->getNumParams() == 6);
 
     size_t currentKey = 0;
 
-    Value * endOfLastSymbol = nullptr;
+    Value * endPosition = nullptr;
 
     const auto bw = sizeTy->getBitWidth();
 
@@ -379,23 +385,31 @@ has_unique_key:
     };
 
     IntegerType * int8Ty = b->getInt8Ty();
+    Type * const voidPtrTy = b->getVoidPtrTy();
 
-    Value * const baseHashTableObjects = b->CreatePointerCast(b->getScalarField("hashTableObjects"), b->getInt8PtrTy());
+    Value * baseHashTableObjects = b->getScalarField("hashTableObjects");
+    assert (baseHashTableObjects->getType() == voidPtrTy);
+    baseHashTableObjects = b->CreatePointerCast(baseHashTableObjects, voidPtrTy); // ->getPointerTo())
+
+    Value * const lineNum = b->CreateExactUDiv(hashCodesProcessedPhi, sz_STRIDE);
 
     for (unsigned i = 0; i < mStride; ++i) {
 
         ConstantInt * const sz_Offset = b->getSize(i * sizeof(HashArrayMappedTrie));
-        args[0] = b->CreateGEP(int8Ty, baseHashTableObjects, sz_Offset);
-        Value * const hashCodePtr = b->CreateGEP(hashCodesTy, baseHashCodePtr, b->CreateAdd(hashCodesProcessedPhi, b->getSize(i)));
+        args[0] = b->CreateGEP(voidPtrTy, baseHashTableObjects, sz_Offset);
+        Value * const hashIndex = b->CreateAdd(hashCodesProcessedPhi, b->getSize(i));
+        Value * const hashCodePtr = b->CreateGEP(hashCodesTy, baseHashCodePtr, hashIndex);
         args[1] = b->CreateZExt(b->CreateLoad(hashCodesTy, hashCodePtr), i32Ty);
-        Value * const startPtr = b->CreateGEP(coordinatesTy, baseCoordinatePtr, b->CreateAdd(hashCodesProcessedPhi, b->getSize(i * 2)));
-        args[2] = b->CreateGEP(baseInputTy, baseInputPtr, b->CreateLoad(coordinatesTy, startPtr));
-        Value * const endPtr = b->CreateGEP(coordinatesTy, baseCoordinatePtr, b->CreateAdd(hashCodesProcessedPhi, b->getSize(i * 2 + 1)));
-        endOfLastSymbol = b->CreateLoad(coordinatesTy, endPtr);
-        args[3] = b->CreateGEP(baseInputTy, baseInputPtr, endOfLastSymbol);
-
+        Value * const startCoordIndex = b->CreateMul(hashIndex, sz_TWO);
+        Value * const startPtr = b->CreateGEP(coordinatesTy, baseCoordinatePtr, startCoordIndex);
+        Value * const startPosition = b->CreateLoad(coordinatesTy, startPtr);
+        args[2] = b->CreateGEP(int8Ty, baseInputPtr, startPosition);
+        Value * const endCoordIndex = b->CreateAdd(startCoordIndex, sz_ONE);
+        Value * const endPtr = b->CreateGEP(coordinatesTy, baseCoordinatePtr, endCoordIndex);
+        endPosition = b->CreateLoad(coordinatesTy, endPtr);
+        args[3] = b->CreateGEP(int8Ty, baseInputPtr, endPosition);
+        args[4] = lineNum;
         args[5] = b->CreateGEP(sizeTy, hashValueArray, b->getSize(i));
-
         Value * result = b->CreateCall(checkHashCodeFn->getFunctionType(), checkHashCodeFn, args);
 
         if (LLVM_LIKELY(mustBeUnique.test(i))) {
@@ -404,7 +418,7 @@ has_unique_key:
 
     }
 
-    assert (endOfLastSymbol);
+    assert (endPosition);
 
     if (compositeKeys > 0) {
 
@@ -449,14 +463,12 @@ has_unique_key:
                 }
 
                 ConstantInt * const sz_Offset = b->getSize(compositeKeyIndex * sizeof(HashArrayMappedTrie));
-                args[0] = b->CreateGEP(int8Ty, baseHashTableObjects, sz_Offset);
-
+                args[0] = b->CreateGEP(voidPtrTy, baseHashTableObjects, sz_Offset);
                 args[1] = hashCode;
                 args[2] = startBasePtr;
                 args[3] = b->CreateGEP(int8Ty, startBasePtr, b->getSize(n * sizeof(size_t)));
-
+                args[4] = lineNum;
                 args[5] = b->CreateGEP(sizeTy, hashValueArray, b->getSize(compositeKeyIndex));
-
                 Value *  result = b->CreateCall(checkHashCodeFn->getFunctionType(), checkHashCodeFn, args);
 
                 updateResultArray(result, compositeKeyIndex++);
@@ -491,11 +503,11 @@ skip_composite_key:
     }
 
     FixedArray<Value *, 3> reportArgs;
+    Function * reportDuplicateKeyFn = m->getFunction("report_duplicate_key");
     Value * const sz_Offset = b->CreateMul(b->getSize(sizeof(HashArrayMappedTrie)), failingKey);
     reportArgs[0] = b->CreateGEP(int8Ty, baseHashTableObjects, sz_Offset);
-    reportArgs[1] = args[4];
+    reportArgs[1] = lineNum;
     reportArgs[2] = b->CreateLoad(sizeTy, b->CreateGEP(sizeTy, hashValueArray, failingKey));
-    Function * reportDuplicateKeyFn = m->getFunction("report_duplicate_key");
     b->CreateCall(reportDuplicateKeyFn, reportArgs);
 
     // TODO: to make warnings work, have this construct a constant array to indicate
@@ -509,15 +521,15 @@ skip_composite_key:
     b->SetInsertPoint(continueToNext);
 
 
-    Value * const nextHashCodesProcessed = b->CreateAdd(hashCodesProcessedPhi, b->getSize(mStride));
-    hashCodesProcessedPhi->addIncoming(nextHashCodesProcessed, entry);
+    Value * const nextHashCodesProcessed = b->CreateAdd(hashCodesProcessedPhi, sz_STRIDE);
+    hashCodesProcessedPhi->addIncoming(nextHashCodesProcessed, continueToNext);
     Value * const notDone = b->CreateICmpULT(nextHashCodesProcessed, totalHashCodeProcessed);
     b->CreateCondBr(notDone, loopStart, loopEnd);
 
     b->SetInsertPoint(loopEnd);
     PHINode * const finalPos = b->CreatePHI(sizeTy, 2);
     finalPos->addIncoming(initial, entry);
-    finalPos->addIncoming(endOfLastSymbol, continueToNext);
+    finalPos->addIncoming(endPosition, continueToNext);
     b->setProcessedItemCount("InputStream", finalPos);
 }
 

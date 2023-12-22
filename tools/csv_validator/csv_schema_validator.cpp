@@ -217,23 +217,21 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
         }
     }
 
-    // TODO: if we started with a carry bit set initially, we wouldn't need the start position stream.
-
-    PabloAST * warning = nullptr;
-
-    Var * starts = pb.createExtract(fd, pb.getInteger(CSVDataParserFieldData::StartPositions));
-
-    PabloAST * currentPos = starts;
-
-    PabloAST * allSeparatorsMatches = nullptr;
-
     PabloAST * const recordSeparators = pb.createAnd(recordSeparatorsAndNonText, allSeparators, "recordSeparators");
     PabloAST * const fieldSeparators = pb.createAnd(allSeparators, pb.createNot(recordSeparators), "fieldSeparators");
     PabloAST * const nonSeperators = pb.createInFile(pb.createNot(allSeparators), "nonSeparators");
 
-    for (unsigned i = 0; i < n; ++i) {
-        PabloAST * const fieldStart = currentPos;
+    // TODO: if we started with a carry bit set initially, we wouldn't need the start position stream.
+    // However, this would need to be aware of whether we're ignoring the first line or not.
+    PabloAST * currentPos = pb.createExtract(fd, pb.getInteger(CSVDataParserFieldData::StartPositions));
 
+    PabloAST * warning = nullptr;
+
+    PabloAST * allSeparatorsMatches = nullptr;
+
+    for (unsigned i = 0; i < n; ++i) {
+
+        PabloAST * const fieldStart = currentPos;
         if (i == 0) {
             currentPos = pb.createScanThru(fieldStart, nonSeperators, "endOfField" + std::to_string(i));
         } else {
@@ -264,14 +262,11 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
             allSeparatorsMatches = currentPos;
         }
 
-        currentPos = pb.createScanThru(currentPos, nonSeperators);
-
         if (i < (n - 1)) {
             currentPos = pb.createAnd(currentPos, fieldSeparators, "matchedFieldSep" + std::to_string(i + 1));
         } else {
             currentPos = pb.createAnd(currentPos, recordSeparators, "matchedRecSep");
         }
-      //  pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, {currentPos});
 
         if (LLVM_UNLIKELY(usedInSchemaUID[i])) {
             if (args[0] == nullptr) {
@@ -297,13 +292,19 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
         pb.createAssign(pb.createExtract(invalid, pb.getInteger(1)), warning);
     }
 
+
+
     if (mSchema.CompositeKey.size() > 0) {
+        #warning this won't work with noHeader set if the key field is the first one
+
+        args[0] = pb.createAdvance(args[0], 1);
+
         PabloAST * const keyMarkers = pb.createOr(args[0], args[1]);
         pb.createAssign(pb.createExtract(getOutputStreamVar("hashKeyMarkers"), pb_ZERO), keyMarkers);
 
         PabloAST * const run = pb.createIntrinsicCall(pablo::Intrinsic::SpanUpTo, args, "run");
-        PabloAST * const hashableFieldData = pb.createAnd(run, nonSeperators);
-        pb.createAssign(pb.createExtract(getOutputStreamVar("hashKeyRuns"), pb_ZERO), hashableFieldData);
+       // PabloAST * const hashableFieldData = pb.createAnd(run, nonSeperators);
+        pb.createAssign(pb.createExtract(getOutputStreamVar("hashKeyRuns"), pb_ZERO), run);
     }
 
 
