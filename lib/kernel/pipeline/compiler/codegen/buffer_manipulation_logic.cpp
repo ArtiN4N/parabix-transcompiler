@@ -319,9 +319,6 @@ void PipelineCompiler::zeroInputAfterFinalItemCount(BuilderRef b, const Vec<Valu
                 Value * const requiredPtrInt = b->CreatePtrToInt(requiredPtr, intPtrTy);
 
                 Value * const mallocBytes = b->CreateSub(requiredPtrInt, initialPtrInt);
-
-
-
                 const auto blockSize = b->getBitBlockWidth() / 8;
                 const auto alignment = unaligned ? 1 : blockSize;
 
@@ -431,6 +428,7 @@ void PipelineCompiler::freeZeroedInputBuffers(BuilderRef b) {
     // free any truncated input buffers
     for (unsigned i = 0; i < mNumOfTruncatedInputBuffers; ++i) {
         b->CreateFree(b->CreateLoad(b->getInt8PtrTy(), mTruncatedInputBuffer[i]));
+        b->CreateStore(ConstantPointerNull::get(b->getInt8PtrTy()), mTruncatedInputBuffer[i]);
     }
 }
 

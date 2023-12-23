@@ -33,22 +33,3 @@ DEPS
     kernel.util
     toolchain
 )
-
-parabix_add_executable(
-NAME
-    hashtester
-SRC
-    hashtester.cpp
-    murmur3/MurmurHash3.cpp
-DEPS
-    fileselect
-    grep
-    pablo
-    kernel.basis
-    kernel.io
-    kernel.pipeline
-    kernel.streamutils
-    kernel.util
-    toolchain
-)
-

@@ -15,6 +15,8 @@
 #include <re/parse/PCRE_parser.h>
 #include <re/printer/re_printer.h>
 
+#include <llvm/Support/raw_ostream.h>
+
 using namespace llvm;
 using namespace boost;
 
@@ -271,11 +273,11 @@ CSVSchema CSVSchemaParser::load(const llvm::StringRef fileName) {
 
         auto findOrAddKey = [&](const std::string & name) -> size_t {
             auto f = M.find(name);
-            if (f == M.end()) {
+            if (f != M.end()) {
                 return f->second;
             } else {
                 const auto v = M.size();
-                M.emplace(name, M.size());
+                M.emplace(std::string{name}, M.size());
                 return v;
             }
         };
@@ -362,8 +364,7 @@ CSVSchema CSVSchemaParser::load(const llvm::StringRef fileName) {
                 }
             }
 
-            schema.Column.emplace_back();
-            CSVSchemaColumnRule & rule = schema.Column.back();
+            CSVSchemaColumnRule rule;
             rule.Name = name.str();
 
             // ColumnRule	::=	ColumnValidationExpr* ColumnDirectives
@@ -494,7 +495,7 @@ parse_column_directives:
                 }
             }
 done_parsing_column_rule:
-            continue;
+            schema.Column.emplace_back(rule);
         }
 
         if (LLVM_UNLIKELY(!M.empty())) {

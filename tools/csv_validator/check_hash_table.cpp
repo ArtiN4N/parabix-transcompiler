@@ -40,19 +40,21 @@ public:
     bool findOrAdd(const uint32_t hashKey, const char * start, const char * end, ValueType value, size_t & hashValue) {
 
         const auto mask = (1ULL << HashBitsPerTrie) - 1ULL;
-        void ** current = Root;
+        void * current = Root; assert (Root);
         auto key = hashKey;
         for (size_t i = 1; i < NumOfHashTrieLevels; ++i) {
-           void ** node = current + (key & mask);
+           const auto k = (key & mask);
+           assert (k < (1ULL << HashBitsPerTrie));
+           DataNode ** node = ((DataNode **)current) + k;
            if (*node == nullptr) {
-               void ** newNode = mInternalAllocator.allocate<void *>(1ULL << HashBitsPerTrie);
+               DataNode ** newNode = mInternalAllocator.allocate<DataNode *>(1ULL << HashBitsPerTrie);
                for (unsigned i = 0; i < (1ULL << HashBitsPerTrie); ++i) {
                    newNode[i] = nullptr;
                }
-               *node = newNode;
+               *node = (DataNode *)newNode;
            }
            key >>= HashBitsPerTrie;
-           current = node;
+           current = *node;
         }
 
         DataNode ** data = (DataNode **)current;
@@ -98,18 +100,19 @@ public:
 
     HashArrayMappedTrie() {
         mInternalAllocator.Reset();
-        Root = mInternalAllocator.allocate<void *>(1ULL << HashBitsPerTrie);
+        DataNode ** newRoot = mInternalAllocator.allocate<DataNode *>(1ULL << HashBitsPerTrie);
         for (unsigned i = 0; i < (1ULL << HashBitsPerTrie); ++i) {
-            Root[i] = nullptr;
+            newRoot[i] = nullptr;
         }
+        Root = newRoot;
         NodeCount = 0;
     }
 
 
 private:
 
-    SlabAllocator<char> mInternalAllocator;
-    void ** Root = nullptr;
+    SlabAllocator<void*> mInternalAllocator;
+    void * Root = nullptr;
     size_t NodeCount = 0;
 };
 
@@ -127,15 +130,16 @@ bool check_hash_code(HashArrayMappedTrie * const table, const uint32_t hashCode,
     return table->findOrAdd(hashCode, start, end, lineNum, out);
 }
 
-void report_duplicate_key(void * const table, const size_t failingLineNum, const size_t originalLineNum) {
+void report_duplicate_key(HashArrayMappedTrie * const table, const size_t failingLineNum, const size_t originalLineNum) {
     errs() << "duplicate key found on row " << (failingLineNum + 1) << " (originally observed on " << (originalLineNum + 1) << ")";
 }
 
 void deconstruct_n_tries(HashArrayMappedTrie * const tables, const size_t n) {
-//    for (size_t i = 0; i < n; ++i) {
-//        (tables + i)->~HashArrayMappedTrie();
-//    }
-//    std::free(tables);
+    errs() << " -- deconstruct_n_tries\n";
+    for (size_t i = 0; i < n; ++i) {
+        (tables + i)->~HashArrayMappedTrie();
+    }
+    std::free(tables);
 }
 
 CheckKeyUniqueness::Config CheckKeyUniqueness::makeCreateHashTableConfig(const csv::CSVSchema & schema, const size_t bitsPerHashCode) {
@@ -340,9 +344,9 @@ has_unique_key:
 
     const auto totalKeys = mStride + compositeKeys;
 
-    ArrayType * const hashValueArrayTy = ArrayType::get(sizeTy, totalKeys);
-    Value * const hashValueArray = b->CreateAllocaAtEntryPoint(hashValueArrayTy);
-    Value * const outValueArray = b->CreateAllocaAtEntryPoint(hashValueArrayTy);
+    ArrayType * const priorLineNumArrayTy = ArrayType::get(sizeTy, totalKeys);
+    Value * const priorLineNumArray = b->CreateAllocaAtEntryPoint(priorLineNumArrayTy);
+    Value * const outValueArray = b->CreateAllocaAtEntryPoint(priorLineNumArrayTy);
 
     Value * const unprocessedHashCodes = b->getAccessibleItemCount("HashCodes");
     Value * const totalHashCodeProcessed = b->CreateAdd(hashCodesProcessed, unprocessedHashCodes);
@@ -366,15 +370,15 @@ has_unique_key:
 
     Value * endPosition = nullptr;
 
-    const auto bw = sizeTy->getBitWidth();
+    const auto sizeTyBitWidth = sizeTy->getBitWidth();
 
-    SmallVector<Value *, 2> resultArray(ceil_udiv(totalKeys, bw), nullptr);
+    SmallVector<Value *, 2> resultArray(ceil_udiv(totalKeys, sizeTyBitWidth), nullptr);
 
     auto updateResultArray = [&](Value * result, const size_t k) {
 
         result = b->CreateZExt(result, sizeTy);
-        const auto index = ceil_udiv(k, bw);
-        const auto offset = k & (bw - 1);
+        const auto index = ceil_udiv(k, sizeTyBitWidth);
+        const auto offset = k & (sizeTyBitWidth - 1);
         if (offset > 0) {
             result = b->CreateShl(result, b->getSize(offset));
             result = b->CreateOr(result, resultArray[index]);
@@ -389,14 +393,17 @@ has_unique_key:
 
     Value * baseHashTableObjects = b->getScalarField("hashTableObjects");
     assert (baseHashTableObjects->getType() == voidPtrTy);
-    baseHashTableObjects = b->CreatePointerCast(baseHashTableObjects, voidPtrTy); // ->getPointerTo())
+    baseHashTableObjects = b->CreatePointerCast(baseHashTableObjects, voidPtrTy->getPointerTo());
 
     Value * const lineNum = b->CreateExactUDiv(hashCodesProcessedPhi, sz_STRIDE);
+
+    FixedArray<Value *, 2> priorLineNumIndex;
+    priorLineNumIndex[0] = sz_ZERO;
 
     for (unsigned i = 0; i < mStride; ++i) {
 
         ConstantInt * const sz_Offset = b->getSize(i * sizeof(HashArrayMappedTrie));
-        args[0] = b->CreateGEP(voidPtrTy, baseHashTableObjects, sz_Offset);
+        args[0] = b->CreatePointerCast(b->CreateGEP(voidPtrTy, baseHashTableObjects, sz_Offset), voidPtrTy);
         Value * const hashIndex = b->CreateAdd(hashCodesProcessedPhi, b->getSize(i));
         Value * const hashCodePtr = b->CreateGEP(hashCodesTy, baseHashCodePtr, hashIndex);
         args[1] = b->CreateZExt(b->CreateLoad(hashCodesTy, hashCodePtr), i32Ty);
@@ -409,7 +416,8 @@ has_unique_key:
         endPosition = b->CreateLoad(coordinatesTy, endPtr);
         args[3] = b->CreateGEP(int8Ty, baseInputPtr, endPosition);
         args[4] = lineNum;
-        args[5] = b->CreateGEP(sizeTy, hashValueArray, b->getSize(i));
+        priorLineNumIndex[1] = b->getSize(i);
+        args[5] = b->CreateGEP(priorLineNumArrayTy, priorLineNumArray, priorLineNumIndex);
         Value * result = b->CreateCall(checkHashCodeFn->getFunctionType(), checkHashCodeFn, args);
 
         if (LLVM_LIKELY(mustBeUnique.test(i))) {
@@ -451,7 +459,7 @@ has_unique_key:
 
                     const auto f = SetOfKeyColumns.find(*itr++);
                     const auto k = std::distance(SetOfKeyColumns.begin(), f);
-                    Value * const inPtr = b->CreateGEP(sizeTy, hashValueArray, b->getSize(k));
+                    Value * const inPtr = b->CreateGEP(sizeTy, priorLineNumArray, b->getSize(k));
                     Value * const outPtr = b->CreateGEP(sizeTy, outValueArray, b->getSize(j));
                     b->CreateStore(b->CreateLoad(sizeTy, inPtr), outPtr);
 
@@ -463,12 +471,13 @@ has_unique_key:
                 }
 
                 ConstantInt * const sz_Offset = b->getSize(compositeKeyIndex * sizeof(HashArrayMappedTrie));
-                args[0] = b->CreateGEP(voidPtrTy, baseHashTableObjects, sz_Offset);
+                args[0] = b->CreatePointerCast(b->CreateGEP(voidPtrTy, baseHashTableObjects, sz_Offset), voidPtrTy);
                 args[1] = hashCode;
                 args[2] = startBasePtr;
                 args[3] = b->CreateGEP(int8Ty, startBasePtr, b->getSize(n * sizeof(size_t)));
                 args[4] = lineNum;
-                args[5] = b->CreateGEP(sizeTy, hashValueArray, b->getSize(compositeKeyIndex));
+                priorLineNumIndex[1] = b->getSize(compositeKeyIndex);
+                args[5] = b->CreateGEP(priorLineNumArrayTy, priorLineNumArray, priorLineNumIndex);
                 Value *  result = b->CreateCall(checkHashCodeFn->getFunctionType(), checkHashCodeFn, args);
 
                 updateResultArray(result, compositeKeyIndex++);
@@ -495,9 +504,9 @@ skip_composite_key:
     for (unsigned i = 1; i < resultArray.size(); ++i) {
         Value * const alreadyFound = b->CreateICmpNE(earliestResult, sz_ZERO);
         earliestResult = b->CreateSelect(alreadyFound, earliestResult, resultArray[i]);
-        earliestResultOffset = b->CreateSelect(alreadyFound, earliestResultOffset, b->getSize(i * bw));
+        earliestResultOffset = b->CreateSelect(alreadyFound, earliestResultOffset, b->getSize(i * sizeTyBitWidth));
     }
-    Value * failingKey = b->CreateCountReverseZeroes(earliestResult);
+    Value * failingKey = b->CreateCountForwardZeroes(earliestResult);
     if (resultArray.size() > 1) {
         failingKey = b->CreateAdd(earliestResultOffset, failingKey);
     }
@@ -505,9 +514,10 @@ skip_composite_key:
     FixedArray<Value *, 3> reportArgs;
     Function * reportDuplicateKeyFn = m->getFunction("report_duplicate_key");
     Value * const sz_Offset = b->CreateMul(b->getSize(sizeof(HashArrayMappedTrie)), failingKey);
-    reportArgs[0] = b->CreateGEP(int8Ty, baseHashTableObjects, sz_Offset);
+    reportArgs[0] = b->CreatePointerCast(b->CreateGEP(voidPtrTy, baseHashTableObjects, sz_Offset), voidPtrTy);
     reportArgs[1] = lineNum;
-    reportArgs[2] = b->CreateLoad(sizeTy, b->CreateGEP(sizeTy, hashValueArray, failingKey));
+    priorLineNumIndex[1] = failingKey;
+    reportArgs[2] = b->CreateLoad(sizeTy, b->CreateGEP(priorLineNumArrayTy, priorLineNumArray, priorLineNumIndex));
     b->CreateCall(reportDuplicateKeyFn, reportArgs);
 
     // TODO: to make warnings work, have this construct a constant array to indicate
