@@ -66,6 +66,22 @@ protected:
     NullCharMode mNullMode;
 };
 
+class UnicodeLinesKernelBuilder final : public pablo::PabloKernel {
+public:
+    UnicodeLinesKernelBuilder(BuilderRef b,
+                              kernel::StreamSet * Basis,
+                              kernel::StreamSet * LF,
+                              kernel::StreamSet * UnicodeLB,
+                              kernel::StreamSet * u8index,
+                              UnterminatedLineAtEOF m = UnterminatedLineAtEOF::Ignore,
+                              NullCharMode nullMode = NullCharMode::Data,
+                              kernel::Scalar * signalNullObject = nullptr);
+protected:
+    void generatePabloMethod() override;
+    const UnterminatedLineAtEOF mEOFmode;
+    const NullCharMode mNullMode;
+};
+
 void UnicodeLinesLogic(const std::unique_ptr<kernel::ProgramBuilder> & P,
                        kernel::StreamSet * Basis,
                        kernel::StreamSet * LineEnds,

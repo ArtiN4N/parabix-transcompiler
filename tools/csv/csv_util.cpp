@@ -63,7 +63,7 @@ void CSVlexer::generatePabloMethod() {
     PabloAST * CR = ccc->compileCC(re::makeCC(charCR, &cc::Byte));
     PabloAST * DQ = ccc->compileCC(re::makeCC(charDQ, &cc::Byte));
     PabloAST * Comma = ccc->compileCC(re::makeCC(charComma, &cc::Byte));
-    PabloAST * EOFbit = pb.createAtEOF(pb.createAdvance(pb.createOnes(), 1));
+    PabloAST * EOFbit = pb.createAtEOF(pb.createAdvance(pb.createOnes(), 1), "CSVLexer:EOFbit");
     Var * lexOut = getOutputStreamVar("CSVlexical");
     pb.createAssign(pb.createExtract(lexOut, pb.getInteger(markLF)), LF);
     pb.createAssign(pb.createExtract(lexOut, pb.getInteger(markCR)), CR);

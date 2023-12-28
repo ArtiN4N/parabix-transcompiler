@@ -122,22 +122,6 @@ void LineFeedKernelBuilder::generatePabloMethod() {
 
 /* The kernel that implements the core UnicodeLines logic */
 
-class UnicodeLinesKernelBuilder final : public pablo::PabloKernel {
-public:
-    UnicodeLinesKernelBuilder(BuilderRef b,
-                              StreamSet * Basis,
-                              StreamSet * LF,
-                              StreamSet * UnicodeLB,
-                              StreamSet * u8index,
-                              UnterminatedLineAtEOF m = UnterminatedLineAtEOF::Ignore,
-                              NullCharMode nullMode = NullCharMode::Data,
-                              Scalar * signalNullObject = nullptr);
-protected:
-    void generatePabloMethod() override;
-    const UnterminatedLineAtEOF mEOFmode;
-    const NullCharMode mNullMode;
-};
-
 UnicodeLinesKernelBuilder::UnicodeLinesKernelBuilder(BuilderRef b,
                                                      StreamSet * Basis,
                                                      StreamSet * LF,

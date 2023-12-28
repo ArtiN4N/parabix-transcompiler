@@ -131,11 +131,10 @@ bool check_hash_code(HashArrayMappedTrie * const table, const uint32_t hashCode,
 }
 
 void report_duplicate_key(HashArrayMappedTrie * const table, const size_t failingLineNum, const size_t originalLineNum) {
-    errs() << "duplicate key found on row " << (failingLineNum + 1) << " (originally observed on " << (originalLineNum + 1) << ")";
+    errs() << "duplicate key found on row " << (failingLineNum + 1) << " (originally observed on " << (originalLineNum + 1) << ")\n";
 }
 
 void deconstruct_n_tries(HashArrayMappedTrie * const tables, const size_t n) {
-    errs() << " -- deconstruct_n_tries\n";
     for (size_t i = 0; i < n; ++i) {
         (tables + i)->~HashArrayMappedTrie();
     }
@@ -526,20 +525,19 @@ skip_composite_key:
     // Have tables contain a friendly name for the key type / fields?
 
     b->setFatalTerminationSignal();
-    b->CreateBr(continueToNext);
+    b->CreateBr(loopEnd);
 
     b->SetInsertPoint(continueToNext);
-
-
     Value * const nextHashCodesProcessed = b->CreateAdd(hashCodesProcessedPhi, sz_STRIDE);
     hashCodesProcessedPhi->addIncoming(nextHashCodesProcessed, continueToNext);
     Value * const notDone = b->CreateICmpULT(nextHashCodesProcessed, totalHashCodeProcessed);
     b->CreateCondBr(notDone, loopStart, loopEnd);
 
     b->SetInsertPoint(loopEnd);
-    PHINode * const finalPos = b->CreatePHI(sizeTy, 2);
+    PHINode * const finalPos = b->CreatePHI(sizeTy, 3);
     finalPos->addIncoming(initial, entry);
     finalPos->addIncoming(endPosition, continueToNext);
+    finalPos->addIncoming(endPosition, foundDuplicate);
     b->setProcessedItemCount("InputStream", finalPos);
 }
 

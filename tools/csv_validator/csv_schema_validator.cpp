@@ -119,7 +119,11 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
     using Mark = RE_Compiler::Marker;
 
     const auto & columns = mSchema.Column;
-    const auto n = columns.size(); assert (n > 8);
+    const auto n = columns.size();
+    if (LLVM_UNLIKELY(n == 0)) {
+        report_fatal_error("CSV schema must have at least one column");
+    }
+
     std::vector<RE *> fieldExpr(n);
 
     RE_MemoizingTransformer memo("memoizer");
@@ -152,17 +156,10 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
 
     PabloAST * fieldData = pb.createOr(pb.createNot(recordSeparatorsAndNonText), allSeparators, "fieldData");
 
-    if (mOptions.mIndexStream) {
+    assert (mOptions.mIndexStream);
 
-        // TODO: the incoming field data contains marks for any formatting only double quote and the
-        // CR of a CRLF. We could disable indexed advances when we know a valid match to a substring
-        // cannot contain double quote or CR. Can this concept be generalized in the RE Compiler?
-        // Could the RE compiler have more than one indexing stream?
-
-        PabloAST *  indexStream = pb.createExtract(getInputStreamVar("mIndexing"), pb.getInteger(0));
-        fieldData = pb.createAnd(fieldData, indexStream, "fieldData");
-    }
-
+    PabloAST *  indexStream = pb.createExtract(getInputStreamVar("mIndexing"), pb.getInteger(0));
+    fieldData = pb.createAnd(fieldData, indexStream, "fieldData");
     re_compiler.setIndexing(&cc::Unicode, fieldData);
 
     for (unsigned i = 0; i < mOptions.mExternalBindings.size(); i++) {
@@ -283,7 +280,10 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
     assert (allSeparatorsMatches);
     assert (nonSeperators);
 
-    PabloAST * result = pb.createXor(allSeparatorsMatches, allSeparators, "result");
+
+//    pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, pb.createInFile(pb.createOnes(), "CSVValidator:createInFile"));
+
+    PabloAST * result = pb.createInFile(pb.createXor(allSeparatorsMatches, allSeparators), "result");
     Var * invalid = getOutputStreamVar("invalid");
     pb.createAssign(pb.createExtract(invalid, pb_ZERO), result);
 

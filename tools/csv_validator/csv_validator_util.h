@@ -31,7 +31,8 @@ public:
                   StreamSet * fieldData, StreamSet * allSeperators)
         : PabloKernel(kb, makeNameFromOptions(),
                       {Binding{"csvMarks", csvMarks, FixedRate(), LookAhead(1)}},
-                      {Binding{"fieldData", fieldData}, Binding{"allSeperators", allSeperators}}) {
+                      {Binding{"fieldData", fieldData}                      
+                      , Binding{"allSeperators", allSeperators}}) {
         addAttribute(SideEffecting());
         assert (csvMarks->getNumElements() == 5);
     }

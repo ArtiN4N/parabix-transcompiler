@@ -98,18 +98,15 @@ void CSVMatcherEngine::initRE(csv::CSVSchema & schema) {
     RE_MemoizingTransformer MT("memoizer");
     StripStartEndBookEnds ST("removeStartEnds");
 
-    bool nonFixedUTF8 = true; // false;
-
     RE * emptyString = nullptr;
+
+    const auto optLevel = codegen::OptLevel;
+    codegen::OptLevel = CodeGenOpt::Level::Aggressive;
 
     for (unsigned i = 0; i < schema.Column.size(); ++i) {
         auto & column = schema.Column[i];
 
         RE * expr = ST.transformRE(column.Expression, NameTransformationMode::TransformDefinition);
-
-//        expr = makeSeq({makeStart(), expr, makeEnd()});
-
-//        errs() << "INPUT RE " << i << ":\n\n" << Printer_RE::PrintRE(expr) << "\n\n\n";
 
         if (column.Optional && !matchesEmptyString(expr)) {
             // the Column Rule evaluates to true, or if the column is empty.
@@ -121,10 +118,6 @@ void CSVMatcherEngine::initRE(csv::CSVSchema & schema) {
 
         expr = resolveModesAndExternalSymbols(expr, column.IgnoreCase);
 
-        if (!validateFixedUTF8(expr)) {
-            nonFixedUTF8 = true;
-        }
-
         updateReferenceInfo(expr, cm, info);
 
         expr = regular_expression_passes(expr);
@@ -134,34 +127,20 @@ void CSVMatcherEngine::initRE(csv::CSVSchema & schema) {
         column.Expression = MT.transformRE(expr);
     }
 
-    for (auto m : PE.mNameMap) {
-        if (PropertyExpression * pe = dyn_cast<PropertyExpression>(m.second)) {
-            if (pe->getKind() == PropertyExpression::Kind::Codepoint) {
-                RE * propRE = pe->getResolvedRE();
-                if (getLengthRange(propRE, &cc::UTF8).second > 1) {
-                    mLengthAlphabet = &cc::Unicode;
-                    break;
-                }
-            }
-        }
-    }
+    codegen::OptLevel = optLevel;
 
-    if (nonFixedUTF8) {
-        setComponent(mExternalComponents, Component::UTF8index);
-        mLengthAlphabet = &cc::Unicode;
-    }
+    mLengthAlphabet = &cc::Unicode;
 
     if (!info.twixtREs.empty()) {
         UnicodeIndexing = true;
         auto indexCode = mExternalTable.getStreamIndex(cc::Unicode.getCode());
-        setComponent(mExternalComponents, Component::S2P);
+//        setComponent(mExternalComponents, Component::S2P);
         FixedReferenceTransformer FRT(info);
 
         for (unsigned i = 0; i < schema.Column.size(); ++i) {
             auto & column = schema.Column[i];
             column.Expression = MT.transformRE(FRT.transformRE(column.Expression));
         }
-
 
         for (auto m : FRT.mNameMap) {
             Reference * ref = cast<Reference>(m.second);
@@ -186,18 +165,15 @@ void CSVMatcherEngine::initRE(csv::CSVSchema & schema) {
         }
     }
 
-    if (mLengthAlphabet == &cc::Unicode) {
-        mExternalTable.declareExternal(u8, "LineStarts", new LineStartsExternal());
-        UnicodeIndexing = true;
-    }
+    mExternalTable.declareExternal(u8, "LineStarts", new LineStartsExternal());
 
-    if (UnicodeIndexing) {
+    mIndexAlphabet = &cc::Unicode;
+    setComponent(mExternalComponents, Component::S2P);
+    setComponent(mExternalComponents, Component::UTF8index);
 
-        mIndexAlphabet = &cc::Unicode;
-        setComponent(mExternalComponents, Component::S2P);
-        setComponent(mExternalComponents, Component::UTF8index);
+    // TODO: multiplexing seems to break matching algorithm?
 
-        // if (!mExternalTable.isDeclared(Unicode, "basis")) {
+#if 0
 
         SmallVector<RE *, 256> tmp;
         for (unsigned i = 0; i < schema.Column.size(); ++i) {
@@ -205,17 +181,18 @@ void CSVMatcherEngine::initRE(csv::CSVSchema & schema) {
             tmp.push_back(column.Expression);
         }
 
-//        const auto UnicodeSets = collectCCs(makeSeq(tmp.begin(), tmp.end()), *mIndexAlphabet);
-//        if (!UnicodeSets.empty()) {
-//            auto mpx = makeMultiplexedAlphabet("mpx", UnicodeSets);
-//            mExternalTable.declareExternal(Unicode, mpx->getName() + "_basis", new MultiplexedExternal(mpx));
-//            for (unsigned i = 0; i < schema.Column.size(); ++i) {
-//                auto & column = schema.Column[i];
-//                RE * re = transformCCs(mpx, column.Expression, NameTransformationMode::None);
-//                column.Expression = MT.transformRE(re);
-//            }
-//        }
-    }
+        const auto UnicodeSets = collectCCs(makeSeq(tmp.begin(), tmp.end()), *mIndexAlphabet);
+        if (!UnicodeSets.empty()) {
+            auto mpx = makeMultiplexedAlphabet("mpx", UnicodeSets);
+            mExternalTable.declareExternal(Unicode, mpx->getName() + "_basis", new MultiplexedExternal(mpx));
+            for (unsigned i = 0; i < schema.Column.size(); ++i) {
+                auto & column = schema.Column[i];
+                RE * re = transformCCs(mpx, column.Expression, NameTransformationMode::None);
+                column.Expression = MT.transformRE(re);
+            }
+        }
+
+#endif
 
     auto indexCode = mExternalTable.getStreamIndex(mIndexAlphabet->getCode());
 //    if (hasGraphemeClusterBoundary(re)) {
@@ -249,14 +226,6 @@ void CSVMatcherEngine::initRE(csv::CSVSchema & schema) {
         }
     }
 
-    if (mIndexAlphabet == &cc::UTF8) {
-        bool useInternalNaming = mLengthAlphabet == &cc::Unicode;
-        for (unsigned i = 0; i < schema.Column.size(); ++i) {
-            auto & column = schema.Column[i];
-            column.Expression = MT.transformRE(toUTF8(column.Expression, useInternalNaming));
-        }
-    }
-
     VariableLengthCCNamer CCnamer;
 
     bool addWordBoundaryExternal = false;
@@ -264,7 +233,7 @@ void CSVMatcherEngine::initRE(csv::CSVSchema & schema) {
     for (unsigned i = 0; i < schema.Column.size(); ++i) {
         auto & column = schema.Column[i];
         column.Expression = CCnamer.transformRE(column.Expression);
-        if (hasWordBoundary(column.Expression)) {
+        if (!addWordBoundaryExternal && hasWordBoundary(column.Expression)) {
             addWordBoundaryExternal = true;
         }
     }
@@ -275,40 +244,6 @@ void CSVMatcherEngine::initRE(csv::CSVSchema & schema) {
 
     if (addWordBoundaryExternal) {
         mExternalTable.declareExternal(indexCode, "\\b", new WordBoundaryExternal());
-    }
-
-//    if (matchesToEOLrequired()) {
-//        // Move matches to EOL.   This may be achieved internally by modifying
-//        // the regular expression or externally.   The internal approach is more
-//        // generally more efficient, but cannot be used if colorization is needed
-//        // or in UnicodeLines mode.
-//        if ((mGrepRecordBreak == GrepRecordBreakKind::Unicode) || (mEngineKind == EngineKind::EmitMatches) || mInvertMatches || UnicodeIndexing) {
-//            setComponent(mExternalComponents, Component::MoveMatchesToEOL);
-//        } else {
-//            setComponent(mInternalComponents, Component::MoveMatchesToEOL);
-//        }
-//    }
-//    if (hasComponent(mInternalComponents, Component::MoveMatchesToEOL)) {
-//        for (unsigned i = 0; i < schema.Column.size(); ++i) {
-//            auto & column = schema.Column[i];
-//            RE * re = column.Expression;
-//            if (!hasEndAnchor(re)) {
-//                column.Expression = makeSeq({re, makeRep(makeAny(mLengthAlphabet), 0, Rep::UNBOUNDED_REP), makeEnd()});
-//            }
-//        }
-//    }
-
-    if (mLengthAlphabet == &cc::Unicode) {
-        setComponent(mExternalComponents, Component::S2P);
-        setComponent(mExternalComponents, Component::UTF8index);
-    } else {
-        for (unsigned i = 0; i < schema.Column.size(); ++i) {
-            auto & column = schema.Column[i];
-            if (!byteTestsWithinLimit(column.Expression, ByteCClimit)) {
-                setComponent(mExternalComponents, Component::S2P);
-                break;
-            }
-        }
     }
 
 }
@@ -329,9 +264,7 @@ CSVValidatorFunctionType CSVMatcherEngine::compile(CPUDriver & pxDriver, const s
 
     auto schemaFile = csv::CSVSchemaParser::load(inputSchema);
 
-    if (!schemaFile.CompositeKey.empty()) {
-        setComponent(mExternalComponents, Component::S2P);
-    }
+    setComponent(mExternalComponents, Component::S2P);
 
     initRE(schemaFile);
 
@@ -339,14 +272,25 @@ CSVValidatorFunctionType CSVMatcherEngine::compile(CPUDriver & pxDriver, const s
 
     auto BasisBits = getBasis(P, ByteStream);
 
-    grepPrologue(P, ByteStream);
+    mLineBreakStream = nullptr;
+    mU8index = nullptr;
+    mNullMode = NullCharMode::Data;
+
+    mU8index = P->CreateStreamSet(1, 1);
+    P->CreateKernelCall<UTF8_index>(ByteStream, mU8index);
 
     StreamSet * csvCCs = P->CreateStreamSet(5);
     P->CreateKernelCall<CSVlexer>(BasisBits, csvCCs);
+
     StreamSet * fieldData = P->CreateStreamSet(2);
     StreamSet * allSeparators = P->CreateStreamSet(1);
+    mLineBreakStream = allSeparators;
 
     P->CreateKernelCall<CSVDataParser>(csvCCs, fieldData, allSeparators);
+
+    auto u8 = mExternalTable.getStreamIndex(cc::UTF8.getCode());
+    mExternalTable.declareExternal(u8, "u8index", new PreDefined(mU8index));
+    mExternalTable.declareExternal(u8, "$", new PreDefined(allSeparators));
 
     StreamSet * errors = P->CreateStreamSet(1);
 
@@ -449,33 +393,7 @@ StreamSet * CSVMatcherEngine::getBasis(ProgBuilderRef P, StreamSet * ByteStream)
 }
 
 void CSVMatcherEngine::grepPrologue(ProgBuilderRef P, StreamSet * SourceStream) {
-    mLineBreakStream = nullptr;
-    mU8index = nullptr;
-    mNullMode = NullCharMode::Data;
 
-    mLineBreakStream = P->CreateStreamSet(1, 1);
-    if (mGrepRecordBreak == GrepRecordBreakKind::Unicode) {
-        mU8index = P->CreateStreamSet(1, 1);
-        UnicodeLinesLogic(P, SourceStream, mLineBreakStream, mU8index, UnterminatedLineAtEOF::Add1, mNullMode, nullptr);
-    }
-    else {
-        P->CreateKernelCall<UnixLinesKernelBuilder>(SourceStream, mLineBreakStream, UnterminatedLineAtEOF::Add1, mNullMode, nullptr);
-        if (hasComponent(mExternalComponents, Component::UTF8index)) {
-            mU8index = P->CreateStreamSet(1, 1);
-            P->CreateKernelCall<UTF8_index>(SourceStream, mU8index, mLineBreakStream);
-        }
-    }
-    auto u8 = mExternalTable.getStreamIndex(cc::UTF8.getCode());
-    if (mU8index) {
-        auto u8 = mExternalTable.getStreamIndex(cc::UTF8.getCode());
-        mExternalTable.declareExternal(u8, "u8index", new PreDefined(mU8index));
-    }
-    auto u8_LB = new PreDefined(mLineBreakStream);//, std::make_pair(0, 0), 1);
-    mExternalTable.declareExternal(u8, "$", u8_LB);
-    if (UnicodeIndexing) {
-        auto Unicode = mExternalTable.getStreamIndex(cc::Unicode.getCode());
-        mExternalTable.declareExternal(Unicode, "$", new FilterByMaskExternal(u8, {"u8index", "$"}, u8_LB));
-    }
 }
 
 void CSVMatcherEngine::prepareExternalStreams(ProgBuilderRef P, StreamSet * SourceStream) {

@@ -50,6 +50,103 @@ std::string CSVDataParser::makeNameFromOptions() {
     return tmp;
 }
 
+#if 0
+
+void UTF8_index::generatePabloMethod() {
+    PabloBuilder pb(getEntryScope());
+    std::unique_ptr<cc::CC_Compiler> ccc;
+    bool useDirectCC = getInput(0)->getType()->getArrayNumElements() == 1;
+    if (useDirectCC) {
+        ccc = std::make_unique<cc::Direct_CC_Compiler>(getEntryScope(), pb.createExtract(getInput(0), pb.getInteger(0)));
+    } else {
+        ccc = std::make_unique<cc::Parabix_CC_Compiler_Builder>(getEntryScope(), getInputStreamSet("source"));
+    }
+
+    Zeroes * const ZEROES = pb.createZeroes();
+    PabloAST * const u8pfx = ccc->compileCC(makeByte(0xC0, 0xFF));
+
+
+    Var * const nonFinal = pb.createVar("nonFinal", u8pfx);
+    Var * const u8invalid = pb.createVar("u8invalid", ZEROES);
+    Var * const valid_pfx = pb.createVar("valid_pfx", u8pfx);
+
+    auto it = pb.createScope();
+    pb.createIf(u8pfx, it);
+    PabloAST * const u8pfx2 = ccc->compileCC(makeByte(0xC2, 0xDF), it);
+    PabloAST * const u8pfx3 = ccc->compileCC(makeByte(0xE0, 0xEF), it);
+    PabloAST * const u8pfx4 = ccc->compileCC(makeByte(0xF0, 0xF4), it);
+
+    //
+    // Two-byte sequences
+    Var * const anyscope = it.createVar("anyscope", ZEROES);
+    auto it2 = it.createScope();
+    it.createIf(u8pfx2, it2);
+    it2.createAssign(anyscope, it2.createAdvance(u8pfx2, 1));
+
+
+    //
+    // Three-byte sequences
+    Var * const EF_invalid = it.createVar("EF_invalid", ZEROES);
+    auto it3 = it.createScope();
+    it.createIf(u8pfx3, it3);
+    PabloAST * const u8scope32 = it3.createAdvance(u8pfx3, 1);
+    it3.createAssign(nonFinal, it3.createOr(nonFinal, u8scope32));
+    PabloAST * const u8scope33 = it3.createAdvance(u8pfx3, 2);
+    PabloAST * const u8scope3X = it3.createOr(u8scope32, u8scope33);
+    it3.createAssign(anyscope, it3.createOr(anyscope, u8scope3X));
+
+    PabloAST * const advE0 = it3.createAdvance(ccc->compileCC(makeByte(0xE0), it3), 1, "advEO");
+    PabloAST * const range80_9F = ccc->compileCC(makeByte(0x80, 0x9F), it3);
+    PabloAST * const E0_invalid = it3.createAnd(advE0, range80_9F, "E0_invalid");
+
+    PabloAST * const advED = it3.createAdvance(ccc->compileCC(makeByte(0xED), it3), 1, "advED");
+    PabloAST * const rangeA0_BF = ccc->compileCC(makeByte(0xA0, 0xBF), it3);
+    PabloAST * const ED_invalid = it3.createAnd(advED, rangeA0_BF, "ED_invalid");
+
+    PabloAST * const EX_invalid = it3.createOr(E0_invalid, ED_invalid);
+    it3.createAssign(EF_invalid, EX_invalid);
+
+    //
+    // Four-byte sequences
+    auto it4 = it.createScope();
+    it.createIf(u8pfx4, it4);
+    PabloAST * const u8scope42 = it4.createAdvance(u8pfx4, 1, "u8scope42");
+    PabloAST * const u8scope43 = it4.createAdvance(u8scope42, 1, "u8scope43");
+    PabloAST * const u8scope44 = it4.createAdvance(u8scope43, 1, "u8scope44");
+    PabloAST * const u8scope4nonfinal = it4.createOr(u8scope42, u8scope43);
+    it4.createAssign(nonFinal, it4.createOr(nonFinal, u8scope4nonfinal));
+    PabloAST * const u8scope4X = it4.createOr(u8scope4nonfinal, u8scope44);
+    it4.createAssign(anyscope, it4.createOr(anyscope, u8scope4X));
+    PabloAST * const F0_invalid = it4.createAnd(it4.createAdvance(ccc->compileCC(makeByte(0xF0), it4), 1), ccc->compileCC(makeByte(0x80, 0x8F), it4));
+    PabloAST * const F4_invalid = it4.createAnd(it4.createAdvance(ccc->compileCC(makeByte(0xF4), it4), 1), ccc->compileCC(makeByte(0x90, 0xBF), it4));
+    PabloAST * const FX_invalid = it4.createOr(F0_invalid, F4_invalid);
+    it4.createAssign(EF_invalid, it4.createOr(EF_invalid, FX_invalid));
+
+    //
+    // Invalid cases
+    PabloAST * const legalpfx = it.createOr(it.createOr(u8pfx2, u8pfx3), u8pfx4);
+    //  Any scope that does not have a suffix byte, and any suffix byte that is not in
+    //  a scope is a mismatch, i.e., invalid UTF-8.
+    PabloAST * const u8suffix = ccc->compileCC("u8suffix", makeByte(0x80, 0xBF), it);
+    PabloAST * const mismatch = it.createXor(anyscope, u8suffix);
+    //
+    PabloAST * const pfx_invalid = it.createXor(valid_pfx, legalpfx);
+    it.createAssign(u8invalid, it.createOr(pfx_invalid, it.createOr(mismatch, EF_invalid)));
+    PabloAST * const u8valid = it.createNot(u8invalid, "u8valid");
+    //
+    it.createAssign(nonFinal, it.createAnd(nonFinal, u8valid));
+
+    Var * const u8index = getOutputStreamVar("u8index");
+    PabloAST * u8final = pb.createInFile(pb.createNot(nonFinal));
+    if (getNumOfStreamInputs() > 1) {
+        u8final = pb.createOr(u8final, getInputStreamSet("u8_LB")[0]);
+    }
+    pb.createAssign(pb.createExtract(u8index, pb.getInteger(0)), u8final);
+}
+
+
+#endif
+
 void CSVDataLexer::generatePabloMethod() {
     pablo::PabloBuilder pb(getEntryScope());
     std::unique_ptr<cc::CC_Compiler> ccc;
@@ -85,20 +182,22 @@ void CSVDataParser::generatePabloMethod() {
     PabloAST * end_dquote = pb.createXor(dquote_even, quote_escape);
     PabloAST * quoted_data = pb.createIntrinsicCall(pablo::Intrinsic::InclusiveSpan, {start_dquote, end_dquote});
     PabloAST * unquoted = pb.createNot(quoted_data);
+    PabloAST * CRofCRLF = pb.createAnd(csvMarks[markCR], pb.createLookahead(csvMarks[markLF], 1), "CRofCRLF");
     PabloAST * recordSeparators = pb.createOrAnd(csvMarks[markEOF], csvMarks[markLF], unquoted, "recordSeparators");
-    PabloAST * allSeparators = pb.createOrAnd(recordSeparators, csvMarks[markComma], unquoted, "allSeparators");
-    PabloAST * CRofCRLF = pb.createAnd3(csvMarks[markCR], pb.createLookahead(csvMarks[markLF], 1), unquoted, "CRofCRLF");
-    PabloAST * formattingQuotes = pb.createXor(dquote, escaped_quote, "formattingQuotes");
-    PabloAST * nonText = pb.createOr3(CRofCRLF, formattingQuotes, quote_escape);
 
-    PabloAST * recordSeparatorsAndNonText = pb.createOr(recordSeparators, nonText);
+    // track and "remove" empty lines by advacing recordSeparators and adding the results to nonText?
+    PabloAST * allSeparators = pb.createOrAnd(recordSeparators, csvMarks[markComma], unquoted, "allSeparators");
+    PabloAST * formattingQuotes = pb.createXor(dquote, escaped_quote, "formattingQuotes");
+    PabloAST * nonText = pb.createOr3(CRofCRLF, formattingQuotes, quote_escape, "nonText");
+    PabloAST * recordSeparatorsAndNonText = pb.createOr(recordSeparators, nonText, "recordSeparatorsAndNonText");
+
     PabloAST * start = pb.createScanThru(recordSeparators, recordSeparatorsAndNonText);
     if (noHeaderLine) {
         start = pb.createOr(pb.createNot(pb.createAdvance(pb.createOnes(), 1)), start);
     } else {
         PabloAST * const afterHeader = pb.createSpanAfterFirst(recordSeparators, "afterHeader");
-        allSeparators = pb.createAnd(allSeparators, afterHeader);
-        recordSeparatorsAndNonText = pb.createOr(recordSeparatorsAndNonText, pb.createNot(afterHeader), "recordSeparatorsAndNonText");
+        allSeparators = pb.createAnd(allSeparators, afterHeader, "allSeparators'");
+        recordSeparatorsAndNonText = pb.createOr(recordSeparatorsAndNonText, pb.createNot(afterHeader), "recordSeparatorsAndNonText'");
         start = pb.createAnd(start, afterHeader);
     }
 

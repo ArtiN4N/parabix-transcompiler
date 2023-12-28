@@ -154,7 +154,7 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
     // even if we've already proven one exists.
     Value * const hasError = b->bitblock_any(potentialErrorBlock);
     Value * const nextStrideIndex = b->CreateAdd(strideIndexPhi, sz_ONE);
-    Value * const noMore = b->CreateICmpEQ(nextStrideIndex, numOfBlocks);
+    Value * const noMore = b->CreateICmpUGE(nextStrideIndex, numOfBlocks);
     strideIndexPhi->addIncoming(nextStrideIndex, errorOrFinalPartialStrideStartLoopStart);
     b->CreateCondBr(b->CreateOr(noMore, hasError), errorOrFinalPartialStrideStartLoopExit, errorOrFinalPartialStrideStartLoopStart);
 
