@@ -80,7 +80,8 @@ void BixSubHash::generatePabloMethod() {
     const auto basis = getInputStreamSet("basis");
     const auto n = basis.size();
     PabloAST * run = getInputStreamSet("runs")[0];
-    const auto m = getOutputStreamSet(0)->getNumElements();
+    auto hashes = getOutputStreamSet("hashes");
+    const auto m = hashes.size();
     std::vector<PabloAST *> hash(m * 2);
 
     std::mt19937 rng(mSeed);
@@ -281,10 +282,9 @@ retry:
 
     const auto f = ((mHashSteps & 1) == 0) ? 0 : m;
 
-    Var * hashVar = getOutputStreamVar("hashes");
     for (unsigned i = 0; i < m; i++) {
         PabloAST * const expr = hash[f + i]; assert (expr);
-        pb.createAssign(pb.createExtract(hashVar, pb.getInteger(i)), expr);
+        pb.createAssign(cast<Var>(hashes[i]), expr);
     }
 
     // if the value is still in the select span, we did not include it in the hash'ed value.

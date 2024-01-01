@@ -10,7 +10,7 @@
 using boost::intrusive::detail::floor_log2;
 using namespace llvm;
 
-extern "C" void csv_error_identifier_callback(char * fileName, const size_t fieldNum, const size_t recordNum, const size_t bytePos, char * start, char * end) {
+extern "C" void csv_error_identifier_callback(char * fileName, const size_t fieldNum, const size_t recordNum, const size_t bytePos, char * start, char * end, bool isWarning) {
     foundError = true;
     SmallVector<char, 1024> tmp;
     raw_svector_ostream out(tmp);
@@ -53,6 +53,8 @@ CSVErrorIdentifier::CSVErrorIdentifier(BuilderRef b, StreamSet * const errorStre
     assert ((codegen::SegmentSize % b->getBitBlockWidth()) == 0);
     assert ((b->getBitBlockWidth() % (sizeof(size_t) * 8)) == 0);
     setStride(codegen::SegmentSize);
+
+    #warning not correctly named for warnings
 }
 
 /** ------------------------------------------------------------------------------------------------------------- *
@@ -71,27 +73,17 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
 
     BasicBlock * const fullStrideStart = b->CreateBasicBlock("strideLoopStart");
 
-    BasicBlock * const errorOrFinalPartialStrideStart = b->CreateBasicBlock("finalPartialStrideStart");
-
     BasicBlock * const errorOrFinalPartialStrideStartLoopStart = b->CreateBasicBlock("finalPartialStrideStartLoopStart");
 
     BasicBlock * const errorOrFinalPartialStrideStartLoopExit = b->CreateBasicBlock("finalPartialStrideStartLoopExit");
 
-    BasicBlock * const findErrorIndexFound = b->CreateBasicBlock("findErrorIndexFound");
+    BasicBlock * const checkNextSegment = b->CreateBasicBlock("checkNextStride");
 
-    BasicBlock * const sumSeparationsUpToEndLoop = b->CreateBasicBlock("sumSeparationsUpToEndLoop");
-
-    BasicBlock * const sumSeparationsUpToEndLoopExit = b->CreateBasicBlock("sumSeparationsUpToEndLoopExit");
+    BasicBlock * const foundErrorPosition = b->CreateBasicBlock("findErrorIndexFound");
 
     BasicBlock * const noErrorFoundFull = b->CreateBasicBlock("noErrorFoundFull");
 
-    BasicBlock * const foundLastSeparator = b->CreateBasicBlock("foundLastSeparator");
-
-    BasicBlock * const checkForNextFullStride = b->CreateBasicBlock("checkForNextFullStride");
-
     BasicBlock * const exit = b->CreateBasicBlock("exit");
-
-    Value * const byteStreamProcessed = b->getProcessedItemCount("InputStream");
 
     const auto blockWidth = b->getBitBlockWidth();
     const auto blocksPerSegment = (codegen::SegmentSize / blockWidth);
@@ -100,6 +92,8 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
     ConstantInt * const sz_ZERO = b->getSize(0);
     ConstantInt * const sz_ONE = b->getSize(1);
     ConstantInt * const sz_BITBLOCKWIDTH = b->getSize(blockWidth);
+    ConstantInt * const sz_BLOCKS_PER_SEGMENT = b->getSize(blocksPerSegment);
+
     IntegerType * const sizeTy = b->getSizeTy();
     const auto sizeWidth = sizeTy->getBitWidth();
     ConstantInt * const sz_SIZEWIDTH = b->getSize(sizeWidth);
@@ -110,101 +104,117 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
 
     Value * const allSeparatorsObserved = b->getScalarField("allSeparatorsObserved");
 
-    Value * const initialLastSeparator = b->CreateUDiv(byteStreamProcessed, sz_BITBLOCKWIDTH);
+    Value * const initialSeparatorVector =
+        b->CreateInsertElement(Constant::getNullValue(sizeVecTy), allSeparatorsObserved, partialSumFieldCount - 1U);
 
-    b->CreateUnlikelyCondBr(b->isFinal(), errorOrFinalPartialStrideStart, fullStrideStart);
+    const auto numOfErrorStreams = b->getInputStreamSet("errorStream")->getNumElements();
+    assert (numOfErrorStreams == 1 || numOfErrorStreams == 2);
+    SmallVector<Constant *, 2> i32_Index(numOfErrorStreams);
+
+    const bool canWarn = (numOfErrorStreams == 2);
+
+    for (unsigned i = 0; i < numOfErrorStreams; ++i) {
+        i32_Index[i] = b->getInt32(i);
+    }
+
+    Value * const totalErrorStrideLength = b->CreateCeilUDiv(b->getAccessibleItemCount("errorStream"), sz_BITBLOCKWIDTH);
+    Value * const byteStreamProcessed = b->getProcessedItemCount("InputStream");
+
+    b->CreateUnlikelyCondBr(b->isFinal(), errorOrFinalPartialStrideStartLoopStart, fullStrideStart);
 
     b->SetInsertPoint(fullStrideStart);
-    PHINode * const currentStrideNumPhi = b->CreatePHI(sizeTy, 2);
-    currentStrideNumPhi->addIncoming(sz_ZERO, entryBlock);
-    PHINode * const allSeparatorsObservedPhi = b->CreatePHI(sizeTy, 2);
-    allSeparatorsObservedPhi->addIncoming(allSeparatorsObserved, entryBlock);
-    PHINode * const lastSeparatorObservedIndexPhi = b->CreatePHI(sizeTy, 2);
-    lastSeparatorObservedIndexPhi->addIncoming(initialLastSeparator, entryBlock);
+    PHINode * const fullStartingStrideNumPhi = b->CreatePHI(sizeTy, 2);
+    fullStartingStrideNumPhi->addIncoming(sz_ZERO, entryBlock);
+    PHINode * const fullPriorSeparatorStridePhi = b->CreatePHI(sizeTy, 2);
+    fullPriorSeparatorStridePhi->addIncoming(sz_ZERO, entryBlock);
+    PHINode * const fullSeparatorsPartialSumPhi = b->CreatePHI(sizeVecTy, 2);
+    fullSeparatorsPartialSumPhi->addIncoming(initialSeparatorVector, entryBlock);
 
     // this relies on the pipeline guaranteeing there is enough space to always process a full segment of data
     // and zero-ing out any streams past their EOF position
+
     Value * anyError = nullptr;
     for (unsigned i = 0; i < blocksPerSegment; ++i) {
-        Value * const error = b->loadInputStreamBlock("errorStream", i32_ZERO, b->getInt32(i));
-        if (anyError) {
-            anyError = b->CreateOr(anyError, error);
-        } else {
-            anyError = error;
+        Value * strideNum = b->CreateAdd(fullStartingStrideNumPhi, b->getSize(i));
+        for (unsigned j = 0; j < numOfErrorStreams; ++j) {
+            Value * const error = b->loadInputStreamBlock("errorStream", i32_Index[j], strideNum);
+            if (anyError) {
+                anyError = b->CreateOr(anyError, error);
+            } else {
+                anyError = error;
+            }
         }
     }
-
+    Value * const totalNumOfStridesProcessed = b->CreateAdd(fullStartingStrideNumPhi, sz_BLOCKS_PER_SEGMENT);
     anyError = b->bitblock_any(anyError);
-    b->CreateUnlikelyCondBr(anyError, errorOrFinalPartialStrideStart, noErrorFoundFull);
+    b->CreateUnlikelyCondBr(anyError, errorOrFinalPartialStrideStartLoopStart, noErrorFoundFull);
 
     // -------------------------------------
     // PARTIAL SEGMENT OR ERROR CASE
     // -------------------------------------
 
-    b->SetInsertPoint(errorOrFinalPartialStrideStart);
-    Value * const errorStreamLength = b->getAccessibleItemCount("errorStream");
-    Value * const numOfBlocks = b->CreateUDiv(errorStreamLength, sz_BITBLOCKWIDTH);
-    b->CreateBr(errorOrFinalPartialStrideStartLoopStart);
-
     b->SetInsertPoint(errorOrFinalPartialStrideStartLoopStart);
-    PHINode * const strideIndexPhi = b->CreatePHI(sizeTy, 3);
-    strideIndexPhi->addIncoming(sz_ZERO, errorOrFinalPartialStrideStart);
-    Value * const potentialErrorBlock = b->loadInputStreamBlock("errorStream", i32_ZERO, strideIndexPhi);
+    PHINode * const partialCurrentStrideIndexPhi = b->CreatePHI(sizeTy, 3);
+    partialCurrentStrideIndexPhi->addIncoming(sz_ZERO, entryBlock);
+    partialCurrentStrideIndexPhi->addIncoming(fullStartingStrideNumPhi, fullStrideStart);
+    PHINode * const partialSegmentLengthPhi = b->CreatePHI(sizeTy, 3);
+    partialSegmentLengthPhi->addIncoming(totalErrorStrideLength, entryBlock);
+    partialSegmentLengthPhi->addIncoming(totalNumOfStridesProcessed, fullStrideStart);
+    PHINode * const partialPriorSeparatorStrideIndexPhi = b->CreatePHI(sizeTy, 3);
+    partialPriorSeparatorStrideIndexPhi->addIncoming(sz_ZERO, entryBlock);
+    partialPriorSeparatorStrideIndexPhi->addIncoming(fullPriorSeparatorStridePhi, fullStrideStart);
+    PHINode * const partialSeparatorPartialSumPhi = b->CreatePHI(sizeVecTy, 3);
+    partialSeparatorPartialSumPhi->addIncoming(initialSeparatorVector, entryBlock);
+    partialSeparatorPartialSumPhi->addIncoming(fullSeparatorsPartialSumPhi, fullStrideStart);
+
+    Value * potentialErrorBlock = nullptr;
+    for (unsigned j = 0; j < numOfErrorStreams; ++j) {
+        Value * const val = b->loadInputStreamBlock("errorStream", i32_Index[j], partialCurrentStrideIndexPhi);
+        if (potentialErrorBlock == nullptr) {
+            potentialErrorBlock = val;
+        } else {
+            potentialErrorBlock = b->CreateOr(potentialErrorBlock, val);
+        }
+    }
+
+    // count the number of separaters prior to the error mark
+    Value * currentSeparators = b->loadInputStreamBlock("allSeparators", i32_ZERO, partialCurrentStrideIndexPhi);
+    Value * nextSumPriorSeparator = b->CreateSelect(b->bitblock_any(currentSeparators), partialCurrentStrideIndexPhi, partialPriorSeparatorStrideIndexPhi);
+    Value * const separatorPartialSum = b->simd_popcount(sizeWidth, currentSeparators);
+    Value * const nextSumSeparatorPartialSum = b->CreateAdd(partialSeparatorPartialSumPhi, separatorPartialSum);
+
     // Since we can enter this loop in the final partial segment case, check again if this has an error
     // even if we've already proven one exists.
-    Value * const hasError = b->bitblock_any(potentialErrorBlock);
-    Value * const nextStrideIndex = b->CreateAdd(strideIndexPhi, sz_ONE);
-    Value * const noMore = b->CreateICmpUGE(nextStrideIndex, numOfBlocks);
-    strideIndexPhi->addIncoming(nextStrideIndex, errorOrFinalPartialStrideStartLoopStart);
-    b->CreateCondBr(b->CreateOr(noMore, hasError), errorOrFinalPartialStrideStartLoopExit, errorOrFinalPartialStrideStartLoopStart);
+    Value * const hasWarningOrError = b->bitblock_any(potentialErrorBlock);
+    Value * const nextStrideIndex = b->CreateAdd(partialCurrentStrideIndexPhi, sz_ONE, "nextStrideIndex");
+    Value * const noMore = b->CreateICmpEQ(nextStrideIndex, partialSegmentLengthPhi);
+    Value * const done = b->CreateOr(noMore, hasWarningOrError);
+
+    partialCurrentStrideIndexPhi->addIncoming(nextStrideIndex, errorOrFinalPartialStrideStartLoopStart);
+    partialSegmentLengthPhi->addIncoming(partialSegmentLengthPhi, errorOrFinalPartialStrideStartLoopStart);
+    partialPriorSeparatorStrideIndexPhi->addIncoming(nextSumPriorSeparator, errorOrFinalPartialStrideStartLoopStart);
+    partialSeparatorPartialSumPhi->addIncoming(nextSumSeparatorPartialSum, errorOrFinalPartialStrideStartLoopStart);
+    b->CreateCondBr(done, errorOrFinalPartialStrideStartLoopExit, errorOrFinalPartialStrideStartLoopStart);
 
     b->SetInsertPoint(errorOrFinalPartialStrideStartLoopExit);
-    // If we haven't found an error, we no longer care about the separators. Just exit.
-    b->CreateCondBr(hasError, findErrorIndexFound, exit);
+    // If we haven't found an error, we no longer care about the separators. Just loop back (or exit if we're done.)
+    b->CreateCondBr(hasWarningOrError, foundErrorPosition, checkNextSegment);
 
+    b->SetInsertPoint(checkNextSegment);
+    Value * const noMoreSegments = b->CreateICmpEQ(partialSegmentLengthPhi, totalErrorStrideLength);
+    fullStartingStrideNumPhi->addIncoming(partialSegmentLengthPhi, checkNextSegment);
+    fullPriorSeparatorStridePhi->addIncoming(nextSumPriorSeparator, checkNextSegment);
+    fullSeparatorsPartialSumPhi->addIncoming(nextSumSeparatorPartialSum, checkNextSegment);
+    b->CreateCondBr(noMoreSegments, exit, fullStrideStart);
 
-    b->SetInsertPoint(findErrorIndexFound);
-    Value * const noBlocksBeforeError = b->CreateICmpEQ(strideIndexPhi, sz_ZERO);
-    b->CreateCondBr(noBlocksBeforeError, sumSeparationsUpToEndLoopExit, sumSeparationsUpToEndLoop);
+    //
+    b->SetInsertPoint(foundErrorPosition);
+    PHINode * const updatedPriorSeparatorStrideIndexPhi = b->CreatePHI(sizeTy, 2);
+    updatedPriorSeparatorStrideIndexPhi->addIncoming(partialPriorSeparatorStrideIndexPhi, errorOrFinalPartialStrideStartLoopExit);
+    PHINode * const updatedErrorBlockPhi = b->CreatePHI(potentialErrorBlock->getType(), 2);
+    updatedErrorBlockPhi->addIncoming(potentialErrorBlock, errorOrFinalPartialStrideStartLoopExit);
 
-    // mask and count the number of separaters prior to the error mark
-
-    b->SetInsertPoint(sumSeparationsUpToEndLoop);
-    PHINode * preErrorStrideIndexPhi = b->CreatePHI(sizeTy, 2);
-    preErrorStrideIndexPhi->addIncoming(sz_ZERO, findErrorIndexFound);
-
-    PHINode * lastSeparatorBeforeErrorStrideIndexPhi = b->CreatePHI(sizeTy, 2);
-    lastSeparatorBeforeErrorStrideIndexPhi->addIncoming(sz_ZERO, findErrorIndexFound);
-
-    PHINode * separatorPartialSumPhi = b->CreatePHI(sizeVecTy, 2);
-    separatorPartialSumPhi->addIncoming(ConstantVector::getNullValue(sizeVecTy), findErrorIndexFound);
-
-    Value * allSeparators = b->loadInputStreamBlock("allSeparators", i32_ZERO, preErrorStrideIndexPhi);
-    Value * lastSeparatorBeforeErrorStrideIndex = b->CreateSelect(b->bitblock_any(allSeparators), preErrorStrideIndexPhi, lastSeparatorBeforeErrorStrideIndexPhi);
-
-    Value * const separatorPartialSum = b->simd_popcount(sizeWidth, allSeparators);
-    Value * const nextSeparatorPartialSum = b->CreateAdd(separatorPartialSum, separatorPartialSumPhi);
-
-    Value * const nextSumUpToEndIndex = b->CreateAdd(preErrorStrideIndexPhi, sz_ONE);
-
-    preErrorStrideIndexPhi->addIncoming(nextSumUpToEndIndex, sumSeparationsUpToEndLoop);
-    lastSeparatorBeforeErrorStrideIndexPhi->addIncoming(lastSeparatorBeforeErrorStrideIndex, sumSeparationsUpToEndLoop);
-    separatorPartialSumPhi->addIncoming(nextSeparatorPartialSum, sumSeparationsUpToEndLoop);
-
-    Value * const hasMore = b->CreateICmpNE(nextSumUpToEndIndex, strideIndexPhi);
-    b->CreateCondBr(hasMore, sumSeparationsUpToEndLoop, sumSeparationsUpToEndLoopExit);
-
-
-    b->SetInsertPoint(sumSeparationsUpToEndLoopExit);
-    PHINode * const updatedSeparatorPartialSumPhi = b->CreatePHI(sizeVecTy, 2);
-    updatedSeparatorPartialSumPhi->addIncoming(ConstantVector::getNullValue(sizeVecTy), findErrorIndexFound);
-    updatedSeparatorPartialSumPhi->addIncoming(nextSeparatorPartialSum, sumSeparationsUpToEndLoop);
-
-    PHINode * const updatedLastSeparatorBeforeErrorPhi = b->CreatePHI(sizeTy, 2);
-    updatedLastSeparatorBeforeErrorPhi->addIncoming(sz_ZERO, findErrorIndexFound);
-    updatedLastSeparatorBeforeErrorPhi->addIncoming(lastSeparatorBeforeErrorStrideIndex, sumSeparationsUpToEndLoop);
-
-    Value * const errorVec = b->CreateBitCast(potentialErrorBlock, sizeVecTy);
+    Value * const errorVec = b->CreateBitCast(updatedErrorBlockPhi, sizeVecTy);
     Value * firstErrorWordIndex = b->getSize(partialSumFieldCount - 1);
     for (unsigned i = partialSumFieldCount; i > 0; --i) {
         Value * idx = b->getSize(i - 1);
@@ -213,8 +223,7 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
         firstErrorWordIndex = b->CreateSelect(anySet, idx, firstErrorWordIndex);
     }
 
-    FixedArray<Value *, 6> callbackArgs;
-    // char * fileName, const size_t fieldNum, char * line_start, char * line_end
+    FixedArray<Value *, 7> callbackArgs;
 
     callbackArgs[0] = b->getScalarField("fileName");
 
@@ -224,29 +233,39 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
     Value * const firstErrorWordPos = b->CreateCountForwardZeroes(firstErrorWord, "", true);
     Value * firstErrorSeparator = b->CreateAdd(b->CreateMul(firstErrorWordIndex, sz_SIZEWIDTH), firstErrorWordPos);
 
-    Value * const errorMask = b->CreateNot(b->bitblock_mask_from(firstErrorSeparator));    
+    Value * isWarning = nullptr;
+    if (numOfErrorStreams == 1) {
+        isWarning = b->getInt1(canWarn);
+    } else {
+        Value * const checkMask = b->CreateShl(ConstantInt::get(sizeTy, 1), firstErrorWordPos);
+        Value * const val = b->loadInputStreamBlock("errorStream", i32_Index[0], partialCurrentStrideIndexPhi);
+        Value * const vec = b->CreateBitCast(val, sizeVecTy);
+        Value * const word = b->CreateExtractElement(vec, firstErrorWordIndex);
+        // The first stream indicates an error and second a warning. So if we did not see the bit
+        // in the first stream, we assume it's a warning.
+        isWarning = b->CreateICmpEQ(b->CreateAnd(word, checkMask), sz_ZERO);
+    }
 
-    firstErrorSeparator = b->CreateAdd(firstErrorSeparator, b->CreateMul(strideIndexPhi, sz_BITBLOCKWIDTH));
+    Value * const upToFirstErrorMask = b->bitblock_mask_to(firstErrorSeparator, true);
 
-    Value * const unmaskedFinalValue = b->loadInputStreamBlock("allSeparators", i32_ZERO, strideIndexPhi);
-    Value * const maskedFinalValue = b->CreateAnd(unmaskedFinalValue, errorMask);
+    firstErrorSeparator = b->CreateAdd(firstErrorSeparator, b->CreateMul(partialCurrentStrideIndexPhi, sz_BITBLOCKWIDTH));
 
+    Value * const maskedFinalValue = b->CreateAnd(currentSeparators, upToFirstErrorMask);
     Value * const maskedSepVec = b->simd_popcount(sizeWidth, maskedFinalValue);
-    assert (maskedSepVec->getType() == sizeVecTy);
-    Value * const reportedSepVec = b->CreateAdd(maskedSepVec, updatedSeparatorPartialSumPhi);
-    Value * const partialSum = b->hsimd_partial_sum(sizeWidth, reportedSepVec);
-    Value * const numOfSeparators = b->mvmd_extract(sizeWidth, partialSum, partialSumFieldCount - 1);
-    Value * const totalNumOfSeparators = b->CreateAdd(allSeparatorsObserved, numOfSeparators);
+    Value * const reportedSepVec = b->CreateAdd(maskedSepVec, partialSeparatorPartialSumPhi);
+    Value * const maskedPartialSum = b->hsimd_partial_sum(sizeWidth, reportedSepVec);
+    Value * const totalNumOfMaskedSeparators = b->CreateSub(b->mvmd_extract(sizeWidth, maskedPartialSum, partialSumFieldCount - 1), sz_ONE);
 
-    callbackArgs[1] = b->CreateAdd(b->CreateURem(totalNumOfSeparators, fieldsPerRecord), sz_ONE);
-    callbackArgs[2] = b->CreateAdd(b->CreateUDiv(totalNumOfSeparators, fieldsPerRecord), sz_ONE);
+    callbackArgs[1] = b->CreateAdd(b->CreateURem(totalNumOfMaskedSeparators, fieldsPerRecord), sz_ONE);
+    callbackArgs[2] = b->CreateAdd(b->CreateUDiv(totalNumOfMaskedSeparators, fieldsPerRecord), sz_ONE);
 
     // We know the final position of the byte input to pass the user is indicated by the position in the error
     // stream but not where it starts. We need to backtrack from the error position to find the start.
 
-    Value * const potentialStartBlock = b->loadInputStreamBlock("allSeparators", i32_ZERO, updatedLastSeparatorBeforeErrorPhi);
-    Value * const startPositionInFinalValue = b->CreateOr(b->bitblock_any(maskedFinalValue), b->CreateICmpEQ(updatedLastSeparatorBeforeErrorPhi, sz_ZERO));
-    Value * const priorSeparatorBlock = b->CreateBitCast(b->CreateSelect(startPositionInFinalValue, maskedFinalValue, potentialStartBlock), sizeVecTy);
+    Value * const potentialStartBlock = b->loadInputStreamBlock("allSeparators", i32_ZERO, updatedPriorSeparatorStrideIndexPhi);
+    Value * const usingMaskedValue = b->bitblock_any(maskedFinalValue);
+    Value * const selectedStartBlock = b->CreateSelect(usingMaskedValue, maskedFinalValue, potentialStartBlock);
+    Value * const priorSeparatorBlock = b->CreateBitCast(selectedStartBlock, sizeVecTy);
     Value * priorSeparatorWordIndex = sz_ZERO;
     for (unsigned i = 1; i < partialSumFieldCount; ++i) {
         Value * idx = b->getSize(i);
@@ -261,42 +280,63 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
     // byteStreamProcessed will be set to the last separator in the previous segment so we can reuse that as our
     // start pos.
 
-    Value * priorSeparatorPos = b->CreateMul(b->CreateAdd(priorSeparatorWordIndex, sz_ONE), sz_SIZEWIDTH);
-    priorSeparatorPos = b->CreateSub(priorSeparatorPos, b->CreateCountReverseZeroes(priorSeparatorWord, "", false));
+    Value * priorSeparatorPos = b->CreateSelect(usingMaskedValue, partialCurrentStrideIndexPhi, updatedPriorSeparatorStrideIndexPhi);
+    priorSeparatorPos = b->CreateMul(priorSeparatorPos, sz_BITBLOCKWIDTH);
+    priorSeparatorPos = b->CreateAdd(b->CreateMul(b->CreateAdd(priorSeparatorWordIndex, sz_ONE), sz_SIZEWIDTH), priorSeparatorPos);
+    priorSeparatorPos = b->CreateSub(priorSeparatorPos, b->CreateCountReverseZeroes(priorSeparatorWord));
     priorSeparatorPos = b->CreateSelect(b->CreateICmpEQ(priorSeparatorWord, sz_ZERO), byteStreamProcessed, priorSeparatorPos);
-    Value * const priorSeparatorBlockIdx = b->CreateSelect(startPositionInFinalValue, strideIndexPhi, updatedLastSeparatorBeforeErrorPhi);
 
-    Value * const priorSeparator = b->CreateAdd(b->CreateMul(priorSeparatorBlockIdx, sz_BITBLOCKWIDTH), priorSeparatorPos);
-
-    callbackArgs[3] = priorSeparator;
-    callbackArgs[4] = b->getRawInputPointer("InputStream", priorSeparator);
+    callbackArgs[3] = priorSeparatorPos;
+    callbackArgs[4] = b->getRawInputPointer("InputStream", priorSeparatorPos);
     callbackArgs[5] = b->getRawInputPointer("InputStream", firstErrorSeparator);
+    callbackArgs[6] = isWarning;
 
     Function * callbackFn = b->getModule()->getFunction("csv_error_identifier_callback"); assert (callbackFn);
 
     b->CreateCall(callbackFn->getFunctionType(), callbackFn, callbackArgs);
 
+    if (canWarn) {
+        BasicBlock * const checkForMoreWarnings = b->CreateBasicBlock("checkForMoreWarnings", noErrorFoundFull);
+        BasicBlock * const fatalError = b->CreateBasicBlock("fatalError", noErrorFoundFull);
+        b->CreateCondBr(isWarning, checkForMoreWarnings, fatalError);
+
+        b->SetInsertPoint(checkForMoreWarnings);
+        Value * const afterFirstErrorMask = b->CreateNot(upToFirstErrorMask);
+        Value * const nextPotentialErrorBlock = b->CreateAnd(afterFirstErrorMask, updatedErrorBlockPhi);
+        updatedPriorSeparatorStrideIndexPhi->addIncoming(partialCurrentStrideIndexPhi, checkForMoreWarnings);
+        updatedErrorBlockPhi->addIncoming(nextPotentialErrorBlock, checkForMoreWarnings);
+
+        partialCurrentStrideIndexPhi->addIncoming(nextStrideIndex, checkForMoreWarnings);
+        partialSegmentLengthPhi->addIncoming(partialSegmentLengthPhi, checkForMoreWarnings);
+        partialPriorSeparatorStrideIndexPhi->addIncoming(nextSumPriorSeparator, checkForMoreWarnings);
+        partialSeparatorPartialSumPhi->addIncoming(nextSumSeparatorPartialSum, checkForMoreWarnings);
+
+        b->CreateCondBr(b->bitblock_any(nextPotentialErrorBlock), foundErrorPosition, errorOrFinalPartialStrideStartLoopStart);
+
+        b->SetInsertPoint(fatalError);
+    }
     b->setTerminationSignal();
     b->CreateBr(exit);
+
 
     // -------------------------------------
     // FULL SEGMENT WITHOUT ERROR CASE
     // -------------------------------------
 
     b->SetInsertPoint(noErrorFoundFull);
+
     const auto m = floor_log2(blocksPerSegment + 1) + 1;
     SmallVector<Value *, 64> adders(m);
 
-    Value * const baseIndex = b->CreateMul(currentStrideNumPhi, b->getSize(blocksPerSegment));
-    Value * value = b->loadInputStreamBlock("allSeparators", i32_ZERO, baseIndex);
+    Value * value = b->loadInputStreamBlock("allSeparators", i32_ZERO, fullStartingStrideNumPhi);
     adders[0] = value;
 
-    Value * lastSeparatorIndex = b->CreateSelect(b->bitblock_any(value), baseIndex, lastSeparatorObservedIndexPhi);
+    Value * lastSeparatorIndex = b->CreateSelect(b->bitblock_any(value), fullStartingStrideNumPhi, fullPriorSeparatorStridePhi);
 
     // load and half-add the subsequent blocks
     for (unsigned i = 1; i < blocksPerSegment; ++i) {
         Constant * const I = b->getSize(i);
-        Value * const idx = b->CreateAdd(baseIndex, I);
+        Value * const idx = b->CreateAdd(fullStartingStrideNumPhi, I);
         Value * value = b->loadInputStreamBlock("allSeparators", i32_ZERO, idx);
 
         // is it better to scan to the position we found the last marker in or the defer the sep marker stream?
@@ -318,19 +358,17 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
     }
 
     // sum the half adders to compute the number of separators found in this full segment
-    Value * partialSumVector = nullptr;
+    Value * totalPartialSumVector = fullSeparatorsPartialSumPhi;
     for (unsigned i = 0; i < m; ++i) {
-        Value * const count = b->simd_popcount(sizeWidth, adders[i]);
-        if (i == 0) {
-            partialSumVector = count;
-        } else {
-            partialSumVector = b->CreateAdd(partialSumVector, b->CreateShl(count, i));
+        Value * partialSum = b->simd_popcount(sizeWidth, adders[i]);
+        if (i > 0) {
+            partialSum = b->CreateShl(partialSum, i);
         }
+        totalPartialSumVector = b->CreateAdd(totalPartialSumVector, partialSum);
     }
 
-    Value * const currentPartialSum = b->hsimd_partial_sum(sizeWidth, partialSumVector);
-    Value * const currentNumOfSeparators = b->mvmd_extract(sizeWidth, currentPartialSum, partialSumFieldCount - 1);
-    Value * const nextNumOfSeparators = b->CreateAdd(allSeparatorsObservedPhi, currentNumOfSeparators);
+    Value * const totalPartialSum = b->hsimd_partial_sum(sizeWidth, totalPartialSumVector);
+    Value * const finalNumOfSeparators = b->mvmd_extract(sizeWidth, totalPartialSum, partialSumFieldCount - 1);
 
     // locate the last separator so we can correctly set the deferred position on the byte data
     // NOTE: while it's very likely there is a separator in this block, we do not know if any
@@ -348,25 +386,21 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
     }
 
     Value * lastSeparatorVecElem = b->CreateExtractElement(lastSeparatorVec, lastSeparatorVecIndex);
-    Value * const anySet = b->CreateICmpNE(lastSeparatorVecElem, sz_ZERO);
-    b->CreateLikelyCondBr(anySet, foundLastSeparator, checkForNextFullStride);
-
-    b->SetInsertPoint(foundLastSeparator);
-    Value * lastSeparator = b->CreateSub(sz_SIZEWIDTH, b->CreateCountReverseZeroes(lastSeparatorVecElem, "", true));
+    Value * lastSeparator = b->CreateSub(sz_SIZEWIDTH, b->CreateCountReverseZeroes(lastSeparatorVecElem));
     Value * blockOffset = b->CreateMul(lastSeparatorIndex, sz_BITBLOCKWIDTH);
     Value * wordOffset = b->CreateMul(lastSeparatorVecIndex, sz_SIZEWIDTH);
     lastSeparator = b->CreateAdd(b->CreateOr(blockOffset, wordOffset), lastSeparator);
-    b->setProcessedItemCount("InputStream", lastSeparator);
-    b->setScalarField("allSeparatorsObserved", nextNumOfSeparators);
-    b->CreateBr(checkForNextFullStride);
+    lastSeparator = b->CreateSelect(b->CreateICmpEQ(lastSeparatorVecElem, sz_ZERO), byteStreamProcessed, lastSeparator);
 
-    b->SetInsertPoint(checkForNextFullStride);
-    allSeparatorsObservedPhi->addIncoming(nextNumOfSeparators, checkForNextFullStride);
-    Value * const nextStrideNum = b->CreateAdd(currentStrideNumPhi, sz_ONE);
-    currentStrideNumPhi->addIncoming(nextStrideNum, checkForNextFullStride);
-    Value * const noMoreStrides = b->CreateICmpUGE(nextStrideNum, numOfStrides);
-    lastSeparatorObservedIndexPhi->addIncoming(lastSeparatorIndex, checkForNextFullStride);
-    b->CreateLikelyCondBr(noMoreStrides, exit, fullStrideStart);
+    b->setProcessedItemCount("InputStream", lastSeparator);
+    b->setScalarField("allSeparatorsObserved", finalNumOfSeparators);
+
+    fullStartingStrideNumPhi->addIncoming(totalNumOfStridesProcessed, noErrorFoundFull);
+    fullPriorSeparatorStridePhi->addIncoming(lastSeparatorIndex, noErrorFoundFull);
+    fullSeparatorsPartialSumPhi->addIncoming(totalPartialSumVector, noErrorFoundFull);
+
+    Value * const hasMoreStrides = b->CreateICmpEQ(totalNumOfStridesProcessed, totalErrorStrideLength);
+    b->CreateCondBr(hasMoreStrides, fullStrideStart, exit);
 
     b->SetInsertPoint(exit);
 }

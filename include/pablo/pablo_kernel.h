@@ -64,9 +64,9 @@ public:
         return entryBlock;
     }
 
-    Var * getInputStreamVar(const std::string & name);
+    Var * getInputStreamVar(const llvm::StringRef name);
 
-    std::vector<PabloAST *> getInputStreamSet(const std::string & name);
+    std::vector<PabloAST *> getInputStreamSet(const llvm::StringRef name);
 
     Var * getInput(const unsigned index) {
         assert (index < mInputs.size() && mInputs[index]);
@@ -82,9 +82,11 @@ public:
         return mInputs.size();
     }
 
-    Var * getOutputStreamVar(const std::string & name);
+    Var * getOutputStreamVar(const llvm::StringRef name);
 
-    Var * getOutputScalarVar(const std::string & name);
+    Var * getOutputScalarVar(const llvm::StringRef name);
+
+    std::vector<PabloAST *> getOutputStreamSet(const llvm::StringRef name);
 
     Var * getOutput(const unsigned index) {
         assert (index < mOutputs.size() && mOutputs[index]);

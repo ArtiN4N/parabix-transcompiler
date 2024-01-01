@@ -292,7 +292,7 @@ CSVValidatorFunctionType CSVMatcherEngine::compile(CPUDriver & pxDriver, const s
     mExternalTable.declareExternal(u8, "u8index", new PreDefined(mU8index));
     mExternalTable.declareExternal(u8, "$", new PreDefined(allSeparators));
 
-    StreamSet * errors = P->CreateStreamSet(1);
+    StreamSet * errors = P->CreateStreamSet(schemaFile.AnyWarnings ? 2 : 1);
 
     prepareExternalStreams(P, BasisBits);
 

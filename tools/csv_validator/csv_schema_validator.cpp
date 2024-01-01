@@ -158,13 +158,13 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
 
     assert (mOptions.mIndexStream);
 
-    PabloAST *  indexStream = pb.createExtract(getInputStreamVar("mIndexing"), pb.getInteger(0));
+    PabloAST *  indexStream = pb.createExtract(getInputStreamVar("mIndexing"), pb_ZERO);
     fieldData = pb.createAnd(fieldData, indexStream, "fieldData");
     re_compiler.setIndexing(&cc::Unicode, fieldData);
 
     for (unsigned i = 0; i < mOptions.mExternalBindings.size(); i++) {
         auto extName = mOptions.mExternalBindings[i].getName();
-        PabloAST * extStrm = pb.createExtract(getInputStreamVar(extName), pb.getInteger(0));
+        PabloAST * extStrm = pb.createExtract(getInputStreamVar(extName), pb_ZERO);
         unsigned offset = mOptions.mExternalOffsets[i];
         std::pair<int, int> lgthRange = mOptions.mExternalLengths[i];
         re_compiler.addPrecompiled(extName, RE_Compiler::ExternalStream(Mark(extStrm, offset), lgthRange));
@@ -242,13 +242,13 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
             match = pb.createNot(match);
         }
         if (LLVM_UNLIKELY(col.Warning)) {
-            PabloAST * nextWarning = pb.createAnd(currentPos, pb.createNot(match));
+            assert (mSchema.AnyWarnings);
+            PabloAST * nextWarning = pb.createAnd(currentPos, pb.createNot(match), "nextWarning");
             if (warning) {
                 warning = pb.createOr(warning, nextWarning);
             } else {
                 warning = nextWarning;
             }
-            assert (false);
         } else {
             currentPos = pb.createAnd(currentPos, match);
         }
@@ -281,18 +281,19 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
     assert (nonSeperators);
 
 
-//    pb.createIntrinsicCall(pablo::Intrinsic::PrintRegister, pb.createInFile(pb.createOnes(), "CSVValidator:createInFile"));
-
     PabloAST * result = pb.createInFile(pb.createXor(allSeparatorsMatches, allSeparators), "result");
-    Var * invalid = getOutputStreamVar("invalid");
-    pb.createAssign(pb.createExtract(invalid, pb_ZERO), result);
 
+
+
+    auto invalid = getOutputStreamSet("invalid");
+    pb.createAssign(cast<Var>(invalid[0]), result);
     if (warning) {
-        #warning add check here for 2 elements
-        pb.createAssign(pb.createExtract(invalid, pb.getInteger(1)), warning);
+        if (invalid.size() < 2) {
+            report_fatal_error("StreamSet \"invalid\" requires at least two elements");
+        }
+        warning = pb.createInFile(warning, "warning");
+        pb.createAssign(cast<Var>(invalid[1]), warning);
     }
-
-
 
     if (mSchema.CompositeKey.size() > 0) {
         #warning this won't work with noHeader set if the key field is the first one

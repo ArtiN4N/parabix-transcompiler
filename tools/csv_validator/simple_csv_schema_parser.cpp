@@ -486,6 +486,7 @@ parse_column_directives:
                     } else if (matchString("ignoreCase")) {
                         rule.IgnoreCase = true;
                     } else if (matchString("warning")) {
+                        schema.AnyWarnings = true;
                         rule.Warning = true;
                     } else {
                         reportParsingFailure("unknown column directive");

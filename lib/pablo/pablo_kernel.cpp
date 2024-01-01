@@ -35,13 +35,13 @@ std::unique_ptr<KernelCompiler> PabloKernel::instantiateKernelCompiler(BuilderRe
     return std::make_unique<PabloCompiler>(const_cast<PabloKernel *>(this));
 }
 
-Var * PabloKernel::getInputStreamVar(const std::string & name) {
+Var * PabloKernel::getInputStreamVar(const StringRef name) {
     const auto port = mPabloCompiler->getStreamPort(name);
     assert (port.Type == PortType::Input);
     return mInputs[port.Number];
 }
 
-std::vector<PabloAST *> PabloKernel::getInputStreamSet(const std::string & name) {
+std::vector<PabloAST *> PabloKernel::getInputStreamSet(const StringRef name) {
     const auto port = mPabloCompiler->getStreamPort(name);
     assert (port.Type == PortType::Input);
     const Binding & input = getInputStreamSetBinding(port.Number);
@@ -53,19 +53,31 @@ std::vector<PabloAST *> PabloKernel::getInputStreamSet(const std::string & name)
     return inputSet;
 }
 
-Var * PabloKernel::getOutputStreamVar(const std::string & name) {
+Var * PabloKernel::getOutputStreamVar(const StringRef name) {
     const auto port = mPabloCompiler->getStreamPort(name);
     assert (port.Type == PortType::Output);
     return mOutputs[port.Number];
 }
 
-Var * PabloKernel::getOutputScalarVar(const std::string & name) {
+Var * PabloKernel::getOutputScalarVar(const StringRef name) {
     for (Var * out : mScalarOutputVars) {
         if (out->getName().equals(name)) {
             return out;
         }
     }
     report_fatal_error("Kernel does not contain scalar " + StringRef(name));
+}
+
+std::vector<PabloAST *> PabloKernel::getOutputStreamSet(const StringRef name) {
+    const auto port = mPabloCompiler->getStreamPort(name);
+    assert (port.Type == PortType::Output);
+    const Binding & output = getOutputStreamSetBinding(port.Number);
+    const auto numOfStreams = IDISA::getNumOfStreams(output.getType());
+    std::vector<PabloAST *> outputSet(numOfStreams);
+    for (unsigned i = 0; i < numOfStreams; i++) {
+        outputSet[i] = mEntryScope->createExtract(mOutputs[port.Number], mEntryScope->getInteger(i));
+    }
+    return outputSet;
 }
 
 Var * PabloKernel::makeVariable(const String * const name, Type * const type) {
