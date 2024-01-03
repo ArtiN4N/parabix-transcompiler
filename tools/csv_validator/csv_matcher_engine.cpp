@@ -302,7 +302,7 @@ CSVValidatorFunctionType CSVMatcherEngine::compile(CPUDriver & pxDriver, const s
 
     addExternalStreams(P, mIndexAlphabet, schemaFile, options, mU8index);
 
-    if (schemaFile.CompositeKey.empty()) {
+    if (!schemaFile.AnyUniqueKeys) {
 
         P->CreateKernelFamilyCall<CSVSchemaValidatorKernel>(schemaFile, BasisBits, fieldData, allSeparators, errors, std::move(options));
 

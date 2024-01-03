@@ -444,7 +444,6 @@ CSVSchema CSVSchemaParser::load(const llvm::StringRef fileName) {
 
                     CSVSchemaCompositeKey key;
                     auto & fields = key.Fields;
-                    fields.push_back(u);
 
                     skipSpaceUntilNewLine();
 
@@ -465,9 +464,13 @@ CSVSchema CSVSchemaParser::load(const llvm::StringRef fileName) {
 
                         std::sort(fields.begin(), fields.end());
                         fields.erase(std::unique( fields.begin(), fields.end()), fields.end() );
+                    } else {
+                        fields.push_back(u);
                     }
 
-                    schema.CompositeKey.emplace_back(key);
+                    schema.AnyUniqueKeys = true;
+
+                    rule.CompositeKey.emplace_back(key);
                 } else {
                     break;
                 }
@@ -515,11 +518,14 @@ done_parsing_column_rule:
                     }
                 }
             }
-            for (CSVSchemaCompositeKey & key : schema.CompositeKey) {
-                for (auto & k : key.Fields) {
-                    k = L[k];
+
+            for (CSVSchemaColumnRule & col : schema.Column) {
+                for (CSVSchemaCompositeKey & key : col.CompositeKey) {
+                    for (auto & k : key.Fields) {
+                        k = L[k];
+                    }
+                    std::sort(key.Fields.begin(), key.Fields.end());
                 }
-                std::sort(key.Fields.begin(), key.Fields.end());
             }
         }
 

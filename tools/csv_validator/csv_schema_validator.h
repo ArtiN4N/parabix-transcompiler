@@ -11,6 +11,10 @@ namespace re { class RE; }
 
 namespace csv {
 
+    struct CSVSchemaCompositeKey {
+        std::vector<size_t> Fields;
+    };
+
     struct CSVSchemaColumnRule {
         std::string Name;
         bool Optional = false; // field data can be empty regardless of rule
@@ -18,10 +22,7 @@ namespace csv {
         bool IgnoreCase = false; // the case of a column value is not important
         bool Warning = false; // violations are warnings not errors
         re::RE * Expression = nullptr;
-    };
-
-    struct CSVSchemaCompositeKey {
-        std::vector<size_t> Fields;
+        std::vector<CSVSchemaCompositeKey> CompositeKey;
     };
 
     struct CSVSchema {
@@ -32,8 +33,8 @@ namespace csv {
         bool NoHeader = false; // whether first line of CSV is column header names
         bool IgnoreColumnNameCase = false; // ignore mismatches in case for column header names
         bool AnyWarnings = false;
+        bool AnyUniqueKeys = false;
         std::vector<CSVSchemaColumnRule> Column;
-        std::vector<CSVSchemaCompositeKey> CompositeKey;
     };
 
     class CSVSchemaValidatorOptions {

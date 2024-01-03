@@ -10,13 +10,11 @@
 using boost::intrusive::detail::floor_log2;
 using namespace llvm;
 
-extern "C" void csv_error_identifier_callback(char * fileName, const size_t fieldNum, const size_t recordNum, const size_t bytePos, char * start, char * end, bool isWarning) {
+extern "C" void csv_error_identifier_callback(char * fileName, const size_t fieldNum, const size_t recordNum, char * start, char * end, bool isWarning) {
     foundError = true;
     SmallVector<char, 1024> tmp;
     raw_svector_ostream out(tmp);
     out << "Error found in " << fileName << ": Field " << fieldNum << " of Record " << recordNum
-     //   << '\n'
-     //   << "start: " << bytePos << " length: " << (end - start)
         << "\n\n";
     for (auto c = start; c < end; ++c) {
         out << *c;
@@ -223,7 +221,7 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
         firstErrorWordIndex = b->CreateSelect(anySet, idx, firstErrorWordIndex);
     }
 
-    FixedArray<Value *, 7> callbackArgs;
+    FixedArray<Value *, 6> callbackArgs;
 
     callbackArgs[0] = b->getScalarField("fileName");
 
@@ -246,15 +244,15 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
         isWarning = b->CreateICmpEQ(b->CreateAnd(word, checkMask), sz_ZERO);
     }
 
-    Value * const upToFirstErrorMask = b->bitblock_mask_to(firstErrorSeparator, true);
+    Value * const priorToFirstErrorMask = b->CreateNot(b->bitblock_mask_from(firstErrorSeparator, true));
 
     firstErrorSeparator = b->CreateAdd(firstErrorSeparator, b->CreateMul(partialCurrentStrideIndexPhi, sz_BITBLOCKWIDTH));
 
-    Value * const maskedFinalValue = b->CreateAnd(currentSeparators, upToFirstErrorMask);
+    Value * const maskedFinalValue = b->CreateAnd(currentSeparators, priorToFirstErrorMask);
     Value * const maskedSepVec = b->simd_popcount(sizeWidth, maskedFinalValue);
     Value * const reportedSepVec = b->CreateAdd(maskedSepVec, partialSeparatorPartialSumPhi);
     Value * const maskedPartialSum = b->hsimd_partial_sum(sizeWidth, reportedSepVec);
-    Value * const totalNumOfMaskedSeparators = b->CreateSub(b->mvmd_extract(sizeWidth, maskedPartialSum, partialSumFieldCount - 1), sz_ONE);
+    Value * const totalNumOfMaskedSeparators = b->mvmd_extract(sizeWidth, maskedPartialSum, partialSumFieldCount - 1);
 
     callbackArgs[1] = b->CreateAdd(b->CreateURem(totalNumOfMaskedSeparators, fieldsPerRecord), sz_ONE);
     callbackArgs[2] = b->CreateAdd(b->CreateUDiv(totalNumOfMaskedSeparators, fieldsPerRecord), sz_ONE);
@@ -286,21 +284,23 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
     priorSeparatorPos = b->CreateSub(priorSeparatorPos, b->CreateCountReverseZeroes(priorSeparatorWord));
     priorSeparatorPos = b->CreateSelect(b->CreateICmpEQ(priorSeparatorWord, sz_ZERO), byteStreamProcessed, priorSeparatorPos);
 
-    callbackArgs[3] = priorSeparatorPos;
-    callbackArgs[4] = b->getRawInputPointer("InputStream", priorSeparatorPos);
-    callbackArgs[5] = b->getRawInputPointer("InputStream", firstErrorSeparator);
-    callbackArgs[6] = isWarning;
+    callbackArgs[3] = b->getRawInputPointer("InputStream", priorSeparatorPos);
+    callbackArgs[4] = b->getRawInputPointer("InputStream", firstErrorSeparator);
+    callbackArgs[5] = isWarning;
 
     Function * callbackFn = b->getModule()->getFunction("csv_error_identifier_callback"); assert (callbackFn);
+
+    BasicBlock * fatalError = nullptr;
 
     b->CreateCall(callbackFn->getFunctionType(), callbackFn, callbackArgs);
 
     if (canWarn) {
         BasicBlock * const checkForMoreWarnings = b->CreateBasicBlock("checkForMoreWarnings", noErrorFoundFull);
-        BasicBlock * const fatalError = b->CreateBasicBlock("fatalError", noErrorFoundFull);
+        fatalError = b->CreateBasicBlock("fatalError", noErrorFoundFull);
         b->CreateCondBr(isWarning, checkForMoreWarnings, fatalError);
 
         b->SetInsertPoint(checkForMoreWarnings);
+        Value * const upToFirstErrorMask = b->bitblock_mask_to(firstErrorSeparator, true);
         Value * const afterFirstErrorMask = b->CreateNot(upToFirstErrorMask);
         Value * const nextPotentialErrorBlock = b->CreateAnd(afterFirstErrorMask, updatedErrorBlockPhi);
         updatedPriorSeparatorStrideIndexPhi->addIncoming(partialCurrentStrideIndexPhi, checkForMoreWarnings);
@@ -367,14 +367,37 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
         totalPartialSumVector = b->CreateAdd(totalPartialSumVector, partialSum);
     }
 
-    Value * const totalPartialSum = b->hsimd_partial_sum(sizeWidth, totalPartialSumVector);
+    fullStartingStrideNumPhi->addIncoming(totalNumOfStridesProcessed, noErrorFoundFull);
+    fullPriorSeparatorStridePhi->addIncoming(lastSeparatorIndex, noErrorFoundFull);
+    fullSeparatorsPartialSumPhi->addIncoming(totalPartialSumVector, noErrorFoundFull);
+
+    Value * const hasMoreStrides = b->CreateICmpEQ(totalNumOfStridesProcessed, totalErrorStrideLength);
+    b->CreateCondBr(hasMoreStrides, fullStrideStart, exit);
+
+    // exit
+
+    b->SetInsertPoint(exit);
+    PHINode * const lastSeparatorIndexPhi = b->CreatePHI(sizeTy, 2);
+    lastSeparatorIndexPhi->addIncoming(lastSeparatorIndex, noErrorFoundFull);
+    if (fatalError) {
+        lastSeparatorIndexPhi->addIncoming(nextSumPriorSeparator, fatalError);
+    }
+    lastSeparatorIndexPhi->addIncoming(nextSumPriorSeparator, checkNextSegment);
+    PHINode * const totalPartialSumPhi = b->CreatePHI(sizeVecTy, 2);
+    totalPartialSumPhi->addIncoming(totalPartialSumVector, noErrorFoundFull);
+    if (fatalError) {
+        totalPartialSumPhi->addIncoming(nextSumSeparatorPartialSum, fatalError);
+    }
+    totalPartialSumPhi->addIncoming(nextSumSeparatorPartialSum, checkNextSegment);
+    Value * const totalPartialSum = b->hsimd_partial_sum(sizeWidth, totalPartialSumPhi);
     Value * const finalNumOfSeparators = b->mvmd_extract(sizeWidth, totalPartialSum, partialSumFieldCount - 1);
+    b->setScalarField("allSeparatorsObserved", finalNumOfSeparators);
 
     // locate the last separator so we can correctly set the deferred position on the byte data
     // NOTE: while it's very likely there is a separator in this block, we do not know if any
     // separators were observed in the segment.
 
-    Value * lastSeparatorBlock = b->loadInputStreamBlock("allSeparators", i32_ZERO, lastSeparatorIndex);
+    Value * lastSeparatorBlock = b->loadInputStreamBlock("allSeparators", i32_ZERO, lastSeparatorIndexPhi);
     Value * const lastSeparatorVec = b->CreateBitCast(lastSeparatorBlock, sizeVecTy);
 
     Value * lastSeparatorVecIndex = sz_ZERO;
@@ -387,22 +410,12 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
 
     Value * lastSeparatorVecElem = b->CreateExtractElement(lastSeparatorVec, lastSeparatorVecIndex);
     Value * lastSeparator = b->CreateSub(sz_SIZEWIDTH, b->CreateCountReverseZeroes(lastSeparatorVecElem));
-    Value * blockOffset = b->CreateMul(lastSeparatorIndex, sz_BITBLOCKWIDTH);
+    Value * blockOffset = b->CreateMul(lastSeparatorIndexPhi, sz_BITBLOCKWIDTH);
     Value * wordOffset = b->CreateMul(lastSeparatorVecIndex, sz_SIZEWIDTH);
     lastSeparator = b->CreateAdd(b->CreateOr(blockOffset, wordOffset), lastSeparator);
     lastSeparator = b->CreateSelect(b->CreateICmpEQ(lastSeparatorVecElem, sz_ZERO), byteStreamProcessed, lastSeparator);
 
     b->setProcessedItemCount("InputStream", lastSeparator);
-    b->setScalarField("allSeparatorsObserved", finalNumOfSeparators);
-
-    fullStartingStrideNumPhi->addIncoming(totalNumOfStridesProcessed, noErrorFoundFull);
-    fullPriorSeparatorStridePhi->addIncoming(lastSeparatorIndex, noErrorFoundFull);
-    fullSeparatorsPartialSumPhi->addIncoming(totalPartialSumVector, noErrorFoundFull);
-
-    Value * const hasMoreStrides = b->CreateICmpEQ(totalNumOfStridesProcessed, totalErrorStrideLength);
-    b->CreateCondBr(hasMoreStrides, fullStrideStart, exit);
-
-    b->SetInsertPoint(exit);
 }
 
 }

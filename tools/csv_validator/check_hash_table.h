@@ -18,7 +18,7 @@ protected:
 
     struct Config {
         std::string Signature;
-        size_t FieldsPerKey;
+        size_t SegmentLength;
     };
 
     static Config makeCreateHashTableConfig(const csv::CSVSchema & schema, const size_t bitsPerHashCode);

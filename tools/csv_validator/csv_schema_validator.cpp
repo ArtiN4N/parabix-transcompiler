@@ -61,18 +61,19 @@ std::string CSVSchemaValidatorKernel::makeCSVSchemaSignature(const csv::CSVSchem
         out << '"';
         out.write_escaped(Printer_RE::PrintRE(column.Expression));
         out << '"';
+        for (const auto & key : column.CompositeKey) {
+            assert (key.Fields.size() > 0);
+            char joiner = '{';
+            for (const auto k : key.Fields) {
+                assert (k < schema.Column.size());
+                out << joiner << k;
+                joiner = ',';
+            }
+            out << '}';
+        }
     }
 
-    for (const auto & key : schema.CompositeKey) {
-        assert (key.Fields.size() > 0);
-        char joiner = '{';
-        for (const auto k : key.Fields) {
-            assert (k < schema.Column.size());
-            out << joiner << k;
-            joiner = ',';
-        }
-        out << '}';
-    }
+
 
     out.flush();
     return tmp;
@@ -103,7 +104,7 @@ CSVSchemaValidatorKernel::CSVSchemaValidatorKernel(BuilderRef b, const csv::CSVS
     if (mOptions.mIndexStream) {
         mInputStreamSets.emplace_back("mIndexing", mOptions.mIndexStream);
     }
-    if (schema.CompositeKey.size() > 0) {
+    if (schema.AnyUniqueKeys) {
         mOutputStreamSets.emplace_back("hashKeyMarkers", mOptions.mKeyMarkers);
         mOutputStreamSets.emplace_back("hashKeyRuns", mOptions.mKeyRuns);
     }
@@ -182,9 +183,14 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
     // but since the logic here doesn't depend on it, I permit it for multiple independent keys.
 
     std::vector<bool> usedInSchemaUID(n, false);
-    for (const auto & key : mSchema.CompositeKey) {
-        for (const auto k : key.Fields) {
-            usedInSchemaUID[k] = true;
+
+    if (mSchema.AnyUniqueKeys) {
+        for (const auto & col : mSchema.Column) {
+            for (const auto & key : col.CompositeKey) {
+                for (const auto k : key.Fields) {
+                    usedInSchemaUID[k] = true;
+                }
+            }
         }
     }
 
@@ -295,7 +301,7 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
         pb.createAssign(cast<Var>(invalid[1]), warning);
     }
 
-    if (mSchema.CompositeKey.size() > 0) {
+    if (mSchema.AnyUniqueKeys) {
         #warning this won't work with noHeader set if the key field is the first one
 
         args[0] = pb.createAdvance(args[0], 1);
