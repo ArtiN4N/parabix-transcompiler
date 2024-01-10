@@ -34,7 +34,7 @@ using namespace pablo;
 
 namespace csv {
 
-std::string CSVSchemaValidatorKernel::makeCSVSchemaSignature(const csv::CSVSchema & schema) {
+std::string CSVSchemaValidatorKernel::makeCSVSchemaSignature(const csv::CSVSchema & schema, const CSVSchemaValidatorOptions & options) {
 
     std::string tmp;
     tmp.reserve(1024);
@@ -73,14 +73,16 @@ std::string CSVSchemaValidatorKernel::makeCSVSchemaSignature(const csv::CSVSchem
         }
     }
 
-
+    for (const auto & a : options.mExternalBindings) {
+        out << ",EXT:" << a.getName();
+    }
 
     out.flush();
     return tmp;
 }
 
 CSVSchemaValidatorKernel::CSVSchemaValidatorKernel(BuilderRef b, const csv::CSVSchema & schema, StreamSet * basisBits, StreamSet * fieldData, StreamSet * allSeperators, StreamSet * invalid, CSVSchemaValidatorOptions && options)
-: CSVSchemaValidatorKernel(b, schema, makeCSVSchemaSignature(schema), basisBits, fieldData, allSeperators, invalid, std::move(options)) {
+: CSVSchemaValidatorKernel(b, schema, makeCSVSchemaSignature(schema, options), basisBits, fieldData, allSeperators, invalid, std::move(options)) {
 
 }
 
@@ -160,6 +162,7 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
     assert (mOptions.mIndexStream);
 
     PabloAST *  indexStream = pb.createExtract(getInputStreamVar("mIndexing"), pb_ZERO);
+
     fieldData = pb.createAnd(fieldData, indexStream, "fieldData");
     re_compiler.setIndexing(&cc::Unicode, fieldData);
 

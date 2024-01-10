@@ -86,7 +86,7 @@ namespace csv {
 
     protected:
 
-        static std::string makeCSVSchemaSignature(const csv::CSVSchema & schema);
+        static std::string makeCSVSchemaSignature(const csv::CSVSchema & schema, const CSVSchemaValidatorOptions & options);
 
         CSVSchemaValidatorKernel(BuilderRef b, const csv::CSVSchema & schema, std::string && signature, kernel::StreamSet * basisBits, kernel::StreamSet * fieldData, kernel::StreamSet * allSeperators, kernel::StreamSet * invalid, CSVSchemaValidatorOptions && options);
         void generatePabloMethod() override;

@@ -27,11 +27,13 @@ extern "C" void csv_error_identifier_callback(char * fileName, const size_t fiel
 
 namespace kernel {
 
+
+
 /** ------------------------------------------------------------------------------------------------------------- *
  * @brief constructor
  ** ------------------------------------------------------------------------------------------------------------- */
 CSVErrorIdentifier::CSVErrorIdentifier(BuilderRef b, StreamSet * const errorStream, StreamSet * const allSeparators, StreamSet * const ByteStream, Scalar * const fileName, Scalar * const fieldsPerRecord)
-: MultiBlockKernel(b, "CSVErrorIdentifier" + std::to_string(codegen::SegmentSize),
+: MultiBlockKernel(b, "CSVErrorIdentifier" + std::to_string(codegen::SegmentSize) + ((errorStream->getNumElements() == 2) ? "W" : "E"),
 // inputs
 {Binding{"errorStream", errorStream}
 ,Binding{"allSeparators", allSeparators}
@@ -78,6 +80,8 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
     BasicBlock * const checkNextSegment = b->CreateBasicBlock("checkNextStride");
 
     BasicBlock * const foundErrorPosition = b->CreateBasicBlock("findErrorIndexFound");
+
+    BasicBlock * const fatalError = b->CreateBasicBlock("fatalError");
 
     BasicBlock * const noErrorFoundFull = b->CreateBasicBlock("noErrorFoundFull");
 
@@ -290,13 +294,10 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
 
     Function * callbackFn = b->getModule()->getFunction("csv_error_identifier_callback"); assert (callbackFn);
 
-    BasicBlock * fatalError = nullptr;
-
     b->CreateCall(callbackFn->getFunctionType(), callbackFn, callbackArgs);
 
     if (canWarn) {
         BasicBlock * const checkForMoreWarnings = b->CreateBasicBlock("checkForMoreWarnings", noErrorFoundFull);
-        fatalError = b->CreateBasicBlock("fatalError", noErrorFoundFull);
         b->CreateCondBr(isWarning, checkForMoreWarnings, fatalError);
 
         b->SetInsertPoint(checkForMoreWarnings);
@@ -312,9 +313,11 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
         partialSeparatorPartialSumPhi->addIncoming(nextSumSeparatorPartialSum, checkForMoreWarnings);
 
         b->CreateCondBr(b->bitblock_any(nextPotentialErrorBlock), foundErrorPosition, errorOrFinalPartialStrideStartLoopStart);
-
-        b->SetInsertPoint(fatalError);
+    } else {
+        b->CreateBr(fatalError);
     }
+
+    b->SetInsertPoint(fatalError);
     b->setTerminationSignal();
     b->CreateBr(exit);
 
@@ -377,18 +380,16 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
     // exit
 
     b->SetInsertPoint(exit);
-    PHINode * const lastSeparatorIndexPhi = b->CreatePHI(sizeTy, 2);
+    PHINode * const lastSeparatorIndexPhi = b->CreatePHI(sizeTy, 2, "lastSeparatorIndex");
     lastSeparatorIndexPhi->addIncoming(lastSeparatorIndex, noErrorFoundFull);
-    if (fatalError) {
-        lastSeparatorIndexPhi->addIncoming(nextSumPriorSeparator, fatalError);
-    }
+    lastSeparatorIndexPhi->addIncoming(nextSumPriorSeparator, fatalError);
     lastSeparatorIndexPhi->addIncoming(nextSumPriorSeparator, checkNextSegment);
-    PHINode * const totalPartialSumPhi = b->CreatePHI(sizeVecTy, 2);
+
+    PHINode * const totalPartialSumPhi = b->CreatePHI(sizeVecTy, 2, "totalPartialSum");
     totalPartialSumPhi->addIncoming(totalPartialSumVector, noErrorFoundFull);
-    if (fatalError) {
-        totalPartialSumPhi->addIncoming(nextSumSeparatorPartialSum, fatalError);
-    }
+    totalPartialSumPhi->addIncoming(nextSumSeparatorPartialSum, fatalError);
     totalPartialSumPhi->addIncoming(nextSumSeparatorPartialSum, checkNextSegment);
+
     Value * const totalPartialSum = b->hsimd_partial_sum(sizeWidth, totalPartialSumPhi);
     Value * const finalNumOfSeparators = b->mvmd_extract(sizeWidth, totalPartialSum, partialSumFieldCount - 1);
     b->setScalarField("allSeparatorsObserved", finalNumOfSeparators);

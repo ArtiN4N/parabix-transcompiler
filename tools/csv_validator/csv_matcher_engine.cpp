@@ -250,19 +250,30 @@ void CSVMatcherEngine::initRE(csv::CSVSchema & schema) {
 
 CSVValidatorFunctionType CSVMatcherEngine::compile(CPUDriver & pxDriver, const std::string & inputSchema) {
 
+    auto schemaFile = csv::CSVSchemaParser::load(inputSchema);
+
     auto & b = pxDriver.getBuilder();
 
     Type * const int32Ty = b->getInt32Ty();
 
     auto P = pxDriver.makePipeline({Binding{int32Ty, "fd"}, Binding{b->getInt8PtrTy(), "fileName"}});
 
-    P->setUniqueName("csv_validator");
+//    std::string tmp;
+//    raw_string_ostream nm(tmp);
+//    nm << "csv_validator";
+//    if (schemaFile.AnyUniqueKeys) {
+//        nm << "U";
+//    }
+//    #warning what if we only have warnings?
+//    if (schemaFile.AnyWarnings) {
+//        nm << "W";
+//    }
+//    nm.flush();
+//    P->setUniqueName(tmp);
 
     Scalar * const fileDescriptor = P->getInputScalar("fd");
 
     StreamSet * const ByteStream = P->CreateStreamSet(1, 8);
-
-    auto schemaFile = csv::CSVSchemaParser::load(inputSchema);
 
     setComponent(mExternalComponents, Component::S2P);
 
