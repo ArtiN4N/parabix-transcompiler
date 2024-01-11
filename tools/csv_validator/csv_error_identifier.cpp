@@ -12,17 +12,31 @@ using namespace llvm;
 
 extern "C" void csv_error_identifier_callback(char * fileName, const size_t fieldNum, const size_t recordNum, char * start, char * end, bool isWarning) {
     foundError = true;
-    SmallVector<char, 1024> tmp;
-    raw_svector_ostream out(tmp);
+
+    auto & out = errs();
+
     out << "Error found in " << fileName << ": Field " << fieldNum << " of Record " << recordNum
         << "\n\n";
+
+    assert (start <= end);
+
+//    for (auto c = start - 16; c < start; ++c) {
+//        out << *c;
+//    }
+    out.changeColor(raw_ostream::Colors::RED);
     for (auto c = start; c < end; ++c) {
         out << *c;
     }
+    out.resetColor();
+//    for (auto c = end; c < end + 16; ++c) {
+//        out << *c;
+//    }
+
+    out << "\n\n";
     out << " does not match supplied rule.\n";
     // TODO: this needs to report more information as to what field/rule was invalid
     // TODO: this cannot differntiate between erroneous line ends
-    errs() << out.str();
+    // errs() << out.str();
 }
 
 namespace kernel {
@@ -249,10 +263,8 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
     }
 
     Value * const priorToFirstErrorMask = b->CreateNot(b->bitblock_mask_from(firstErrorSeparator, true));
-
-    firstErrorSeparator = b->CreateAdd(firstErrorSeparator, b->CreateMul(partialCurrentStrideIndexPhi, sz_BITBLOCKWIDTH));
-
     Value * const maskedFinalValue = b->CreateAnd(currentSeparators, priorToFirstErrorMask);
+
     Value * const maskedSepVec = b->simd_popcount(sizeWidth, maskedFinalValue);
     Value * const reportedSepVec = b->CreateAdd(maskedSepVec, partialSeparatorPartialSumPhi);
     Value * const maskedPartialSum = b->hsimd_partial_sum(sizeWidth, reportedSepVec);
@@ -284,12 +296,19 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
 
     Value * priorSeparatorPos = b->CreateSelect(usingMaskedValue, partialCurrentStrideIndexPhi, updatedPriorSeparatorStrideIndexPhi);
     priorSeparatorPos = b->CreateMul(priorSeparatorPos, sz_BITBLOCKWIDTH);
-    priorSeparatorPos = b->CreateAdd(b->CreateMul(b->CreateAdd(priorSeparatorWordIndex, sz_ONE), sz_SIZEWIDTH), priorSeparatorPos);
-    priorSeparatorPos = b->CreateSub(priorSeparatorPos, b->CreateCountReverseZeroes(priorSeparatorWord));
+    priorSeparatorPos = b->CreateAdd(b->CreateMul(priorSeparatorWordIndex, sz_SIZEWIDTH), priorSeparatorPos);
+    priorSeparatorPos = b->CreateAdd(priorSeparatorPos, b->CreateSub(sz_SIZEWIDTH, b->CreateCountReverseZeroes(priorSeparatorWord)));
     priorSeparatorPos = b->CreateSelect(b->CreateICmpEQ(priorSeparatorWord, sz_ZERO), byteStreamProcessed, priorSeparatorPos);
 
-    callbackArgs[3] = b->getRawInputPointer("InputStream", priorSeparatorPos);
-    callbackArgs[4] = b->getRawInputPointer("InputStream", firstErrorSeparator);
+    Value * const errorStreamLength = b->getProcessedItemCount("errorStream");
+    Value * start = b->CreateAdd(errorStreamLength, priorSeparatorPos);
+
+    callbackArgs[3] = b->getRawInputPointer("InputStream", start);
+
+    Value * baseEnd = b->CreateAdd(errorStreamLength, b->CreateMul(partialCurrentStrideIndexPhi, sz_BITBLOCKWIDTH));
+    Value * end = b->CreateAdd(baseEnd, firstErrorSeparator);
+
+    callbackArgs[4] = b->getRawInputPointer("InputStream", end);
     callbackArgs[5] = isWarning;
 
     Function * callbackFn = b->getModule()->getFunction("csv_error_identifier_callback"); assert (callbackFn);
@@ -338,8 +357,7 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
 
     // load and half-add the subsequent blocks
     for (unsigned i = 1; i < blocksPerSegment; ++i) {
-        Constant * const I = b->getSize(i);
-        Value * const idx = b->CreateAdd(fullStartingStrideNumPhi, I);
+        Value * const idx = b->CreateAdd(fullStartingStrideNumPhi, b->getSize(i));
         Value * value = b->loadInputStreamBlock("allSeparators", i32_ZERO, idx);
 
         // is it better to scan to the position we found the last marker in or the defer the sep marker stream?
@@ -363,18 +381,18 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
     // sum the half adders to compute the number of separators found in this full segment
     Value * totalPartialSumVector = fullSeparatorsPartialSumPhi;
     for (unsigned i = 0; i < m; ++i) {
-        Value * partialSum = b->simd_popcount(sizeWidth, adders[i]);
+        Value * popCounts = b->simd_popcount(sizeWidth, adders[i]);
         if (i > 0) {
-            partialSum = b->CreateShl(partialSum, i);
+            popCounts = b->CreateShl(popCounts, i);
         }
-        totalPartialSumVector = b->CreateAdd(totalPartialSumVector, partialSum);
+        totalPartialSumVector = b->CreateAdd(totalPartialSumVector, popCounts);
     }
 
     fullStartingStrideNumPhi->addIncoming(totalNumOfStridesProcessed, noErrorFoundFull);
     fullPriorSeparatorStridePhi->addIncoming(lastSeparatorIndex, noErrorFoundFull);
     fullSeparatorsPartialSumPhi->addIncoming(totalPartialSumVector, noErrorFoundFull);
 
-    Value * const hasMoreStrides = b->CreateICmpEQ(totalNumOfStridesProcessed, totalErrorStrideLength);
+    Value * const hasMoreStrides = b->CreateICmpNE(totalNumOfStridesProcessed, totalErrorStrideLength);
     b->CreateCondBr(hasMoreStrides, fullStrideStart, exit);
 
     // exit

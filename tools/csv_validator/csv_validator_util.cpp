@@ -249,9 +249,6 @@ void ExtractCoordinateSequence::generateMultiBlockLogic(BuilderRef b, Value * co
     const auto sizeTyWidth = sizeTy->getBitWidth();
 
     Constant * const sz_BITS = b->getSize(sizeTyWidth);
-    Constant * const sz_MAXBIT = b->getSize(sizeTyWidth - 1);
-
-    Type * const blockTy = b->getBitBlockType();
 
     assert ((mStride % sizeTyWidth ) == 0);
 
@@ -290,8 +287,6 @@ void ExtractCoordinateSequence::generateMultiBlockLogic(BuilderRef b, Value * co
     Value * a = b->simd_popcount(b->getBitBlockWidth(), currentMarks);
     a = b->CreateBitCast(a, b->getIntNTy(b->getBitBlockWidth()));
     a = b->CreateTrunc(a, sizeTy);
-
-    Value * expected = b->CreateAdd(a, outerCoordinatePhi);
 
     Value * const currentVec = b->CreateBitCast(currentMarks, sizeVecTy);
     b->CreateLikelyCondBr(b->bitblock_any(currentMarks), strideCoordinateVecLoop, strideCoordinateVecDone);

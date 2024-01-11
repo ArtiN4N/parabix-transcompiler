@@ -292,8 +292,6 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
 
     PabloAST * result = pb.createInFile(pb.createXor(allSeparatorsMatches, allSeparators), "result");
 
-
-
     auto invalid = getOutputStreamSet("invalid");
     pb.createAssign(cast<Var>(invalid[0]), result);
     if (warning) {
