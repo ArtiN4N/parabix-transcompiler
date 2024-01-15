@@ -21,7 +21,9 @@ namespace csv {
         bool MatchIsFalse = false; // negate field match when validating
         bool IgnoreCase = false; // the case of a column value is not important
         bool Warning = false; // violations are warnings not errors
+        bool IsIdentifyingColumn = false;
         re::RE * Expression = nullptr;
+        std::vector<std::string> Rule;
         std::vector<CSVSchemaCompositeKey> CompositeKey;
     };
 
@@ -32,8 +34,7 @@ namespace csv {
         bool PermitEmpty = false; // whether CSV file can be empty
         bool NoHeader = false; // whether first line of CSV is column header names
         bool IgnoreColumnNameCase = false; // ignore mismatches in case for column header names
-        bool AnyWarnings = false;
-        bool AnyUniqueKeys = false;
+        size_t NumOfIdentifyingColumns = 0;
         std::vector<CSVSchemaColumnRule> Column;
     };
 

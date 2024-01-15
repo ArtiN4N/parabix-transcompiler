@@ -9,7 +9,7 @@
 
 #include <kernel/pipeline/driver/cpudriver.h>
 
-typedef void (*CSVValidatorFunctionType)(uint32_t fd, const char * fileName);
+typedef void (*CSVValidatorFunctionType)(uint32_t fd, const csv::CSVSchema & schema, const char * fileName);
 
 class CSVMatcherEngine {
     enum class FileStatus {Pending, GrepComplete, PrintComplete};
@@ -23,7 +23,7 @@ public:
 
     CSVMatcherEngine() = default;
 
-    CSVValidatorFunctionType compile(CPUDriver & pxDriver, const std::string & inputSchema);
+    CSVValidatorFunctionType compile(CPUDriver & pxDriver, csv::CSVSchema & schema);
 
 protected:
 
@@ -45,7 +45,6 @@ protected:
     };
     bool hasComponent(Component compon_set, Component c);
     void setComponent(Component & compon_set, Component c);
-    bool matchesToEOLrequired();
 
     // Transpose to basis bit streams, if required otherwise return the source byte stream.
     kernel::StreamSet * getBasis(ProgBuilderRef P, kernel::StreamSet * ByteStream);
@@ -56,55 +55,13 @@ protected:
     void grepPrologue(ProgBuilderRef P, kernel::StreamSet * SourceStream);
     // Prepare external property and GCB streams, if required.
     void prepareExternalStreams(ProgBuilderRef P, kernel::StreamSet * SourceStream);
-    kernel::StreamSet * getMatchSpan(ProgBuilderRef P, re::RE * r, kernel::StreamSet * MatchResults);
-    kernel::StreamSet * initialMatches(ProgBuilderRef P, kernel::StreamSet * ByteStream);
-    kernel::StreamSet * matchedLines(ProgBuilderRef P, kernel::StreamSet * ByteStream);
-    kernel::StreamSet * grepPipeline(ProgBuilderRef P, kernel::StreamSet * ByteStream);
-//    virtual uint64_t doGrep(const std::vector<std::string> & fileNames, std::ostringstream & strm);
-//    int32_t openFile(const std::string & fileName, std::ostringstream & msgstrm);
-//    void applyColorization(const std::unique_ptr<kernel::ProgramBuilder> & E,
-//                                              kernel::StreamSet * SourceCoords,
-//                                              kernel::StreamSet * MatchSpans,
-//                                              kernel::StreamSet * Basis);
-//    std::string linePrefix(std::string fileName);
 
     void addExternalStreams(ProgBuilderRef P, const cc::Alphabet * a, const csv::CSVSchema &schema, csv::CSVSchemaValidatorOptions & options, kernel::StreamSet * indexMask = nullptr);
 
 
 protected:
 
-    EngineKind mEngineKind;
-    bool mSuppressFileMessages;
-    argv::BinaryFilesMode mBinaryFilesMode;
-//    bool mPreferMMap;
-//    bool mColoring;
-//    bool mShowFileNames;
-    std::string mStdinLabel;
-//    bool mShowLineNumbers;
-//    unsigned mBeforeContext;
-//    unsigned mAfterContext;
-    bool mInitialTab;
-    bool mCaseInsensitive;
-    bool mInvertMatches;
-    int mMaxCount;
-    bool mGrepStdIn;
-    NullCharMode mNullMode;
-//    BaseDriver & mGrepDriver;
-    void * mMainMethod;
-    void * mBatchMethod;
-
-//    std::atomic<unsigned> mNextFileToGrep;
-//    std::atomic<unsigned> mNextFileToPrint;
-//    std::vector<boost::filesystem::path> mInputPaths;
-//    std::vector<std::vector<std::string>> mFileGroups;
-//    std::vector<std::ostringstream> mResultStrs;
-//    std::vector<FileStatus> mFileStatus;
-//    bool grepMatchFound;
-    grep::GrepRecordBreakKind mGrepRecordBreak;
     bool UnicodeIndexing = false;
-//    re:: RE * mRE;
-    re::ReferenceInfo mRefInfo;
-//    std::string mFileSuffix;
     Component mExternalComponents;
     Component mInternalComponents;
     const cc::Alphabet * mIndexAlphabet;
@@ -112,11 +69,6 @@ protected:
     kernel::ExternalStreamTable mExternalTable;
     kernel::StreamSet * mLineBreakStream;
     kernel::StreamSet * mU8index;
-    kernel::StreamSet * mU21;
-    std::vector<std::string> mSpanNames;
-    re::UTF8_Transformer mUTF8_Transformer;
-//    pthread_t mEngineThread;
-//    kernel::ParabixIllustrator * mIllustrator;
 };
 
 #endif // CSV_MATCHER_ENGINE_H

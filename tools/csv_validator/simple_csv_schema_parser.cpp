@@ -12,10 +12,11 @@
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/raw_ostream.h>
 #include <boost/container/flat_set.hpp>
+#include <re/adt/re_alt.h>
 #include <re/parse/PCRE_parser.h>
 #include <re/printer/re_printer.h>
-
 #include <llvm/Support/raw_ostream.h>
+#include <llvm/ADT/BitVector.h>
 
 using namespace llvm;
 using namespace boost;
@@ -422,9 +423,14 @@ CSVSchema CSVSchemaParser::load(const llvm::StringRef fileName) {
                     requireChar('(', "expected (");
                     skipSpaceUntilNewLine();
                     const auto re = parseStringLiteral();
-                    rule.Expression = re::RE_Parser::parse(re.str());
-//                    errs() << "INPUT RE:\n\n" << re << ":\n\n"
-//                           << Printer_RE::PrintRE(rule.Expression) << "\n\n\n";
+                    auto reString = re.str();
+                    auto expr = re::RE_Parser::parse(reString);
+                    if (rule.Expression) {
+                        rule.Expression = re::makeAlt({rule.Expression, expr});
+                    } else {
+                        rule.Expression = expr;
+                    }
+                    rule.Rule.emplace_back(reString);
                     skipSpace();
                     requireChar(')', "expected )");
                 } else if (exprName.equals("unique")) {
@@ -463,12 +469,10 @@ CSVSchema CSVSchemaParser::load(const llvm::StringRef fileName) {
                         }
 
                         std::sort(fields.begin(), fields.end());
-                        fields.erase(std::unique( fields.begin(), fields.end()), fields.end() );
+                        fields.erase(std::unique(fields.begin(), fields.end()), fields.end() );
                     } else {
                         fields.push_back(u);
                     }
-
-                    schema.AnyUniqueKeys = true;
 
                     rule.CompositeKey.emplace_back(key);
                 } else {
@@ -489,7 +493,6 @@ parse_column_directives:
                     } else if (matchString("ignoreCase")) {
                         rule.IgnoreCase = true;
                     } else if (matchString("warning")) {
-                        schema.AnyWarnings = true;
                         rule.Warning = true;
                     } else {
                         reportParsingFailure("unknown column directive");
@@ -519,14 +522,25 @@ done_parsing_column_rule:
                 }
             }
 
+            BitVector identifyingColumn(schema.Column.size());
+
             for (CSVSchemaColumnRule & col : schema.Column) {
                 for (CSVSchemaCompositeKey & key : col.CompositeKey) {
                     for (auto & k : key.Fields) {
                         k = L[k];
+                        assert (k < schema.Column.size());
+                        identifyingColumn.set(k);
                     }
                     std::sort(key.Fields.begin(), key.Fields.end());
                 }
             }
+
+            for (auto k : identifyingColumn.set_bits()) {
+                schema.Column[k].IsIdentifyingColumn = true;
+            }
+
+            schema.NumOfIdentifyingColumns = identifyingColumn.count();
+
         }
 
         if (schema.TotalColumns == 0) {

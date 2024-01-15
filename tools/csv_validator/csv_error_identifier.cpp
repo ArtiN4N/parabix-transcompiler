@@ -4,39 +4,41 @@
 #include <kernel/core/streamset.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Module.h>
+#include "csv_schema_validator.h"
 #include "csv_validator_toolchain.h"
 #include <boost/intrusive/detail/math.hpp>
 
 using boost::intrusive::detail::floor_log2;
 using namespace llvm;
 
-extern "C" void csv_error_identifier_callback(char * fileName, const size_t fieldNum, const size_t recordNum, char * start, char * end, bool isWarning) {
-    foundError = true;
+extern "C" bool csv_error_identifier_callback(const csv::CSVSchema & schema, char * fileName, const size_t delimiterNum, char * start, char * end) {
+
+    const auto numOfFields = schema.Column.size();
+    // TODO: this will fail if we allow erroneous line ends
+    const auto fieldNum = (delimiterNum % numOfFields);
+    const auto recordNum = (delimiterNum / numOfFields);
+
+    const auto & column = schema.Column[fieldNum];
 
     auto & out = errs();
 
-    out << "Error found in " << fileName << ": Field " << fieldNum << " of Record " << recordNum
-        << "\n\n";
-
-    assert (start <= end);
-
-//    for (auto c = start - 16; c < start; ++c) {
-//        out << *c;
-//    }
-    out.changeColor(raw_ostream::Colors::RED);
+    if (column.Warning) {
+        out << "Warning";
+    } else {
+        out << "Error";
+    }
+    out << ": ";
+    for (const auto & rule : column.Rule) {
+        out << ' ' << rule;
+    }
+    out << " fails for record: " << (recordNum + 1) << ", column: " << column.Name
+        << " (" << (fieldNum + 1) << "), value: \"";
     for (auto c = start; c < end; ++c) {
         out << *c;
     }
-    out.resetColor();
-//    for (auto c = end; c < end + 16; ++c) {
-//        out << *c;
-//    }
+    out << "\"\n";
 
-    out << "\n\n";
-    out << " does not match supplied rule.\n";
-    // TODO: this needs to report more information as to what field/rule was invalid
-    // TODO: this cannot differntiate between erroneous line ends
-    // errs() << out.str();
+    return column.Warning || !failFast;
 }
 
 namespace kernel {
@@ -46,7 +48,8 @@ namespace kernel {
 /** ------------------------------------------------------------------------------------------------------------- *
  * @brief constructor
  ** ------------------------------------------------------------------------------------------------------------- */
-CSVErrorIdentifier::CSVErrorIdentifier(BuilderRef b, StreamSet * const errorStream, StreamSet * const allSeparators, StreamSet * const ByteStream, Scalar * const fileName, Scalar * const fieldsPerRecord)
+CSVErrorIdentifier::CSVErrorIdentifier(BuilderRef b, StreamSet * const errorStream, StreamSet * const allSeparators, StreamSet * const ByteStream,
+                                       Scalar * const schemaObject, Scalar * const fileName)
 : MultiBlockKernel(b, "CSVErrorIdentifier" + std::to_string(codegen::SegmentSize) + ((errorStream->getNumElements() == 2) ? "W" : "E"),
 // inputs
 {Binding{"errorStream", errorStream}
@@ -56,7 +59,7 @@ CSVErrorIdentifier::CSVErrorIdentifier(BuilderRef b, StreamSet * const errorStre
 {},
 // input scalars
 {Binding{"fileName", fileName}
-,Binding{"fieldsPerRecord", fieldsPerRecord}},
+,Binding{"schemaObject", schemaObject}},
 // output scalars
 {},
 // kernel state
@@ -67,15 +70,23 @@ CSVErrorIdentifier::CSVErrorIdentifier(BuilderRef b, StreamSet * const errorStre
     assert ((codegen::SegmentSize % b->getBitBlockWidth()) == 0);
     assert ((b->getBitBlockWidth() % (sizeof(size_t) * 8)) == 0);
     setStride(codegen::SegmentSize);
-
-    #warning not correctly named for warnings
 }
 
 /** ------------------------------------------------------------------------------------------------------------- *
  * @brief linkExternalMethods
  ** ------------------------------------------------------------------------------------------------------------- */
 void CSVErrorIdentifier::linkExternalMethods(BuilderRef b) {
-    b->LinkFunction("csv_error_identifier_callback", csv_error_identifier_callback);
+
+    FixedArray<Type *, 5> params;
+    params[0] = b->getVoidPtrTy();
+    PointerType * const int8PtrTy = b->getInt8PtrTy();
+    params[1] = int8PtrTy;
+    params[2] = b->getSizeTy();
+    params[3] = int8PtrTy;
+    params[4] = int8PtrTy;
+
+    FunctionType * const funcType = FunctionType::get(b->getInt1Ty(), params, false);
+    b->LinkFunction("csv_error_identifier_callback", funcType, (void*)csv_error_identifier_callback);
 }
 
 /** ------------------------------------------------------------------------------------------------------------- *
@@ -93,9 +104,11 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
 
     BasicBlock * const checkNextSegment = b->CreateBasicBlock("checkNextStride");
 
-    BasicBlock * const foundErrorPosition = b->CreateBasicBlock("findErrorIndexFound");
+    BasicBlock * const foundWarningOrError = b->CreateBasicBlock("findErrorIndexFound");
 
     BasicBlock * const fatalError = b->CreateBasicBlock("fatalError");
+
+    BasicBlock * const checkForMoreErrorsOrWarnings = b->CreateBasicBlock("checkForMoreWarnings");
 
     BasicBlock * const noErrorFoundFull = b->CreateBasicBlock("noErrorFoundFull");
 
@@ -124,10 +137,8 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
         b->CreateInsertElement(Constant::getNullValue(sizeVecTy), allSeparatorsObserved, partialSumFieldCount - 1U);
 
     const auto numOfErrorStreams = b->getInputStreamSet("errorStream")->getNumElements();
-    assert (numOfErrorStreams == 1 || numOfErrorStreams == 2);
+    assert (numOfErrorStreams == 1);
     SmallVector<Constant *, 2> i32_Index(numOfErrorStreams);
-
-    const bool canWarn = (numOfErrorStreams == 2);
 
     for (unsigned i = 0; i < numOfErrorStreams; ++i) {
         i32_Index[i] = b->getInt32(i);
@@ -193,6 +204,8 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
         }
     }
 
+
+
     // count the number of separaters prior to the error mark
     Value * currentSeparators = b->loadInputStreamBlock("allSeparators", i32_ZERO, partialCurrentStrideIndexPhi);
     Value * nextSumPriorSeparator = b->CreateSelect(b->bitblock_any(currentSeparators), partialCurrentStrideIndexPhi, partialPriorSeparatorStrideIndexPhi);
@@ -214,7 +227,7 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
 
     b->SetInsertPoint(errorOrFinalPartialStrideStartLoopExit);
     // If we haven't found an error, we no longer care about the separators. Just loop back (or exit if we're done.)
-    b->CreateCondBr(hasWarningOrError, foundErrorPosition, checkNextSegment);
+    b->CreateCondBr(hasWarningOrError, foundWarningOrError, checkNextSegment);
 
     b->SetInsertPoint(checkNextSegment);
     Value * const noMoreSegments = b->CreateICmpEQ(partialSegmentLengthPhi, totalErrorStrideLength);
@@ -224,7 +237,7 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
     b->CreateCondBr(noMoreSegments, exit, fullStrideStart);
 
     //
-    b->SetInsertPoint(foundErrorPosition);
+    b->SetInsertPoint(foundWarningOrError);
     PHINode * const updatedPriorSeparatorStrideIndexPhi = b->CreatePHI(sizeTy, 2);
     updatedPriorSeparatorStrideIndexPhi->addIncoming(partialPriorSeparatorStrideIndexPhi, errorOrFinalPartialStrideStartLoopExit);
     PHINode * const updatedErrorBlockPhi = b->CreatePHI(potentialErrorBlock->getType(), 2);
@@ -239,28 +252,14 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
         firstErrorWordIndex = b->CreateSelect(anySet, idx, firstErrorWordIndex);
     }
 
-    FixedArray<Value *, 6> callbackArgs;
+    FixedArray<Value *, 5> callbackArgs;
 
-    callbackArgs[0] = b->getScalarField("fileName");
-
-    Value * const fieldsPerRecord = b->getScalarField("fieldsPerRecord");
+    callbackArgs[0] = b->getScalarField("schemaObject");
+    callbackArgs[1] = b->getScalarField("fileName");
 
     Value * const firstErrorWord = b->CreateExtractElement(errorVec, firstErrorWordIndex);
     Value * const firstErrorWordPos = b->CreateCountForwardZeroes(firstErrorWord, "", true);
     Value * firstErrorSeparator = b->CreateAdd(b->CreateMul(firstErrorWordIndex, sz_SIZEWIDTH), firstErrorWordPos);
-
-    Value * isWarning = nullptr;
-    if (numOfErrorStreams == 1) {
-        isWarning = b->getInt1(canWarn);
-    } else {
-        Value * const checkMask = b->CreateShl(ConstantInt::get(sizeTy, 1), firstErrorWordPos);
-        Value * const val = b->loadInputStreamBlock("errorStream", i32_Index[0], partialCurrentStrideIndexPhi);
-        Value * const vec = b->CreateBitCast(val, sizeVecTy);
-        Value * const word = b->CreateExtractElement(vec, firstErrorWordIndex);
-        // The first stream indicates an error and second a warning. So if we did not see the bit
-        // in the first stream, we assume it's a warning.
-        isWarning = b->CreateICmpEQ(b->CreateAnd(word, checkMask), sz_ZERO);
-    }
 
     Value * const priorToFirstErrorMask = b->CreateNot(b->bitblock_mask_from(firstErrorSeparator, true));
     Value * const maskedFinalValue = b->CreateAnd(currentSeparators, priorToFirstErrorMask);
@@ -270,8 +269,7 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
     Value * const maskedPartialSum = b->hsimd_partial_sum(sizeWidth, reportedSepVec);
     Value * const totalNumOfMaskedSeparators = b->mvmd_extract(sizeWidth, maskedPartialSum, partialSumFieldCount - 1);
 
-    callbackArgs[1] = b->CreateAdd(b->CreateURem(totalNumOfMaskedSeparators, fieldsPerRecord), sz_ONE);
-    callbackArgs[2] = b->CreateAdd(b->CreateUDiv(totalNumOfMaskedSeparators, fieldsPerRecord), sz_ONE);
+    callbackArgs[2] = totalNumOfMaskedSeparators;
 
     // We know the final position of the byte input to pass the user is indicated by the position in the error
     // stream but not where it starts. We need to backtrack from the error position to find the start.
@@ -309,32 +307,25 @@ void CSVErrorIdentifier::generateMultiBlockLogic(BuilderRef b, Value * const num
     Value * end = b->CreateAdd(baseEnd, firstErrorSeparator);
 
     callbackArgs[4] = b->getRawInputPointer("InputStream", end);
-    callbackArgs[5] = isWarning;
 
     Function * callbackFn = b->getModule()->getFunction("csv_error_identifier_callback"); assert (callbackFn);
 
-    b->CreateCall(callbackFn->getFunctionType(), callbackFn, callbackArgs);
+    Value * doNotAbort = b->CreateCall(callbackFn->getFunctionType(), callbackFn, callbackArgs);
+    b->CreateCondBr(doNotAbort, checkForMoreErrorsOrWarnings, fatalError);
 
-    if (canWarn) {
-        BasicBlock * const checkForMoreWarnings = b->CreateBasicBlock("checkForMoreWarnings", noErrorFoundFull);
-        b->CreateCondBr(isWarning, checkForMoreWarnings, fatalError);
+    b->SetInsertPoint(checkForMoreErrorsOrWarnings);
+    Value * const upToFirstErrorMask = b->bitblock_mask_to(firstErrorSeparator, true);
+    Value * const afterFirstErrorMask = b->CreateNot(upToFirstErrorMask);
+    Value * const nextPotentialErrorBlock = b->CreateAnd(afterFirstErrorMask, updatedErrorBlockPhi);
+    updatedPriorSeparatorStrideIndexPhi->addIncoming(partialCurrentStrideIndexPhi, checkForMoreErrorsOrWarnings);
+    updatedErrorBlockPhi->addIncoming(nextPotentialErrorBlock, checkForMoreErrorsOrWarnings);
 
-        b->SetInsertPoint(checkForMoreWarnings);
-        Value * const upToFirstErrorMask = b->bitblock_mask_to(firstErrorSeparator, true);
-        Value * const afterFirstErrorMask = b->CreateNot(upToFirstErrorMask);
-        Value * const nextPotentialErrorBlock = b->CreateAnd(afterFirstErrorMask, updatedErrorBlockPhi);
-        updatedPriorSeparatorStrideIndexPhi->addIncoming(partialCurrentStrideIndexPhi, checkForMoreWarnings);
-        updatedErrorBlockPhi->addIncoming(nextPotentialErrorBlock, checkForMoreWarnings);
+    partialCurrentStrideIndexPhi->addIncoming(nextStrideIndex, checkForMoreErrorsOrWarnings);
+    partialSegmentLengthPhi->addIncoming(partialSegmentLengthPhi, checkForMoreErrorsOrWarnings);
+    partialPriorSeparatorStrideIndexPhi->addIncoming(nextSumPriorSeparator, checkForMoreErrorsOrWarnings);
+    partialSeparatorPartialSumPhi->addIncoming(nextSumSeparatorPartialSum, checkForMoreErrorsOrWarnings);
 
-        partialCurrentStrideIndexPhi->addIncoming(nextStrideIndex, checkForMoreWarnings);
-        partialSegmentLengthPhi->addIncoming(partialSegmentLengthPhi, checkForMoreWarnings);
-        partialPriorSeparatorStrideIndexPhi->addIncoming(nextSumPriorSeparator, checkForMoreWarnings);
-        partialSeparatorPartialSumPhi->addIncoming(nextSumSeparatorPartialSum, checkForMoreWarnings);
-
-        b->CreateCondBr(b->bitblock_any(nextPotentialErrorBlock), foundErrorPosition, errorOrFinalPartialStrideStartLoopStart);
-    } else {
-        b->CreateBr(fatalError);
-    }
+    b->CreateCondBr(b->bitblock_any(nextPotentialErrorBlock), foundWarningOrError, errorOrFinalPartialStrideStartLoopStart);
 
     b->SetInsertPoint(fatalError);
     b->setTerminationSignal();

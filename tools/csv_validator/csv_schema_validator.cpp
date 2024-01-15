@@ -46,31 +46,15 @@ std::string CSVSchemaValidatorKernel::makeCSVSchemaSignature(const csv::CSVSchem
 //        out << '"';
 //        out.write_escaped(column.Name);
 //        out << '"';
-//        if (column.Optional) {
-//            out << 'O';
-//        }
         if (column.MatchIsFalse) {
-            out << 'N';
+            out << '!';
         }
-//        if (column.IgnoreCase) {
-//            out << 'I';
-//        }
-        if (column.Warning) {
-            out << 'W';
+        if (column.IsIdentifyingColumn) {
+            out << 'U';
         }
         out << '"';
         out.write_escaped(Printer_RE::PrintRE(column.Expression));
         out << '"';
-        for (const auto & key : column.CompositeKey) {
-            assert (key.Fields.size() > 0);
-            char joiner = '{';
-            for (const auto k : key.Fields) {
-                assert (k < schema.Column.size());
-                out << joiner << k;
-                joiner = ',';
-            }
-            out << '}';
-        }
     }
 
     for (const auto & a : options.mExternalBindings) {
@@ -106,7 +90,7 @@ CSVSchemaValidatorKernel::CSVSchemaValidatorKernel(BuilderRef b, const csv::CSVS
     if (mOptions.mIndexStream) {
         mInputStreamSets.emplace_back("mIndexing", mOptions.mIndexStream);
     }
-    if (schema.AnyUniqueKeys) {
+    if (schema.NumOfIdentifyingColumns) {
         mOutputStreamSets.emplace_back("hashKeyMarkers", mOptions.mKeyMarkers);
         mOutputStreamSets.emplace_back("hashKeyRuns", mOptions.mKeyRuns);
     }
@@ -182,21 +166,6 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
     // total schema length is "long", we won't necessarily be starting a new record every block. Can we "break up" the validation checks to
     // test if we should scan through a chunk of them based on the current position?
 
-    // I expect to see at most one UID (since databases only really support a single primary/composite key)
-    // but since the logic here doesn't depend on it, I permit it for multiple independent keys.
-
-    std::vector<bool> usedInSchemaUID(n, false);
-
-    if (mSchema.AnyUniqueKeys) {
-        for (const auto & col : mSchema.Column) {
-            for (const auto & key : col.CompositeKey) {
-                for (const auto k : key.Fields) {
-                    usedInSchemaUID[k] = true;
-                }
-            }
-        }
-    }
-
     FixedArray<PabloAST *, 2> args;
     args[0] = nullptr;
 
@@ -231,8 +200,6 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
     // However, this would need to be aware of whether we're ignoring the first line or not.
     PabloAST * currentPos = pb.createExtract(fd, pb.getInteger(CSVDataParserFieldData::StartPositions));
 
-    PabloAST * warning = nullptr;
-
     PabloAST * allSeparatorsMatches = nullptr;
 
     for (unsigned i = 0; i < n; ++i) {
@@ -250,23 +217,8 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
         if (col.MatchIsFalse) {
             match = pb.createNot(match);
         }
-        if (LLVM_UNLIKELY(col.Warning)) {
-            assert (mSchema.AnyWarnings);
-            PabloAST * nextWarning = pb.createAnd(currentPos, pb.createNot(match), "nextWarning");
-            if (warning) {
-                warning = pb.createOr(warning, nextWarning);
-            } else {
-                warning = nextWarning;
-            }
-        } else {
-            currentPos = pb.createAnd(currentPos, match);
-        }
 
-        if (allSeparatorsMatches) {
-            allSeparatorsMatches = pb.createOr(allSeparatorsMatches, currentPos);
-        } else {
-            allSeparatorsMatches = currentPos;
-        }
+        match = pb.createAnd(currentPos, match);
 
         if (i < (n - 1)) {
             currentPos = pb.createAnd(currentPos, fieldSeparators, "matchedFieldSep" + std::to_string(i + 1));
@@ -274,7 +226,13 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
             currentPos = pb.createAnd(currentPos, recordSeparators, "matchedRecSep");
         }
 
-        if (LLVM_UNLIKELY(usedInSchemaUID[i])) {
+        if (allSeparatorsMatches) {
+            allSeparatorsMatches = pb.createOr(allSeparatorsMatches, match);
+        } else {
+            allSeparatorsMatches = match;
+        }
+
+        if (LLVM_UNLIKELY(col.IsIdentifyingColumn)) {
             if (args[0] == nullptr) {
                 args[0] = fieldStart;
                 args[1] = currentPos;
@@ -289,20 +247,10 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
     assert (allSeparatorsMatches);
     assert (nonSeperators);
 
-
     PabloAST * result = pb.createInFile(pb.createXor(allSeparatorsMatches, allSeparators), "result");
+    pb.createAssign(pb.createExtract(getOutputStreamVar("invalid"), pb_ZERO), result);
 
-    auto invalid = getOutputStreamSet("invalid");
-    pb.createAssign(cast<Var>(invalid[0]), result);
-    if (warning) {
-        if (invalid.size() < 2) {
-            report_fatal_error("StreamSet \"invalid\" requires at least two elements");
-        }
-        warning = pb.createInFile(warning, "warning");
-        pb.createAssign(cast<Var>(invalid[1]), warning);
-    }
-
-    if (mSchema.AnyUniqueKeys) {
+    if (mSchema.NumOfIdentifyingColumns) {
         #warning this won't work with noHeader set if the key field is the first one
 
         args[0] = pb.createAdvance(args[0], 1);
