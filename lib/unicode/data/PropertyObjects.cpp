@@ -340,6 +340,99 @@ const UnicodeSet NumericPropertyObject::GetCodepointSetMatchingPattern(re::RE * 
     return matched;
 }
 
+const UnicodeSet CodePointPropertyObject::GetCodepointSet(const std::string & value_spec) {
+    unsigned val_bytes = value_spec.length();
+    codepoint_t cp;
+    unsigned cp_bytes = firstCodepointLengthAndVal(value_spec, cp);
+    if (val_bytes != cp_bytes) {
+        return UnicodeSet();  // empty set
+    }
+    UnicodeSet result_set;
+    if (mSelfCodepointSet.contains(cp)) {
+        result_set.insert(cp);
+    }
+    for (auto & p : mExplicitCodepointMap) {
+        if (p.second == cp) {
+            result_set.insert(p.first);
+        }
+    }
+    return result_set;
+}
+
+const UnicodeSet CodePointPropertyObject::GetPropertyIntersection(PropertyObject * p) {
+    UnicodeSet intersection;
+    if (isa<CodePointPropertyObject>(p) || isa<StringPropertyObject>(p) || isa<StringOverridePropertyObject>(p)) {
+        intersection = (mNullCodepointSet & p->GetNullSet()) + (mSelfCodepointSet & p->GetReflexiveSet());
+        for (auto & mapping : mExplicitCodepointMap) {
+            if (GetStringValue(mapping.first) == p->GetStringValue(mapping.first)) {
+                intersection.insert(mapping.first);
+            }
+        }
+        return intersection;
+    } else return UnicodeSet();
+}
+
+const UnicodeSet CodePointPropertyObject::GetCodepointSetMatchingPattern(re::RE * re, GrepLinesFunctionType grep) {
+    const re::CC * matchable = re::matchableCodepoints(re);
+    UCD::UnicodeSet matched(*matchable & mSelfCodepointSet);
+    for (auto & p : mExplicitCodepointMap) {
+        if (matched.contains(p.second)) {
+            matched.insert(p.first);
+        }
+    }
+    return matched;
+}
+
+const UnicodeSet CodePointPropertyObject::GetNullSet() const {
+    return mNullCodepointSet;
+}
+
+const UnicodeSet CodePointPropertyObject::GetReflexiveSet() const {
+    return mSelfCodepointSet;
+}
+
+const codepoint_t CodePointPropertyObject::GetCodePointValue(codepoint_t cp) const {
+    if (mSelfCodepointSet.contains(cp)) {
+        return cp;
+    }
+    auto f = mExplicitCodepointMap.find(cp);
+    if (f != mExplicitCodepointMap.end()) {
+        return f->second;
+    }
+    llvm::report_fatal_error("codepoint property value not found");
+}
+
+const std::string CodePointPropertyObject::GetStringValue(codepoint_t cp) const {
+    std::u32string s(1, GetCodePointValue(cp));
+    std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> conv;
+    return conv.to_bytes(s);
+}
+
+std::vector<UCD::UnicodeSet> & CodePointPropertyObject::GetBitTransformSets() {
+    // Return the previously computed vector of bit transformation sets, if it exists.
+    if (bit_xform_sets.empty()) {
+        // Otherwise compute and return.
+        //
+        // Basis set i is the set of all codepoints whose numerical enumeration code e
+        // has bit i set, i.e., (e >> i) & 1 == 1.
+        for (auto & p : mExplicitCodepointMap) {
+            codepoint_t bit_diff = p.second ^ p.first;
+            unsigned bit = 0;
+            while (bit_diff > 0) {
+                if ((bit_diff & 1UL) == 1UL) {
+                    while (bit_xform_sets.size() <= bit) {
+                        bit_xform_sets.push_back(UnicodeSet());
+                    }
+                    bit_xform_sets[bit].insert(p.first);
+                }
+                bit_diff >>= 1;
+                bit++;
+            }
+        }
+    }
+    return bit_xform_sets;
+}
+
 const UnicodeSet StringPropertyObject::GetCodepointSet(const std::string & value_spec) {
     if (value_spec.empty()) {
         return mNullCodepointSet;
@@ -370,6 +463,9 @@ const UnicodeSet StringPropertyObject::GetCodepointSet(const std::string & value
 
 const UnicodeSet StringPropertyObject::GetPropertyIntersection(PropertyObject * p) {
     UnicodeSet intersection;
+    if (isa<CodePointPropertyObject>(p)) {
+        return p->GetPropertyIntersection(this);
+    }
     if (isa<StringPropertyObject>(p) || isa<StringOverridePropertyObject>(p)) {
         intersection = (mNullCodepointSet & p->GetNullSet()) + (mSelfCodepointSet & p->GetReflexiveSet());
         for (unsigned i = 0; i < mExplicitCps.size(); i++) {
@@ -471,6 +567,9 @@ const std::string StringOverridePropertyObject::GetStringValue(codepoint_t cp) c
 
 const UnicodeSet StringOverridePropertyObject::GetPropertyIntersection(PropertyObject * p) {
     UnicodeSet intersection = getPropertyObject(mBaseProperty)->GetPropertyIntersection(p) - mOverriddenSet;
+    if (isa<CodePointPropertyObject>(p)) {
+        return p->GetPropertyIntersection(this);
+    }
     if (isa<StringPropertyObject>(p) || isa<StringOverridePropertyObject>(p)) {
         for (unsigned i = 0; i < mExplicitCps.size(); i++) {
             if (GetStringValue(mExplicitCps[i]) == p->GetStringValue(mExplicitCps[i])) {
