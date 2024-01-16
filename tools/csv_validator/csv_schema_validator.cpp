@@ -211,20 +211,18 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
             currentPos = pb.createAdvanceThenScanThru(fieldStart, nonSeperators, "endOfField" + std::to_string(i));
         }
 
-        PabloAST * match = matches[i];
-
-        const auto & col = columns[i];
-        if (col.MatchIsFalse) {
-            match = pb.createNot(match);
-        }
-
-        match = pb.createAnd(currentPos, match);
-
         if (i < (n - 1)) {
             currentPos = pb.createAnd(currentPos, fieldSeparators, "matchedFieldSep" + std::to_string(i + 1));
         } else {
             currentPos = pb.createAnd(currentPos, recordSeparators, "matchedRecSep");
         }
+
+        PabloAST * match = matches[i];
+        const auto & col = columns[i];
+        if (col.MatchIsFalse) {
+            match = pb.createNot(match);
+        }
+        match = pb.createAnd(currentPos, match);
 
         if (allSeparatorsMatches) {
             allSeparatorsMatches = pb.createOr(allSeparatorsMatches, match);
@@ -233,6 +231,7 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
         }
 
         if (LLVM_UNLIKELY(col.IsIdentifyingColumn)) {
+            assert (mSchema.NumOfIdentifyingColumns > 0);
             if (args[0] == nullptr) {
                 args[0] = fieldStart;
                 args[1] = currentPos;
@@ -251,15 +250,25 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
     pb.createAssign(pb.createExtract(getOutputStreamVar("invalid"), pb_ZERO), result);
 
     if (mSchema.NumOfIdentifyingColumns) {
-        #warning this won't work with noHeader set if the key field is the first one
-
-        args[0] = pb.createAdvance(args[0], 1);
-
-        PabloAST * const keyMarkers = pb.createOr(args[0], args[1]);
+        // TODO: this won't work for zero-length keys
+        PabloAST * run = pb.createIntrinsicCall(pablo::Intrinsic::InclusiveSpan, args);
+        run = pb.createAnd(run, nonSeperators, "run");
+        PabloAST * keyMarkers = nullptr;
+        bool keysAreOnlyInFirstColumn = true;
+        for (unsigned i = 1; i < n; ++i) {
+            const auto & col = columns[i];
+            if (LLVM_UNLIKELY(col.IsIdentifyingColumn)) {
+                keysAreOnlyInFirstColumn = false;
+                break;
+            }
+        }
+        if (keysAreOnlyInFirstColumn) {
+            keyMarkers = pb.createXor(args[0], args[1], "markers");
+        } else {
+            PabloAST * const advRun = pb.createAdvance(run, 1);
+            keyMarkers = pb.createXor(advRun, run, "markers");
+        }
         pb.createAssign(pb.createExtract(getOutputStreamVar("hashKeyMarkers"), pb_ZERO), keyMarkers);
-
-        PabloAST * const run = pb.createIntrinsicCall(pablo::Intrinsic::SpanUpTo, args, "run");
-       // PabloAST * const hashableFieldData = pb.createAnd(run, nonSeperators);
         pb.createAssign(pb.createExtract(getOutputStreamVar("hashKeyRuns"), pb_ZERO), run);
     }
 

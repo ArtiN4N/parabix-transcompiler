@@ -284,10 +284,6 @@ void ExtractCoordinateSequence::generateMultiBlockLogic(BuilderRef b, Value * co
     Value * const currentMarks = b->loadInputStreamBlock("markers", sz_ZERO, strideNumPhi);
     FixedVectorType * const sizeVecTy = FixedVectorType::get(sizeTy, vecsPerStride);
 
-    Value * a = b->simd_popcount(b->getBitBlockWidth(), currentMarks);
-    a = b->CreateBitCast(a, b->getIntNTy(b->getBitBlockWidth()));
-    a = b->CreateTrunc(a, sizeTy);
-
     Value * const currentVec = b->CreateBitCast(currentMarks, sizeVecTy);
     b->CreateLikelyCondBr(b->bitblock_any(currentMarks), strideCoordinateVecLoop, strideCoordinateVecDone);
 

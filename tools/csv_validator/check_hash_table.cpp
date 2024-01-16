@@ -142,10 +142,11 @@ bool report_duplicate_key(const csv::CSVSchema & schema, const char * fileName, 
     size_t keyIndex = 0;
 
     const auto n = schema.Column.size();
+
     for (size_t i = 0; i < n; ++i) {
         const CSVSchemaColumnRule & column = schema.Column[i];
         const auto m = column.CompositeKey.size();
-        if ((keyIndex + m) < keyNum) {
+        if (keyNum < (keyIndex + m)) {
             const CSVSchemaCompositeKey & key = column.CompositeKey[keyNum - keyIndex];
             if (column.Warning) {
                 out << "Warning";
@@ -421,7 +422,6 @@ void CheckKeyUniqueness::generateDoSegmentMethod(BuilderRef b) {
     Value * const totalHashCodeProcessed = b->CreateAdd(hashCodesProcessed, unprocessedHashCodes);
 
     Value * const initial = b->getProcessedItemCount("InputStream");
-
     b->CreateLikelyCondBr(b->CreateICmpNE(unprocessedHashCodes, sz_ZERO), loopStart, loopEnd);
 
     b->SetInsertPoint(loopStart);
