@@ -322,17 +322,15 @@ CSVValidatorFunctionType CSVMatcherEngine::compile(CPUDriver & pxDriver, CSVSche
 
     } else {
 
-        StreamSet * const keyMarkers = P->CreateStreamSet(1);
+        // keys have independent start and end streams to handle any potential zero-length key string
+
+        StreamSet * const keyMarkers = P->CreateStreamSet(2);
 
         options.setKeyMarkerStream(keyMarkers);
 
         StreamSet * const keyRuns = P->CreateStreamSet(1);
 
         options.setKeyRunStream(keyRuns);
-
-        // If we use a bixhash like technique, we could possibly chunk the field data into N-byte phases and use
-        // a loop to combine the data. But how can we prevent the data from one record from being combined with
-        // another? We could scan through and iterate over each record individually?
 
         P->CreateKernelFamilyCall<CSVSchemaValidatorKernel>(schema, BasisBits, fieldData, allSeparators, errors, std::move(options));
 

@@ -56,9 +56,11 @@ std::string CSVSchemaValidatorKernel::makeCSVSchemaSignature(const csv::CSVSchem
         out.write_escaped(Printer_RE::PrintRE(column.Expression));
         out << '"';
     }
-
+    for (const auto & a : options.mAlphabets) {
+        out << ",AL:" << a.first->getName();
+    }
     for (const auto & a : options.mExternalBindings) {
-        out << ",EXT:" << a.getName();
+        out << ",EX:" << a.getName();
     }
 
     out.flush();
@@ -194,6 +196,7 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
 
     PabloAST * const recordSeparators = pb.createAnd(recordSeparatorsAndNonText, allSeparators, "recordSeparators");
     PabloAST * const fieldSeparators = pb.createAnd(allSeparators, pb.createNot(recordSeparators), "fieldSeparators");
+
     PabloAST * const nonSeperators = pb.createInFile(pb.createNot(allSeparators), "nonSeparators");
 
     // TODO: if we started with a carry bit set initially, we wouldn't need the start position stream.
@@ -246,13 +249,17 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
     assert (allSeparatorsMatches);
     assert (nonSeperators);
 
-    PabloAST * result = pb.createInFile(pb.createXor(allSeparatorsMatches, allSeparators), "result");
+    PabloAST * result = pb.createXor(allSeparatorsMatches, allSeparators, "result");
     pb.createAssign(pb.createExtract(getOutputStreamVar("invalid"), pb_ZERO), result);
 
     if (mSchema.NumOfIdentifyingColumns) {
-        // TODO: this won't work for zero-length keys
+        // TODO: not completely correct for quoted fields as it'll include the formatting quotes
+        // but we cannot distinguish them from the escaping quotes here
+
         PabloAST * run = pb.createIntrinsicCall(pablo::Intrinsic::InclusiveSpan, args);
-        run = pb.createAnd(run, nonSeperators, "run");
+        run = pb.createInFile(pb.createAnd(run, nonSeperators), "run");
+
+
         PabloAST * keyMarkers = nullptr;
         bool keysAreOnlyInFirstColumn = true;
         for (unsigned i = 1; i < n; ++i) {
@@ -262,13 +269,18 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
                 break;
             }
         }
+
+        PabloAST * starts = nullptr;
         if (keysAreOnlyInFirstColumn) {
-            keyMarkers = pb.createXor(args[0], args[1], "markers");
+            starts = args[0];
         } else {
             PabloAST * const advRun = pb.createAdvance(run, 1);
-            keyMarkers = pb.createXor(advRun, run, "markers");
+            starts = pb.createAnd(run, pb.createNot(advRun));
         }
-        pb.createAssign(pb.createExtract(getOutputStreamVar("hashKeyMarkers"), pb_ZERO), keyMarkers);
+
+        Var * markers = getOutputStreamVar("hashKeyMarkers");
+        pb.createAssign(pb.createExtract(markers, pb_ZERO), starts);
+        pb.createAssign(pb.createExtract(markers, pb.getInteger(1)), args[1]);
         pb.createAssign(pb.createExtract(getOutputStreamVar("hashKeyRuns"), pb_ZERO), run);
     }
 
