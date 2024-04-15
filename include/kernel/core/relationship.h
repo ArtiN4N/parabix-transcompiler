@@ -196,6 +196,7 @@ enum class CommandLineScalarType {
     , DynamicMultithreadingAddSynchronizationThreshold
     , DynamicMultithreadingRemoveSynchronizationThreshold
     , ParabixIllustratorObject
+    , BufferSegmentLength
     #ifdef ENABLE_PAPI
     , PAPIEventSet
     , PAPIEventList
