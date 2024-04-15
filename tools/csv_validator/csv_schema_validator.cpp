@@ -34,7 +34,7 @@ using namespace pablo;
 
 namespace csv {
 
-std::string CSVSchemaValidatorKernel::makeCSVSchemaSignature(const csv::CSVSchema & schema) {
+std::string CSVSchemaValidatorKernel::makeCSVSchemaSignature(const csv::CSVSchema & schema, const CSVSchemaValidatorOptions & options) {
 
     std::string tmp;
     tmp.reserve(1024);
@@ -46,41 +46,29 @@ std::string CSVSchemaValidatorKernel::makeCSVSchemaSignature(const csv::CSVSchem
 //        out << '"';
 //        out.write_escaped(column.Name);
 //        out << '"';
-//        if (column.Optional) {
-//            out << 'O';
-//        }
         if (column.MatchIsFalse) {
-            out << 'N';
+            out << '!';
         }
-//        if (column.IgnoreCase) {
-//            out << 'I';
-//        }
-        if (column.Warning) {
-            out << 'W';
+        if (column.IsIdentifyingColumn) {
+            out << 'U';
         }
         out << '"';
         out.write_escaped(Printer_RE::PrintRE(column.Expression));
         out << '"';
-        for (const auto & key : column.CompositeKey) {
-            assert (key.Fields.size() > 0);
-            char joiner = '{';
-            for (const auto k : key.Fields) {
-                assert (k < schema.Column.size());
-                out << joiner << k;
-                joiner = ',';
-            }
-            out << '}';
-        }
     }
-
-
+    for (const auto & a : options.mAlphabets) {
+        out << ",AL:" << a.first->getName();
+    }
+    for (const auto & a : options.mExternalBindings) {
+        out << ",EX:" << a.getName();
+    }
 
     out.flush();
     return tmp;
 }
 
 CSVSchemaValidatorKernel::CSVSchemaValidatorKernel(BuilderRef b, const csv::CSVSchema & schema, StreamSet * basisBits, StreamSet * fieldData, StreamSet * allSeperators, StreamSet * invalid, CSVSchemaValidatorOptions && options)
-: CSVSchemaValidatorKernel(b, schema, makeCSVSchemaSignature(schema), basisBits, fieldData, allSeperators, invalid, std::move(options)) {
+: CSVSchemaValidatorKernel(b, schema, makeCSVSchemaSignature(schema, options), basisBits, fieldData, allSeperators, invalid, std::move(options)) {
 
 }
 
@@ -104,7 +92,7 @@ CSVSchemaValidatorKernel::CSVSchemaValidatorKernel(BuilderRef b, const csv::CSVS
     if (mOptions.mIndexStream) {
         mInputStreamSets.emplace_back("mIndexing", mOptions.mIndexStream);
     }
-    if (schema.AnyUniqueKeys) {
+    if (schema.NumOfIdentifyingColumns) {
         mOutputStreamSets.emplace_back("hashKeyMarkers", mOptions.mKeyMarkers);
         mOutputStreamSets.emplace_back("hashKeyRuns", mOptions.mKeyRuns);
     }
@@ -160,6 +148,7 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
     assert (mOptions.mIndexStream);
 
     PabloAST *  indexStream = pb.createExtract(getInputStreamVar("mIndexing"), pb_ZERO);
+
     fieldData = pb.createAnd(fieldData, indexStream, "fieldData");
     re_compiler.setIndexing(&cc::Unicode, fieldData);
 
@@ -178,21 +167,6 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
     // TODO: if the number of validators equals the number of fields, just scan sequentially? We expect everything to be valid but if the
     // total schema length is "long", we won't necessarily be starting a new record every block. Can we "break up" the validation checks to
     // test if we should scan through a chunk of them based on the current position?
-
-    // I expect to see at most one UID (since databases only really support a single primary/composite key)
-    // but since the logic here doesn't depend on it, I permit it for multiple independent keys.
-
-    std::vector<bool> usedInSchemaUID(n, false);
-
-    if (mSchema.AnyUniqueKeys) {
-        for (const auto & col : mSchema.Column) {
-            for (const auto & key : col.CompositeKey) {
-                for (const auto k : key.Fields) {
-                    usedInSchemaUID[k] = true;
-                }
-            }
-        }
-    }
 
     FixedArray<PabloAST *, 2> args;
     args[0] = nullptr;
@@ -222,13 +196,12 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
 
     PabloAST * const recordSeparators = pb.createAnd(recordSeparatorsAndNonText, allSeparators, "recordSeparators");
     PabloAST * const fieldSeparators = pb.createAnd(allSeparators, pb.createNot(recordSeparators), "fieldSeparators");
+
     PabloAST * const nonSeperators = pb.createInFile(pb.createNot(allSeparators), "nonSeparators");
 
     // TODO: if we started with a carry bit set initially, we wouldn't need the start position stream.
     // However, this would need to be aware of whether we're ignoring the first line or not.
     PabloAST * currentPos = pb.createExtract(fd, pb.getInteger(CSVDataParserFieldData::StartPositions));
-
-    PabloAST * warning = nullptr;
 
     PabloAST * allSeparatorsMatches = nullptr;
 
@@ -241,37 +214,27 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
             currentPos = pb.createAdvanceThenScanThru(fieldStart, nonSeperators, "endOfField" + std::to_string(i));
         }
 
-        PabloAST * match = matches[i];
-
-        const auto & col = columns[i];
-        if (col.MatchIsFalse) {
-            match = pb.createNot(match);
-        }
-        if (LLVM_UNLIKELY(col.Warning)) {
-            assert (mSchema.AnyWarnings);
-            PabloAST * nextWarning = pb.createAnd(currentPos, pb.createNot(match), "nextWarning");
-            if (warning) {
-                warning = pb.createOr(warning, nextWarning);
-            } else {
-                warning = nextWarning;
-            }
-        } else {
-            currentPos = pb.createAnd(currentPos, match);
-        }
-
-        if (allSeparatorsMatches) {
-            allSeparatorsMatches = pb.createOr(allSeparatorsMatches, currentPos);
-        } else {
-            allSeparatorsMatches = currentPos;
-        }
-
         if (i < (n - 1)) {
             currentPos = pb.createAnd(currentPos, fieldSeparators, "matchedFieldSep" + std::to_string(i + 1));
         } else {
             currentPos = pb.createAnd(currentPos, recordSeparators, "matchedRecSep");
         }
 
-        if (LLVM_UNLIKELY(usedInSchemaUID[i])) {
+        PabloAST * match = matches[i];
+        const auto & col = columns[i];
+        if (col.MatchIsFalse) {
+            match = pb.createNot(match);
+        }
+        match = pb.createAnd(currentPos, match);
+
+        if (allSeparatorsMatches) {
+            allSeparatorsMatches = pb.createOr(allSeparatorsMatches, match);
+        } else {
+            allSeparatorsMatches = match;
+        }
+
+        if (LLVM_UNLIKELY(col.IsIdentifyingColumn)) {
+            assert (mSchema.NumOfIdentifyingColumns > 0);
             if (args[0] == nullptr) {
                 args[0] = fieldStart;
                 args[1] = currentPos;
@@ -286,31 +249,38 @@ void CSVSchemaValidatorKernel::generatePabloMethod() {
     assert (allSeparatorsMatches);
     assert (nonSeperators);
 
+    PabloAST * result = pb.createXor(allSeparatorsMatches, allSeparators, "result");
+    pb.createAssign(pb.createExtract(getOutputStreamVar("invalid"), pb_ZERO), result);
 
-    PabloAST * result = pb.createInFile(pb.createXor(allSeparatorsMatches, allSeparators), "result");
+    if (mSchema.NumOfIdentifyingColumns) {
+        // TODO: not completely correct for quoted fields as it'll include the formatting quotes
+        // but we cannot distinguish them from the escaping quotes here
+
+        PabloAST * run = pb.createIntrinsicCall(pablo::Intrinsic::InclusiveSpan, args);
+        run = pb.createInFile(pb.createAnd(run, nonSeperators), "run");
 
 
-
-    auto invalid = getOutputStreamSet("invalid");
-    pb.createAssign(cast<Var>(invalid[0]), result);
-    if (warning) {
-        if (invalid.size() < 2) {
-            report_fatal_error("StreamSet \"invalid\" requires at least two elements");
+        PabloAST * keyMarkers = nullptr;
+        bool keysAreOnlyInFirstColumn = true;
+        for (unsigned i = 1; i < n; ++i) {
+            const auto & col = columns[i];
+            if (LLVM_UNLIKELY(col.IsIdentifyingColumn)) {
+                keysAreOnlyInFirstColumn = false;
+                break;
+            }
         }
-        warning = pb.createInFile(warning, "warning");
-        pb.createAssign(cast<Var>(invalid[1]), warning);
-    }
 
-    if (mSchema.AnyUniqueKeys) {
-        #warning this won't work with noHeader set if the key field is the first one
+        PabloAST * starts = nullptr;
+        if (keysAreOnlyInFirstColumn) {
+            starts = args[0];
+        } else {
+            PabloAST * const advRun = pb.createAdvance(run, 1);
+            starts = pb.createAnd(run, pb.createNot(advRun));
+        }
 
-        args[0] = pb.createAdvance(args[0], 1);
-
-        PabloAST * const keyMarkers = pb.createOr(args[0], args[1]);
-        pb.createAssign(pb.createExtract(getOutputStreamVar("hashKeyMarkers"), pb_ZERO), keyMarkers);
-
-        PabloAST * const run = pb.createIntrinsicCall(pablo::Intrinsic::SpanUpTo, args, "run");
-       // PabloAST * const hashableFieldData = pb.createAnd(run, nonSeperators);
+        Var * markers = getOutputStreamVar("hashKeyMarkers");
+        pb.createAssign(pb.createExtract(markers, pb_ZERO), starts);
+        pb.createAssign(pb.createExtract(markers, pb.getInteger(1)), args[1]);
         pb.createAssign(pb.createExtract(getOutputStreamVar("hashKeyRuns"), pb_ZERO), run);
     }
 

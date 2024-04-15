@@ -56,6 +56,10 @@ bool noHeaderLine = false;
 static cl::opt<bool, true> optNoHeaderLine("no-header", cl::desc("CSV record data begins on first line"),
                                      cl::location(noHeaderLine), cl::init(false), cl::cat(csvValidatorFlags));
 
+bool failFast = true;
+
+static cl::opt<bool, true> optFailFast("fail-fast", cl::desc("Stops on the first validation error rather than reporting all errors"),
+                                     cl::location(failFast), cl::init(true), cl::cat(csvValidatorFlags));
 
 static cl::OptionCategory hashFlags("Hash Function Generation Flags", "CSV Validator options");
 
@@ -86,11 +90,9 @@ static cl::opt<size_t, true> optHashSeed("hashseed", cl::location(HashSeed),  cl
 
 size_t HashBitsPerTrie = 0;
 
-bool foundError = false;
-
 std::vector<fs::path> allFiles;
 
-void run(CSVValidatorFunctionType fn_ptr, const fs::path & fileName) {
+void run(CSVValidatorFunctionType fn_ptr, const csv::CSVSchema & schema, const fs::path & fileName) {
     struct stat sb;
     const auto fn = fileName.c_str();
     const int fd = open(fn, O_RDONLY);
@@ -106,11 +108,10 @@ void run(CSVValidatorFunctionType fn_ptr, const fs::path & fileName) {
         }
         return;
     }
-    if (stat(fileName.c_str(), &sb) == 0 && S_ISDIR(sb.st_mode)) {
+    if (stat(fn, &sb) == 0 && S_ISDIR(sb.st_mode)) {
         std::cerr << "csv_validator: " << fileName << ": Is a directory.\n";
     } else {
-        foundError = false;
-        fn_ptr(fd, fn);
+        fn_ptr(fd, schema, fn);
     }
     close(fd);
 }
@@ -132,9 +133,11 @@ int main(int argc, char *argv[]) {
 
     allFiles = argv::getFullFileList(pxDriver, inputFiles);
 
+    auto schema = csv::CSVSchemaParser::load(inputSchema);
+
     CSVMatcherEngine engine;
 
-    auto funcPtr = engine.compile(pxDriver, inputSchema);
+    auto funcPtr = engine.compile(pxDriver, schema);
 
     #ifdef REPORT_PAPI_TESTS
     papi::PapiCounter<4> jitExecution{{PAPI_L3_TCM, PAPI_L3_TCA, PAPI_TOT_INS, PAPI_TOT_CYC}};
@@ -142,7 +145,7 @@ int main(int argc, char *argv[]) {
     #endif
 
     for (auto & file : allFiles) {
-        run(funcPtr, file);
+        run(funcPtr, schema, file);
     }
 
     #ifdef REPORT_PAPI_TESTS

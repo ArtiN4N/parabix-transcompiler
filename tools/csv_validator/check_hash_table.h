@@ -8,7 +8,7 @@ namespace kernel {
 
 class CheckKeyUniqueness : public SegmentOrientedKernel {
 public:
-    CheckKeyUniqueness(BuilderRef b, const csv::CSVSchema & schema, StreamSet * ByteStream, StreamSet * const HashVals, StreamSet * keyMarkers);
+    CheckKeyUniqueness(BuilderRef b, const csv::CSVSchema & schema, StreamSet * ByteStream, StreamSet * const HashVals, StreamSet * keyMarkers, Scalar * const schemaObject, Scalar * const fileName);
     void linkExternalMethods(BuilderRef b) override;
     llvm::StringRef getSignature() const override;
     bool hasSignature() const override { return true; }
@@ -16,14 +16,9 @@ public:
     void generateFinalizeMethod(BuilderRef b) override;
 protected:
 
-    struct Config {
-        std::string Signature;
-        size_t SegmentLength;
-    };
+    static std::string makeSignature(const csv::CSVSchema & schema, const size_t bitsPerHashCode);
 
-    static Config makeCreateHashTableConfig(const csv::CSVSchema & schema, const size_t bitsPerHashCode);
-
-    CheckKeyUniqueness(BuilderRef b, const csv::CSVSchema & schema, Config && signature, StreamSet * ByteStream, StreamSet * const HashVals, StreamSet * keyMarkers);
+    CheckKeyUniqueness(BuilderRef b, const csv::CSVSchema & schema, std::string && signature, StreamSet * ByteStream, StreamSet * const HashVals, StreamSet * keyMarkers, Scalar * const schemaObject, Scalar * const fileName);
 private:
     void generateDoSegmentMethod(BuilderRef b) override;
 private:

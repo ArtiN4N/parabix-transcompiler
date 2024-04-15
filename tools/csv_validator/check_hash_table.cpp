@@ -41,7 +41,6 @@ class alignas(CACHE_LINE_SIZE) HashArrayMappedTrie  {
 public:
 
     bool findOrAdd(const uint32_t hashKey, const char * start, const char * end, ValueType value, size_t & hashValue) {
-
         const auto mask = (1ULL << HashBitsPerTrie) - 1ULL;
         void * current = Root; assert (Root);
         auto key = hashKey;
@@ -133,11 +132,63 @@ bool check_hash_code(HashArrayMappedTrie * const table, const uint32_t hashCode,
     return table->findOrAdd(hashCode, start, end, lineNum, out);
 }
 
-void report_duplicate_key(HashArrayMappedTrie * const table, const char * key, const bool isWarning, const size_t failingLineNum, const size_t originalLineNum) {
+bool report_duplicate_key(const csv::CSVSchema & schema, const char * fileName, HashArrayMappedTrie * const table, const char * start, const char * end, const size_t keyNum, const size_t failingKeyNum, const size_t originalKeyNum) {
     // TODO: if we hard coded the columnNum into the program to report here, we'd end up compiling nearly identical kernels. Need to pass that info in
     // at runtime.
+    assert ((failingKeyNum % schema.NumOfIdentifyingColumns) == (originalKeyNum % schema.NumOfIdentifyingColumns));
 
-    errs() << "duplicate key found on row " << (failingLineNum + 1) << " (originally observed on " << (originalLineNum + 1) << ")\n";
+    auto & out = errs();
+
+    size_t keyIndex = 0;
+
+    const auto n = schema.Column.size();
+
+    for (size_t i = 0; i < n; ++i) {
+        const CSVSchemaColumnRule & column = schema.Column[i];
+        const auto m = column.CompositeKey.size();
+        if (keyNum < (keyIndex + m)) {
+            const CSVSchemaCompositeKey & key = column.CompositeKey[keyNum - keyIndex];
+            if (column.Warning) {
+                out << "Warning";
+            } else {
+                out << "Error";
+            }
+
+            out << ": ";
+            const auto failingLineNum = (failingKeyNum / schema.NumOfIdentifyingColumns) + 1;
+            out << "duplicate key observed on record: "
+                << failingLineNum
+                << ", column: ";
+
+            if (key.Fields.size() > 1) {
+                out << "{";
+            }
+            bool notFirst = false;
+            for (const auto keyColId : key.Fields) {
+                if (notFirst) {
+                    out << ", ";
+                }
+                out << schema.Column[keyColId].Name;
+                out << " (" << (keyColId + 1) << ")";
+            }
+            if (key.Fields.size() > 1) {
+                out << "}";
+            }
+
+            out << ", value: \"";
+            for (auto c = start; c < end; ++c) {
+                out << *c;
+            }
+            const auto originalLineNum = ((originalKeyNum / schema.NumOfIdentifyingColumns) + 1);
+            out << "\" originally observed on " << originalLineNum << "\n";
+
+            return column.Warning || !failFast;
+        } else {
+            keyIndex += m;
+        }
+    }
+    llvm_unreachable("Unknown key?");
+    return false;
 }
 
 void deconstruct_n_tries(HashArrayMappedTrie * const tables, const size_t n) {
@@ -147,7 +198,7 @@ void deconstruct_n_tries(HashArrayMappedTrie * const tables, const size_t n) {
     std::free(tables);
 }
 
-CheckKeyUniqueness::Config CheckKeyUniqueness::makeCreateHashTableConfig(const csv::CSVSchema & schema, const size_t bitsPerHashCode) {
+std::string CheckKeyUniqueness::makeSignature(const csv::CSVSchema & schema, const size_t bitsPerHashCode) {
     std::string sig;
     sig.reserve(1024);
     raw_string_ostream out(sig);
@@ -158,29 +209,26 @@ CheckKeyUniqueness::Config CheckKeyUniqueness::makeCreateHashTableConfig(const c
     // {1,2},{2,3} would differ from {1,3},{2,3} when creating the "string" needed
     // to match the composite layers.
 
-    flat_set<size_t> SetOfKeyColumns;
+    const auto n = schema.Column.size();
+    std::vector<size_t> KeyIndex(n);
 
-    for (const CSVSchemaColumnRule & column : schema.Column) {
-        for (const CSVSchemaCompositeKey & key : column.CompositeKey) {
-            for (const auto k : key.Fields) {
-                SetOfKeyColumns.insert(k);
-            }
+    for (size_t i = 0, j = 0; i < n; ++i) {
+        const CSVSchemaColumnRule & column = schema.Column[i];
+        if (column.IsIdentifyingColumn) {
+            assert (j < schema.NumOfIdentifyingColumns);
+            KeyIndex[i] = j++;
         }
     }
 
 
     for (const CSVSchemaColumnRule & column : schema.Column) {
         if (column.CompositeKey.size() > 0) {
-            if (column.Warning) {
-                out << 'W';
-            }
+
             for (const CSVSchemaCompositeKey & key : column.CompositeKey) {
                 char joiner = '{';
                 assert (!key.Fields.empty());
                 for (const auto k : key.Fields) {
-                    auto f = SetOfKeyColumns.find(k);
-                    assert (f != SetOfKeyColumns.end());
-                    out << joiner << std::distance(SetOfKeyColumns.begin(), f);
+                    out << joiner << KeyIndex[k];
                     joiner = ',';
                 }
                 out << '}';
@@ -192,20 +240,17 @@ CheckKeyUniqueness::Config CheckKeyUniqueness::makeCreateHashTableConfig(const c
 
     out.flush();
 
-    Config C;
-    C.SegmentLength = SetOfKeyColumns.size();
-    C.Signature = sig;
-    return C;
+    return sig;
 }
 
 
-CheckKeyUniqueness::CheckKeyUniqueness(BuilderRef b, const csv::CSVSchema & schema, StreamSet * ByteStream, StreamSet * const hashCodes, StreamSet * coordinates)
-: CheckKeyUniqueness(b, schema, makeCreateHashTableConfig(schema, hashCodes->getFieldWidth()), ByteStream, hashCodes, coordinates) {
+CheckKeyUniqueness::CheckKeyUniqueness(BuilderRef b, const csv::CSVSchema & schema, StreamSet * ByteStream, StreamSet * const hashCodes, StreamSet * coordinates, Scalar * const schemaObject, Scalar * const fileName)
+: CheckKeyUniqueness(b, schema, makeSignature(schema, hashCodes->getFieldWidth()), ByteStream, hashCodes, coordinates, schemaObject, fileName) {
 
 }
 
-CheckKeyUniqueness::CheckKeyUniqueness(BuilderRef b, const csv::CSVSchema & schema, Config && config, StreamSet * ByteStream, StreamSet * const hashCodes, StreamSet * coordinates)
-: SegmentOrientedKernel(b, "cht" + getStringHash(config.Signature),
+CheckKeyUniqueness::CheckKeyUniqueness(BuilderRef b, const csv::CSVSchema & schema, std::string && signature, StreamSet * ByteStream, StreamSet * const hashCodes, StreamSet * coordinates, Scalar * const schemaObject, Scalar * const fileName)
+: SegmentOrientedKernel(b, "cht" + getStringHash(signature),
 // inputs
 {Binding{"InputStream", ByteStream, GreedyRate(), Deferred()}
 , Binding{"HashCodes", hashCodes, FixedRate(1)}
@@ -213,17 +258,17 @@ CheckKeyUniqueness::CheckKeyUniqueness(BuilderRef b, const csv::CSVSchema & sche
 // outputs
 {},
 // input scalars
-{},
+{Binding{"schemaObject", schemaObject}
+,Binding{"fileName", fileName}},
 // output scalars
 {},
 // kernel state
-{})
+{InternalScalar{b->getVoidPtrTy(), "hashTableObjects"}})
 , mSchema(schema)
-, mSignature(std::move(config.Signature)) {
-    setStride(config.SegmentLength);
+, mSignature(std::move(signature)) {
+    setStride(schema.NumOfIdentifyingColumns);
     addAttribute(SideEffecting());
     addAttribute(MayFatallyTerminate());
-    addInternalScalar(b->getVoidPtrTy(), "hashTableObjects");
 }
 
 StringRef CheckKeyUniqueness::getSignature() const {
@@ -237,27 +282,32 @@ void CheckKeyUniqueness::linkExternalMethods(BuilderRef b) {
 
     IntegerType * const sizeTy = b->getSizeTy();
     PointerType * const voidPtrTy = b->getVoidPtrTy();
+    IntegerType * const boolTy = b->getInt1Ty();
+    PointerType * const int8PtrTy = b->getInt8PtrTy();
 
     BEGIN_SCOPED_REGION
     FixedArray<Type *, 6> paramTys;
     paramTys[0] = voidPtrTy;
     paramTys[1] = b->getInt32Ty();
-    paramTys[2] = b->getInt8PtrTy();
-    paramTys[3] = b->getInt8PtrTy();
+    paramTys[2] = int8PtrTy;
+    paramTys[3] = int8PtrTy;
     paramTys[4] = sizeTy;
     paramTys[5] = sizeTy->getPointerTo();
-    FunctionType * fty = FunctionType::get(b->getInt1Ty(), paramTys, false);
+    FunctionType * fty = FunctionType::get(boolTy, paramTys, false);
     b->LinkFunction("check_hash_code", fty, (void*)check_hash_code);
     END_SCOPED_REGION
 
     BEGIN_SCOPED_REGION
-    FixedArray<Type *, 5> paramTys;
+    FixedArray<Type *, 8> paramTys;
     paramTys[0] = voidPtrTy;
-    paramTys[1] = b->getInt8PtrTy();
-    paramTys[2] = b->getInt1Ty();
-    paramTys[3] = sizeTy;
-    paramTys[4] = sizeTy;
-    FunctionType * fty = FunctionType::get(voidPtrTy, paramTys, false);
+    paramTys[1] = int8PtrTy;
+    paramTys[2] = voidPtrTy;
+    paramTys[3] = int8PtrTy;
+    paramTys[4] = int8PtrTy;
+    paramTys[5] = sizeTy;
+    paramTys[6] = sizeTy;
+    paramTys[7] = sizeTy;
+    FunctionType * fty = FunctionType::get(boolTy, paramTys, false);
     b->LinkFunction("report_duplicate_key", fty, (void*)report_duplicate_key);
     END_SCOPED_REGION
 
@@ -286,7 +336,8 @@ void CheckKeyUniqueness::generateDoSegmentMethod(BuilderRef b) {
     BasicBlock * const entry = b->GetInsertBlock();
     BasicBlock * const loopStart = b->CreateBasicBlock("strideCoordinateVecLoop");
     BasicBlock * const foundDuplicate = b->CreateBasicBlock("foundDuplicate");
-    BasicBlock * const continueToNext = b->CreateBasicBlock("continueToNext");
+    BasicBlock * const fatalError = b->CreateBasicBlock("fatalError");
+    BasicBlock * const acceptedAllDuplicates = b->CreateBasicBlock("acceptedAllErrors");
     BasicBlock * const loopEnd = b->CreateBasicBlock("strideCoordinateElemLoop");
 
 
@@ -308,24 +359,18 @@ void CheckKeyUniqueness::generateDoSegmentMethod(BuilderRef b) {
 
     Value * const baseInputPtr = b->getRawInputPointer("InputStream", sz_ZERO);
 
-    boost::container::flat_set<size_t> SetOfKeyColumns;
-    SetOfKeyColumns.reserve(mStride);
-
     const auto n = mSchema.Column.size();
 
+    std::vector<size_t> KeyIndex(n, -1U);
     size_t totalNumOfKeys = 0;
 
-    for (size_t i = 0; i < n; ++i) {
+    for (size_t i = 0, j = 0; i < n; ++i) {
         const CSVSchemaColumnRule & column = mSchema.Column[i];
-        for (const CSVSchemaCompositeKey & key : column.CompositeKey) {
-            for (const auto k : key.Fields) {
-                SetOfKeyColumns.insert(k);
-            }
+        if (column.IsIdentifyingColumn) {
+            KeyIndex[i] = j++;
         }
         totalNumOfKeys += column.CompositeKey.size();
     }
-
-    assert (mStride == SetOfKeyColumns.size());
 
     boost::dynamic_bitset<size_t> mustBeUnique(mStride, false);
 
@@ -334,9 +379,7 @@ void CheckKeyUniqueness::generateDoSegmentMethod(BuilderRef b) {
         for (const CSVSchemaCompositeKey & key : column.CompositeKey) {
             const auto & fields = key.Fields;
             if (fields.size() == 1) {
-                const auto f = SetOfKeyColumns.find(fields[0]);
-                assert (f != SetOfKeyColumns.end());
-                const auto k = std::distance(SetOfKeyColumns.begin(), f);
+                const auto k = KeyIndex[fields[0]];
                 assert (k < mStride);
                 mustBeUnique.set(k);
             }
@@ -345,21 +388,15 @@ void CheckKeyUniqueness::generateDoSegmentMethod(BuilderRef b) {
 
     boost::dynamic_bitset<size_t> isCompositeKey(totalNumOfKeys, false);
 
-    boost::dynamic_bitset<size_t> isFatalError(totalNumOfKeys, false);
-
     for (size_t i = 0, j = mStride; i < n; ++i) {
         const CSVSchemaColumnRule & column = mSchema.Column[i];
         for (const CSVSchemaCompositeKey & key : column.CompositeKey) {
             const auto & fields = key.Fields;
             if (fields.size() > 1) {
                 bool notCompositeKey = false;
-                for (auto v : key.Fields) {
-                    const auto f = SetOfKeyColumns.find(v);
-                    const auto k = std::distance(SetOfKeyColumns.begin(), f);
+                for (auto v : fields) {
+                    const auto k = KeyIndex[v];
                     if (LLVM_UNLIKELY(k < mStride && mustBeUnique.test(k))) {
-                        if (!column.Warning) {
-                            isFatalError.set(k);
-                        }
                         notCompositeKey = true;
                     }
                 }
@@ -385,7 +422,6 @@ void CheckKeyUniqueness::generateDoSegmentMethod(BuilderRef b) {
     Value * const totalHashCodeProcessed = b->CreateAdd(hashCodesProcessed, unprocessedHashCodes);
 
     Value * const initial = b->getProcessedItemCount("InputStream");
-
     b->CreateLikelyCondBr(b->CreateICmpNE(unprocessedHashCodes, sz_ZERO), loopStart, loopEnd);
 
     b->SetInsertPoint(loopStart);
@@ -409,8 +445,6 @@ void CheckKeyUniqueness::generateDoSegmentMethod(BuilderRef b) {
     Value * baseHashTableObjects = b->getScalarField("hashTableObjects");
     assert (baseHashTableObjects->getType() == voidPtrTy);
     baseHashTableObjects = b->CreatePointerCast(baseHashTableObjects, voidPtrTy->getPointerTo());
-
-    Value * const lineNum = b->CreateExactUDiv(hashCodesProcessedPhi, sz_STRIDE);
 
     FixedArray<Value *, 2> priorLineNumIndex;
     priorLineNumIndex[0] = sz_ZERO;
@@ -436,6 +470,8 @@ void CheckKeyUniqueness::generateDoSegmentMethod(BuilderRef b) {
         ++fieldResultCount;
     };
 
+    // // bool check_hash_code(HashArrayMappedTrie * const table, const uint32_t hashCode, const char * start, const char * end, const size_t lineNum, size_t & out);
+
     for (unsigned i = 0; i < mStride; ++i) {
         ConstantInt * const sz_Offset = b->getSize(i * sizeof(HashArrayMappedTrie));
         args[0] = b->CreatePointerCast(b->CreateGEP(voidPtrTy, baseHashTableObjects, sz_Offset), voidPtrTy);
@@ -450,7 +486,7 @@ void CheckKeyUniqueness::generateDoSegmentMethod(BuilderRef b) {
         Value * const endPtr = b->CreateGEP(coordinatesTy, baseCoordinatePtr, endCoordIndex);
         endPosition = b->CreateLoad(coordinatesTy, endPtr);
         args[3] = b->CreateGEP(int8Ty, baseInputPtr, endPosition);
-        args[4] = lineNum;
+        args[4] = hashCodesProcessedPhi;
         priorLineNumIndex[1] = b->getSize(i);
         args[5] = b->CreateGEP(priorLineNumArrayTy, priorLineNumArray, priorLineNumIndex);
         assert (checkHashCodeFn->getFunctionType()->getNumParams() == args.size());
@@ -476,19 +512,12 @@ void CheckKeyUniqueness::generateDoSegmentMethod(BuilderRef b) {
                 const auto m = fields.size();
                 if (isCompositeKey.test(k)) { // composite key
 
-                    auto itr = key.Fields.begin();
-
                     Value * hashCode = i32_5381; // using djb2 as combiner
-
-                    if (!column.Warning) {
-                        isFatalError.set(k);
-                    }
 
                     for (unsigned j = 0; j < m; ++j) {
 
-                        const auto f = SetOfKeyColumns.find(*itr++);
-                        assert (f != SetOfKeyColumns.end());
-                        const auto k = std::distance(SetOfKeyColumns.begin(), f);
+                        const auto k = KeyIndex[fields[j]];
+                        assert (k < mStride);
                         Value * const inPtr = b->CreateGEP(sizeTy, priorLineNumArray, b->getSize(k));
                         Value * const outPtr = b->CreateGEP(sizeTy, outValueArray, b->getSize(j));
                         b->CreateStore(b->CreateLoad(sizeTy, inPtr), outPtr);
@@ -504,8 +533,8 @@ void CheckKeyUniqueness::generateDoSegmentMethod(BuilderRef b) {
                     args[0] = b->CreatePointerCast(b->CreateGEP(voidPtrTy, baseHashTableObjects, sz_Offset), voidPtrTy);
                     args[1] = hashCode;
                     args[2] = startBasePtr;
-                    args[3] = b->CreateGEP(int8Ty, startBasePtr, b->getSize(n * sizeof(size_t)));
-                    args[4] = lineNum;
+                    args[3] = b->CreateGEP(int8Ty, startBasePtr, b->getSize(m * sizeof(size_t)));
+                    args[4] = hashCodesProcessedPhi;
                     priorLineNumIndex[1] = b->getSize(k);
                     args[5] = b->CreateGEP(priorLineNumArrayTy, priorLineNumArray, priorLineNumIndex);
                     assert (checkHashCodeFn->getFunctionType()->getNumParams() == args.size());
@@ -519,6 +548,7 @@ void CheckKeyUniqueness::generateDoSegmentMethod(BuilderRef b) {
         }
     }
 
+
     assert (fieldResultCount > 0);
 
     Value * anyFail = fieldResult[0]; assert (anyFail);
@@ -529,23 +559,24 @@ void CheckKeyUniqueness::generateDoSegmentMethod(BuilderRef b) {
     }
     anyFail = b->CreateICmpNE(anyFail, sz_ZERO);
 
-    BasicBlock * fatalError = nullptr;
-    if (isFatalError.any()) {
-        fatalError = b->CreateBasicBlock("fatalError");
-    }
-
-    b->CreateUnlikelyCondBr(anyFail, foundDuplicate, continueToNext);
+    b->CreateUnlikelyCondBr(anyFail, foundDuplicate, acceptedAllDuplicates);
 
     b->SetInsertPoint(foundDuplicate);
-    BasicBlock * nextNode = fatalError ? fatalError : continueToNext;
+
+    FixedArray<Value *, 8> reportArgs;
+    reportArgs[0] = b->getScalarField("schemaObject");
+    reportArgs[1] = b->getScalarField("fileName");
+
     for (unsigned currentFieldError = 0; currentFieldError < fieldResultCount; ++currentFieldError) {
-        BasicBlock * reportError = b->CreateBasicBlock("reportError", nextNode);
+        BasicBlock * const reportError = b->CreateBasicBlock("reportError", fatalError);
+
         BasicBlock * nextCheck = nullptr;
         if (currentFieldError == (fieldResultCount - 1)) {
-            nextCheck = continueToNext;
+            nextCheck = acceptedAllDuplicates;
         } else {
-            nextCheck = b->CreateBasicBlock("nextCheck", nextNode);
+            nextCheck = b->CreateBasicBlock("continueToNext", fatalError);
         }
+
         Value * fieldResultValue = fieldResult[currentFieldError / sizeTyBitWidth];
         Value * fieldMask = b->getSize(1ULL << (currentFieldError & (sizeTyBitWidth - 1)));
         Value * cond = b->CreateICmpNE(b->CreateAnd(fieldResultValue, fieldMask), sz_ZERO);
@@ -553,358 +584,65 @@ void CheckKeyUniqueness::generateDoSegmentMethod(BuilderRef b) {
         b->CreateUnlikelyCondBr(cond, reportError, nextCheck);
 
         b->SetInsertPoint(reportError);
-        FixedArray<Value *, 5> reportArgs;
         Function * reportDuplicateKeyFn = m->getFunction("report_duplicate_key");
+
         assert (reportDuplicateKeyFn->getFunctionType()->getNumParams() == reportArgs.size());
         Value * const sz_Offset = b->getSize(sizeof(HashArrayMappedTrie) * currentFieldError);
-        reportArgs[0] = b->CreatePointerCast(b->CreateGEP(voidPtrTy, baseHashTableObjects, sz_Offset), voidPtrTy);
+        reportArgs[2] = b->CreatePointerCast(b->CreateGEP(voidPtrTy, baseHashTableObjects, sz_Offset), voidPtrTy);
 
-        const bool isFatal = isFatalError.test(currentFieldError);
 
-        reportArgs[1] = ConstantPointerNull::getNullValue(b->getInt8PtrTy()); // need to construct the key string from original data
-        reportArgs[2] = b->getInt1(!isFatal);
-        reportArgs[3] = lineNum;
-        priorLineNumIndex[1] = b->getSize(currentFieldError);
-        reportArgs[4] = b->CreateLoad(sizeTy, b->CreateGEP(priorLineNumArrayTy, priorLineNumArray, priorLineNumIndex));
-        b->CreateCall(reportDuplicateKeyFn->getFunctionType(), reportDuplicateKeyFn, reportArgs);
-        BasicBlock * reportExit = nextCheck;
-        if (isFatal) {
-            reportExit = fatalError; assert (fatalError);
+        if (currentFieldError < mStride) {
+            Value * const hashIndex = b->CreateAdd(hashCodesProcessedPhi, b->getSize(currentFieldError));
+            Value * const startCoordIndex = b->CreateMul(hashIndex, sz_TWO);
+            Value * const startPtr = b->CreateGEP(coordinatesTy, baseCoordinatePtr, startCoordIndex);
+            Value * const startPosition = b->CreateLoad(coordinatesTy, startPtr);
+            Value * const endCoordIndex = b->CreateAdd(startCoordIndex, sz_ONE);
+            Value * const endPtr = b->CreateGEP(coordinatesTy, baseCoordinatePtr, endCoordIndex);
+            Value * const endPosition = b->CreateLoad(coordinatesTy, endPtr);
+            reportArgs[3] = b->CreateGEP(int8Ty, baseInputPtr, startPosition);
+            reportArgs[4] = b->CreateGEP(int8Ty, baseInputPtr, endPosition);
+        } else {
+            // TODO: need to construct the key string from original data
+            reportArgs[3] = ConstantPointerNull::getNullValue(b->getInt8PtrTy());
+            reportArgs[4] = ConstantPointerNull::getNullValue(b->getInt8PtrTy());
         }
-        b->CreateBr(reportExit);
+        ConstantInt * const keyNum = b->getSize(currentFieldError);
+        reportArgs[5] = keyNum;
+        reportArgs[6] = hashCodesProcessedPhi;
+        priorLineNumIndex[1] = keyNum;
+        reportArgs[7] = b->CreateLoad(sizeTy, b->CreateGEP(priorLineNumArrayTy, priorLineNumArray, priorLineNumIndex));
+        Value * const continueToNext = b->CreateCall(reportDuplicateKeyFn->getFunctionType(), reportDuplicateKeyFn, reportArgs);
+        b->CreateCondBr(continueToNext, nextCheck, fatalError);
 
         b->SetInsertPoint(nextCheck);
     }
 
-    if (fatalError) {
-        b->SetInsertPoint(fatalError);
-        b->setFatalTerminationSignal();
-        b->CreateBr(loopEnd);
-    }
-
-    b->SetInsertPoint(continueToNext);
-    Value * const nextHashCodesProcessed = b->CreateAdd(hashCodesProcessedPhi, sz_STRIDE);
-    hashCodesProcessedPhi->addIncoming(nextHashCodesProcessed, continueToNext);
-    Value * const notDone = b->CreateICmpULT(nextHashCodesProcessed, totalHashCodeProcessed);
-    b->CreateCondBr(notDone, loopStart, loopEnd);
-
-    b->SetInsertPoint(loopEnd);
-    PHINode * const finalPos = b->CreatePHI(sizeTy, 3);
-    finalPos->addIncoming(initial, entry);
-    if (fatalError) {
-        finalPos->addIncoming(endPosition, fatalError);
-    }
-    finalPos->addIncoming(endPosition, continueToNext);
-    b->setProcessedItemCount("InputStream", finalPos);
-}
-
-void CheckKeyUniqueness::generateInitializeMethod(BuilderRef b) {
-    Function * constructNTriesFn = b->getModule()->getFunction("construct_n_tries");
-    size_t compositeKeys = 0;
-    for (const CSVSchemaColumnRule & column : mSchema.Column) {
-        for (const CSVSchemaCompositeKey & key : column.CompositeKey) {
-            if (key.Fields.size() > 1) {
-                compositeKeys++;
-            }
-        }
-    }
-    FunctionType * fty = constructNTriesFn->getFunctionType();
-    Value * const hashTableObjects = b->CreateCall(fty, constructNTriesFn, { b->getSize(mStride + compositeKeys)});
-    b->setScalarField("hashTableObjects", b->CreatePointerCast(hashTableObjects, b->getVoidPtrTy()));
-}
-
-void CheckKeyUniqueness::generateFinalizeMethod(BuilderRef b) {
-    Function * deconstructNTriesFn = b->getModule()->getFunction("deconstruct_n_tries");
-    size_t compositeKeys = 0;
-    for (const CSVSchemaColumnRule & column : mSchema.Column) {
-        for (const CSVSchemaCompositeKey & key : column.CompositeKey) {
-            if (key.Fields.size() > 1) {
-                compositeKeys++;
-            }
-        }
-    }
-    FunctionType * fty = deconstructNTriesFn->getFunctionType();
-    FixedArray<Value *, 2> args;
-    args[0] = b->CreatePointerCast(b->getScalarField("hashTableObjects"), b->getVoidPtrTy());
-    args[1] = b->getSize(mStride + compositeKeys);
-    b->CreateCall(fty, deconstructNTriesFn, args);
-}
-
-#if 0
-
-/** ------------------------------------------------------------------------------------------------------------- *
- * @brief generateDoSegmentMethod
- ** ------------------------------------------------------------------------------------------------------------- */
-void CheckKeyUniqueness::generateDoSegmentMethod(BuilderRef b) {
-
-    BasicBlock * const entry = b->GetInsertBlock();
-    BasicBlock * const loopStart = b->CreateBasicBlock("strideCoordinateVecLoop");
-    BasicBlock * const foundDuplicate = b->CreateBasicBlock("foundDuplicate");
-    BasicBlock * const continueToNext = b->CreateBasicBlock("continueToNext");
-    BasicBlock * const loopEnd = b->CreateBasicBlock("strideCoordinateElemLoop");
-
-    Constant * const sz_ZERO = b->getSize(0);
-    Constant * const sz_ONE = b->getSize(1);
-    Constant * const sz_TWO = b->getSize(2);
-    Constant * const sz_STRIDE = b->getSize(mStride);
-    IntegerType *  const sizeTy = b->getSizeTy();
-    IntegerType * const i32Ty = b->getInt32Ty();
-
-    StreamSet * const hashCodes = b->getInputStreamSet("HashCodes");
-    IntegerType * const hashCodesTy = b->getIntNTy(hashCodes->getFieldWidth());
-    Value * const hashCodesProcessed = b->getProcessedItemCount("HashCodes");
-    Value * const baseHashCodePtr = b->getRawInputPointer("HashCodes", sz_ZERO);
-
-    StreamSet * const coordinates = b->getInputStreamSet("Coordinates");
-    IntegerType * const coordinatesTy = b->getIntNTy(coordinates->getFieldWidth());
-    Value * const baseCoordinatePtr = b->getRawInputPointer("Coordinates", sz_ZERO);
-
-    StreamSet * const inputStream = b->getInputStreamSet("InputStream");
-    IntegerType * const baseInputTy = b->getIntNTy(inputStream->getFieldWidth());
-    Value * const baseInputPtr = b->getRawInputPointer("InputStream", sz_ZERO);
-
-    boost::container::flat_set<size_t> SetOfKeyColumns;
-    SetOfKeyColumns.reserve(mStride);
-    for (const CSVSchemaCompositeKey & key : mSchema.CompositeKey) {
-        for (const auto k : key.Fields) {
-            SetOfKeyColumns.insert(k);
-        }
-    }
-    assert (mStride == SetOfKeyColumns.size());
-
-    BitVector mustBeUnique(mStride, false);
-
-    for (const CSVSchemaCompositeKey & key : mSchema.CompositeKey) {
-        if (key.Fields.size() == 1) {
-            const auto f = SetOfKeyColumns.find(key.Fields.front());
-            const auto k = std::distance(SetOfKeyColumns.begin(), f);
-            mustBeUnique.set(k);
-        }
-    }
-
-    size_t compositeKeys = 0;
-
-    for (const CSVSchemaCompositeKey & key : mSchema.CompositeKey) {
-        if (key.Fields.size() > 1) {
-            for (auto v : key.Fields) {
-                const auto f = SetOfKeyColumns.find(v);
-                const auto k = std::distance(SetOfKeyColumns.begin(), f);
-                if (LLVM_UNLIKELY(mustBeUnique.test(k))) {
-                    goto has_unique_key;
-                }
-            }
-            compositeKeys++;
-has_unique_key:
-            continue;
-        }
-    }
-
-    const auto totalKeys = mStride + compositeKeys;
-
-    ArrayType * const priorLineNumArrayTy = ArrayType::get(sizeTy, totalKeys);
-    Value * const priorLineNumArray = b->CreateAllocaAtEntryPoint(priorLineNumArrayTy);
-    Value * const outValueArray = b->CreateAllocaAtEntryPoint(priorLineNumArrayTy);
-
-    Value * const unprocessedHashCodes = b->getAccessibleItemCount("HashCodes");
-    Value * const totalHashCodeProcessed = b->CreateAdd(hashCodesProcessed, unprocessedHashCodes);
-
-    Value * const initial = b->getProcessedItemCount("InputStream");
-
-    b->CreateLikelyCondBr(b->CreateICmpNE(unprocessedHashCodes, sz_ZERO), loopStart, loopEnd);
-
-    b->SetInsertPoint(loopStart);
-    PHINode * const hashCodesProcessedPhi = b->CreatePHI(sizeTy, 2);
-    hashCodesProcessedPhi->addIncoming(hashCodesProcessed, entry);
-
-    FixedArray<Value *, 6> args;
-
-    Module * const m = b->getModule();
-
-    Function * checkHashCodeFn = m->getFunction("check_hash_code");
-    assert (checkHashCodeFn->getFunctionType()->getNumParams() == 6);
-
-    size_t currentKey = 0;
-
-    Value * endPosition = nullptr;
-
-    const auto sizeTyBitWidth = sizeTy->getBitWidth();
-
-    SmallVector<Value *, 2> resultArray(ceil_udiv(totalKeys, sizeTyBitWidth), nullptr);
-
-    auto updateResultArray = [&](Value * result, const size_t k) {
-
-        result = b->CreateZExt(result, sizeTy);
-        const auto index = ceil_udiv(k, sizeTyBitWidth);
-        const auto offset = k & (sizeTyBitWidth - 1);
-        if (offset > 0) {
-            result = b->CreateShl(result, b->getSize(offset));
-            result = b->CreateOr(result, resultArray[index]);
-        } else {
-            assert (resultArray[index] == nullptr);
-        }
-        resultArray[index] = result;
-    };
-
-    IntegerType * int8Ty = b->getInt8Ty();
-    Type * const voidPtrTy = b->getVoidPtrTy();
-
-    Value * baseHashTableObjects = b->getScalarField("hashTableObjects");
-    assert (baseHashTableObjects->getType() == voidPtrTy);
-    baseHashTableObjects = b->CreatePointerCast(baseHashTableObjects, voidPtrTy->getPointerTo());
-
-    Value * const lineNum = b->CreateExactUDiv(hashCodesProcessedPhi, sz_STRIDE);
-
-    FixedArray<Value *, 2> priorLineNumIndex;
-    priorLineNumIndex[0] = sz_ZERO;
-
-    for (unsigned i = 0; i < mStride; ++i) {
-
-        ConstantInt * const sz_Offset = b->getSize(i * sizeof(HashArrayMappedTrie));
-        args[0] = b->CreatePointerCast(b->CreateGEP(voidPtrTy, baseHashTableObjects, sz_Offset), voidPtrTy);
-        Value * const hashIndex = b->CreateAdd(hashCodesProcessedPhi, b->getSize(i));
-        Value * const hashCodePtr = b->CreateGEP(hashCodesTy, baseHashCodePtr, hashIndex);
-        args[1] = b->CreateZExt(b->CreateLoad(hashCodesTy, hashCodePtr), i32Ty);
-        Value * const startCoordIndex = b->CreateMul(hashIndex, sz_TWO);
-        Value * const startPtr = b->CreateGEP(coordinatesTy, baseCoordinatePtr, startCoordIndex);
-        Value * const startPosition = b->CreateLoad(coordinatesTy, startPtr);
-        args[2] = b->CreateGEP(int8Ty, baseInputPtr, startPosition);
-        Value * const endCoordIndex = b->CreateAdd(startCoordIndex, sz_ONE);
-        Value * const endPtr = b->CreateGEP(coordinatesTy, baseCoordinatePtr, endCoordIndex);
-        endPosition = b->CreateLoad(coordinatesTy, endPtr);
-        args[3] = b->CreateGEP(int8Ty, baseInputPtr, endPosition);
-        args[4] = lineNum;
-        priorLineNumIndex[1] = b->getSize(i);
-        args[5] = b->CreateGEP(priorLineNumArrayTy, priorLineNumArray, priorLineNumIndex);
-        Value * result = b->CreateCall(checkHashCodeFn->getFunctionType(), checkHashCodeFn, args);
-
-        if (LLVM_LIKELY(mustBeUnique.test(i))) {
-            updateResultArray(result, i);
-        }
-
-    }
-
-    assert (endPosition);
-
-    if (compositeKeys > 0) {
-
-        ConstantInt * const i32_5381 = b->getInt32(5381);
-        ConstantInt * const i32_33 = b->getInt32(33);
-
-        Value * startBasePtr = b->CreatePointerCast(outValueArray, b->getInt8PtrTy());
-
-        size_t compositeKeyIndex = mStride;
-
-        for (const CSVSchemaCompositeKey & key : mSchema.CompositeKey) {
-            const auto n = key.Fields.size();
-            if (n > 1) {
-
-                for (auto v : key.Fields) {
-                    const auto f = SetOfKeyColumns.find(v);
-                    const auto k = std::distance(SetOfKeyColumns.begin(), f);
-                    if (LLVM_UNLIKELY(mustBeUnique.test(k))) {
-                        goto skip_composite_key;
-                    }
-                }
-
-                BEGIN_SCOPED_REGION
-
-                auto itr = key.Fields.begin();
-
-                Value * hashCode = i32_5381; // using djb2 as combiner
-
-                for (unsigned j = 0; j < n; ++j) {
-
-                    const auto f = SetOfKeyColumns.find(*itr++);
-                    const auto k = std::distance(SetOfKeyColumns.begin(), f);
-                    Value * const inPtr = b->CreateGEP(sizeTy, priorLineNumArray, b->getSize(k));
-                    Value * const outPtr = b->CreateGEP(sizeTy, outValueArray, b->getSize(j));
-                    b->CreateStore(b->CreateLoad(sizeTy, inPtr), outPtr);
-
-                    Value * const hashCodePtr = b->CreateGEP(hashCodesTy, baseHashCodePtr, b->CreateAdd(hashCodesProcessedPhi, b->getSize(k)));
-                    Value * const hashVal = b->CreateZExt(b->CreateLoad(hashCodesTy, hashCodePtr), i32Ty);
-
-                    hashCode = b->CreateAdd(b->CreateMul(hashCode, i32_33), hashVal); // using djb2 as combiner
-
-                }
-
-                ConstantInt * const sz_Offset = b->getSize(compositeKeyIndex * sizeof(HashArrayMappedTrie));
-                args[0] = b->CreatePointerCast(b->CreateGEP(voidPtrTy, baseHashTableObjects, sz_Offset), voidPtrTy);
-                args[1] = hashCode;
-                args[2] = startBasePtr;
-                args[3] = b->CreateGEP(int8Ty, startBasePtr, b->getSize(n * sizeof(size_t)));
-                args[4] = lineNum;
-                priorLineNumIndex[1] = b->getSize(compositeKeyIndex);
-                args[5] = b->CreateGEP(priorLineNumArrayTy, priorLineNumArray, priorLineNumIndex);
-                Value *  result = b->CreateCall(checkHashCodeFn->getFunctionType(), checkHashCodeFn, args);
-
-                updateResultArray(result, compositeKeyIndex++);
-
-                END_SCOPED_REGION
-skip_composite_key:
-                continue;
-
-            }
-        }
-
-    }
-
-    Value * allResults = resultArray[0];
-    for (unsigned i = 1; i < resultArray.size(); ++i) {
-        allResults = b->CreateOr(allResults, resultArray[i]);
-    }
-
-    b->CreateLikelyCondBr(b->CreateICmpEQ(allResults, sz_ZERO), continueToNext, foundDuplicate);
-
-    b->SetInsertPoint(foundDuplicate);
-    Value * earliestResult = resultArray[0];
-    Value * earliestResultOffset = sz_ZERO;
-    for (unsigned i = 1; i < resultArray.size(); ++i) {
-        Value * const alreadyFound = b->CreateICmpNE(earliestResult, sz_ZERO);
-        earliestResult = b->CreateSelect(alreadyFound, earliestResult, resultArray[i]);
-        earliestResultOffset = b->CreateSelect(alreadyFound, earliestResultOffset, b->getSize(i * sizeTyBitWidth));
-    }
-    Value * failingKey = b->CreateCountForwardZeroes(earliestResult);
-    if (resultArray.size() > 1) {
-        failingKey = b->CreateAdd(earliestResultOffset, failingKey);
-    }
-
-    FixedArray<Value *, 3> reportArgs;
-    Function * reportDuplicateKeyFn = m->getFunction("report_duplicate_key");
-    Value * const sz_Offset = b->CreateMul(b->getSize(sizeof(HashArrayMappedTrie)), failingKey);
-    reportArgs[0] = b->CreatePointerCast(b->CreateGEP(voidPtrTy, baseHashTableObjects, sz_Offset), voidPtrTy);
-    reportArgs[1] = lineNum;
-    priorLineNumIndex[1] = failingKey;
-    reportArgs[2] = b->CreateLoad(sizeTy, b->CreateGEP(priorLineNumArrayTy, priorLineNumArray, priorLineNumIndex));
-    b->CreateCall(reportDuplicateKeyFn, reportArgs);
-
-    // TODO: to make warnings work, have this construct a constant array to indicate
-    // that if all key columns have a warning flag, then do not set the termination signal.
-
-    // Have tables contain a friendly name for the key type / fields?
-
+    b->SetInsertPoint(fatalError);
     b->setFatalTerminationSignal();
     b->CreateBr(loopEnd);
 
-    b->SetInsertPoint(continueToNext);
+    b->SetInsertPoint(acceptedAllDuplicates);
     Value * const nextHashCodesProcessed = b->CreateAdd(hashCodesProcessedPhi, sz_STRIDE);
-    hashCodesProcessedPhi->addIncoming(nextHashCodesProcessed, continueToNext);
+    hashCodesProcessedPhi->addIncoming(nextHashCodesProcessed, acceptedAllDuplicates);
     Value * const notDone = b->CreateICmpULT(nextHashCodesProcessed, totalHashCodeProcessed);
     b->CreateCondBr(notDone, loopStart, loopEnd);
 
     b->SetInsertPoint(loopEnd);
     PHINode * const finalPos = b->CreatePHI(sizeTy, 3);
     finalPos->addIncoming(initial, entry);
-    finalPos->addIncoming(endPosition, continueToNext);
-    finalPos->addIncoming(endPosition, foundDuplicate);
+    finalPos->addIncoming(endPosition, fatalError);
+    finalPos->addIncoming(endPosition, acceptedAllDuplicates);
     b->setProcessedItemCount("InputStream", finalPos);
 }
 
 void CheckKeyUniqueness::generateInitializeMethod(BuilderRef b) {
     Function * constructNTriesFn = b->getModule()->getFunction("construct_n_tries");
     size_t compositeKeys = 0;
-    for (const CSVSchemaCompositeKey & key : mSchema.CompositeKey) {
-        if (key.Fields.size() > 1) {
-            compositeKeys++;
+    for (const CSVSchemaColumnRule & column : mSchema.Column) {
+        for (const CSVSchemaCompositeKey & key : column.CompositeKey) {
+            if (key.Fields.size() > 1) {
+                compositeKeys++;
+            }
         }
     }
     FunctionType * fty = constructNTriesFn->getFunctionType();
@@ -915,9 +653,11 @@ void CheckKeyUniqueness::generateInitializeMethod(BuilderRef b) {
 void CheckKeyUniqueness::generateFinalizeMethod(BuilderRef b) {
     Function * deconstructNTriesFn = b->getModule()->getFunction("deconstruct_n_tries");
     size_t compositeKeys = 0;
-    for (const CSVSchemaCompositeKey & key : mSchema.CompositeKey) {
-        if (key.Fields.size() > 1) {
-            compositeKeys++;
+    for (const CSVSchemaColumnRule & column : mSchema.Column) {
+        for (const CSVSchemaCompositeKey & key : column.CompositeKey) {
+            if (key.Fields.size() > 1) {
+                compositeKeys++;
+            }
         }
     }
     FunctionType * fty = deconstructNTriesFn->getFunctionType();
@@ -926,7 +666,5 @@ void CheckKeyUniqueness::generateFinalizeMethod(BuilderRef b) {
     args[1] = b->getSize(mStride + compositeKeys);
     b->CreateCall(fty, deconstructNTriesFn, args);
 }
-
-#endif
 
 }

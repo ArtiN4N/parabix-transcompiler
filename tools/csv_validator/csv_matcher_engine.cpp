@@ -248,33 +248,42 @@ void CSVMatcherEngine::initRE(csv::CSVSchema & schema) {
 
 }
 
-CSVValidatorFunctionType CSVMatcherEngine::compile(CPUDriver & pxDriver, const std::string & inputSchema) {
+CSVValidatorFunctionType CSVMatcherEngine::compile(CPUDriver & pxDriver, CSVSchema & schema) {
 
     auto & b = pxDriver.getBuilder();
 
     Type * const int32Ty = b->getInt32Ty();
 
-    auto P = pxDriver.makePipeline({Binding{int32Ty, "fd"}, Binding{b->getInt8PtrTy(), "fileName"}});
+    auto P = pxDriver.makePipeline({Binding{int32Ty, "fd"}, Binding{b->getVoidPtrTy(), "schemaObj"}, Binding{b->getInt8PtrTy(), "fileName"}});
 
-    P->setUniqueName("csv_validator");
+//    std::string tmp;
+//    raw_string_ostream nm(tmp);
+//    nm << "csv_validator";
+//    if (schemaFile.AnyUniqueKeys) {
+//        nm << "U";
+//    }
+//    #warning what if we only have warnings?
+//    if (schemaFile.AnyWarnings) {
+//        nm << "W";
+//    }
+//    nm.flush();
+//    P->setUniqueName(tmp);
 
     Scalar * const fileDescriptor = P->getInputScalar("fd");
 
     StreamSet * const ByteStream = P->CreateStreamSet(1, 8);
 
-    auto schemaFile = csv::CSVSchemaParser::load(inputSchema);
-
     setComponent(mExternalComponents, Component::S2P);
 
-    initRE(schemaFile);
+    initRE(schema);
 
     P->CreateKernelCall<MMapSourceKernel>(fileDescriptor, ByteStream);
 
     auto BasisBits = getBasis(P, ByteStream);
 
-    mLineBreakStream = nullptr;
-    mU8index = nullptr;
-    mNullMode = NullCharMode::Data;
+//    mLineBreakStream = nullptr;
+//    mU8index = nullptr;
+//    mNullMode = NullCharMode::Data;
 
     mU8index = P->CreateStreamSet(1, 1);
     P->CreateKernelCall<UTF8_index>(ByteStream, mU8index);
@@ -292,7 +301,7 @@ CSVValidatorFunctionType CSVMatcherEngine::compile(CPUDriver & pxDriver, const s
     mExternalTable.declareExternal(u8, "u8index", new PreDefined(mU8index));
     mExternalTable.declareExternal(u8, "$", new PreDefined(allSeparators));
 
-    StreamSet * errors = P->CreateStreamSet(schemaFile.AnyWarnings ? 2 : 1);
+    StreamSet * errors = P->CreateStreamSet(1);
 
     prepareExternalStreams(P, BasisBits);
 
@@ -300,15 +309,22 @@ CSVValidatorFunctionType CSVMatcherEngine::compile(CPUDriver & pxDriver, const s
 
     options.setIndexing(mU8index);
 
-    addExternalStreams(P, mIndexAlphabet, schemaFile, options, mU8index);
+    addExternalStreams(P, mIndexAlphabet, schema, options, mU8index);
 
-    if (!schemaFile.AnyUniqueKeys) {
+    Scalar * const schemaObj = P->getInputScalar("schemaObj");
 
-        P->CreateKernelFamilyCall<CSVSchemaValidatorKernel>(schemaFile, BasisBits, fieldData, allSeparators, errors, std::move(options));
+    Scalar * const fileName = P->getInputScalar("fileName");
+
+
+    if (schema.NumOfIdentifyingColumns == 0) {
+
+        P->CreateKernelFamilyCall<CSVSchemaValidatorKernel>(schema, BasisBits, fieldData, allSeparators, errors, std::move(options));
 
     } else {
 
-        StreamSet * const keyMarkers = P->CreateStreamSet(1);
+        // keys have independent start and end streams to handle any potential zero-length key string
+
+        StreamSet * const keyMarkers = P->CreateStreamSet(2);
 
         options.setKeyMarkerStream(keyMarkers);
 
@@ -316,11 +332,7 @@ CSVValidatorFunctionType CSVMatcherEngine::compile(CPUDriver & pxDriver, const s
 
         options.setKeyRunStream(keyRuns);
 
-        // If we use a bixhash like technique, we could possibly chunk the field data into N-byte phases and use
-        // a loop to combine the data. But how can we prevent the data from one record from being combined with
-        // another? We could scan through and iterate over each record individually?
-
-        P->CreateKernelFamilyCall<CSVSchemaValidatorKernel>(schemaFile, BasisBits, fieldData, allSeparators, errors, std::move(options));
+        P->CreateKernelFamilyCall<CSVSchemaValidatorKernel>(schema, BasisBits, fieldData, allSeparators, errors, std::move(options));
 
         StreamSet * hashes = P->CreateStreamSet(NumOfHashBits);
 
@@ -359,20 +371,16 @@ CSVValidatorFunctionType CSVMatcherEngine::compile(CPUDriver & pxDriver, const s
             P->CreateKernelCall<P2S32Kernel>(outputs, hashVals);
         }
 
-        P->CreateKernelFamilyCall<CheckKeyUniqueness>(schemaFile, ByteStream, hashVals, markerSeq);
+        P->CreateKernelFamilyCall<CheckKeyUniqueness>(schema, ByteStream, hashVals, markerSeq, schemaObj, fileName);
 
     }
-
-    Scalar * const fileName = P->getInputScalar("fileName");
 
     // TODO: using the scan match here like this won't really let us determine what field is wrong in the case an error occurs
     // since the only information we get is whether a match fails.
 
     // TODO: What if we had pablo functions that automatically converts bit markers into an integer sequence and vv?
 
-    Scalar * const fieldsPerRecord = P->CreateConstant(b->getSize(schemaFile.Column.size()));
-
-    P->CreateKernelCall<CSVErrorIdentifier>(errors, allSeparators, ByteStream, fileName, fieldsPerRecord);
+    P->CreateKernelCall<CSVErrorIdentifier>(errors, allSeparators, ByteStream, schemaObj, fileName);
 
     return reinterpret_cast<CSVValidatorFunctionType>(P->compile());
 }
@@ -449,12 +457,4 @@ bool CSVMatcherEngine::hasComponent(Component compon_set, Component c) {
 
 void CSVMatcherEngine::setComponent(Component & compon_set, Component c) {
     compon_set = static_cast<Component>(static_cast<component_t>(compon_set) | static_cast<component_t>(c));
-}
-
-//
-// Moving matches to EOL.   Mathches need to be aligned at EOL if for
-// scanning or counting processes (with a max count != 1).   If the REs
-// are not all anchored, then we need to move the matches to EOL.
-bool CSVMatcherEngine::matchesToEOLrequired () {
-    return (mGrepRecordBreak == GrepRecordBreakKind::Unicode);
 }
