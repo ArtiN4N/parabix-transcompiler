@@ -1,6 +1,6 @@
 /*
- *  Copyright (c) 2019 International Characters.
- *  This software is licensed to the public under the Open Software License 3.0.
+ *  Part of the Parabix Project, under the Open Software License 3.0.
+ *  SPDX-License-Identifier: OSL-3.0
  */
 
 #include <kernel/scan/scanmatchgen.h>
@@ -1577,7 +1577,7 @@ ColorizedReporter::ColorizedReporter(BuilderRef b, StreamSet * ByteStream, Strea
                         // output scalars
 {},
                         // kernel state
-{}), mColorizedLineNumberIndex(SourceCoords->getNumElements() == 3 ? LINE_NUMBERS : BATCH_LINE_NUMBERS) {
+{}), mColorizedLineNumberIndex(SourceCoords->getNumElements() == 3 ? (unsigned)LINE_NUMBERS : (unsigned)BATCH_LINE_NUMBERS) {
     setStride(1);
     addAttribute(SideEffecting());
 }

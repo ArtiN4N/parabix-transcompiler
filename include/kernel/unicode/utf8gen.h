@@ -1,13 +1,24 @@
 /*
- *  Copyright (c) 2019 International Characters.
- *  This software is licensed to the public under the Open Software License 3.0.
+ *  Part of the Parabix Project, under the Open Software License 3.0.
+ *  SPDX-License-Identifier: OSL-3.0
  */
 
-#ifndef UTF8_GEN_H
-#define UTF8_GEN_H
+#pragma once
 
 #include <pablo/pablo_kernel.h>
 #include <kernel/core/kernel_builder.h>
+#include <kernel/pipeline/driver/driver.h>
+
+
+//
+// U21_to_UTF8 transforms a basis set of 21 Unicode bit streams
+// into a corresponding UTF-8 representation in the form 8 parallel
+// bit streams.  Precondition:  The output streamset U8 has been
+// created (using CreateStreamSet(8, 1)), but not initialized.
+//
+using ProgBuilderRef = const std::unique_ptr<kernel::ProgramBuilder> &;
+
+void U21_to_UTF8(ProgBuilderRef P, kernel::StreamSet * U21, kernel::StreamSet * U8);
 
 //
 // UTF-8 encoding requires one to four bytes per Unicode character.
@@ -84,4 +95,3 @@ protected:
     void generatePabloMethod() override;
 };
 
-#endif

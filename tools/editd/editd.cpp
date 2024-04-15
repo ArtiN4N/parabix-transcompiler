@@ -1,7 +1,6 @@
 /*
- *  Copyright (c) 2015 International Characters.
- *  This software is licensed to the public under the Open Software License 3.0.
- *  icgrep is a trademark of International Characters.
+ *  Part of the Parabix Project, under the Open Software License 3.0.
+ *  SPDX-License-Identifier: OSL-3.0
  */
 
 #include "editdscan_kernel.h"
@@ -204,7 +203,7 @@ preprocessFunctionType preprocessPipeline(CPUDriver & pxDriver) {
     StreamSet * const CCResults = pxDriver.CreateStreamSet(4);
     auto & b = pxDriver.getBuilder();
     Type * const int32Ty = b->getInt32Ty();
-    auto P = pxDriver.makePipelineWithIO({}, {Bind("CCResults", CCResults, ReturnedBuffer())}, {{int32Ty, "fileDescriptor"}});
+    auto P = pxDriver.makePipelineWithIO({}, {Bind("CCResults", CCResults, ReturnedBuffer(1))}, {{int32Ty, "fileDescriptor"}});
     Scalar * const fileDescriptor = P->getInputScalar("fileDescriptor");
     StreamSet * const ByteStream = P->CreateStreamSet(1, 8);
     P->CreateKernelCall<MMapSourceKernel>(fileDescriptor, ByteStream);

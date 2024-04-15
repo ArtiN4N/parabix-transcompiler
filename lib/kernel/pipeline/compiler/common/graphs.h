@@ -1,5 +1,4 @@
-#ifndef PIPELINE_KERNEL_HEADER_GRAPHS_H
-#define PIPELINE_KERNEL_HEADER_GRAPHS_H
+#pragma once
 
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/adjacency_matrix.hpp>
@@ -275,6 +274,7 @@ enum BufferLocality {
     , PartitionLocal
     , GloballyShared
     , ConstantShared
+    , ZeroElementsOrWidth
 };
 
 struct BufferNode {
@@ -337,6 +337,10 @@ struct BufferNode {
 
     bool isConstant() const {
         return (Locality == BufferLocality::ConstantShared);
+    }
+
+    bool hasZeroElementsOrWidth() const {
+        return (Locality == BufferLocality::ZeroElementsOrWidth);
     }
 
     bool isDeallocatable() const {
@@ -600,4 +604,3 @@ using FamilyScalarGraph = adjacency_list<vecS, vecS, bidirectionalS, no_property
 
 }
 
-#endif // PIPELINE_KERNEL_HEADER_GRAPHS_H

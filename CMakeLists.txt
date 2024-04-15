@@ -26,6 +26,7 @@ option(ENABLE_PAPI "Enable PAPI support if available" OFF)
 option(REPORT_PAPI_TESTS "Report PAPI testing results" OFF)
 option(LLVM_PATH "LLVM root directory")
 option(GENERATE_TOOLS "Controls whether or not it generate tools" ON)
+option(USE_LIBBACKTRACE "Allows framework to provide more detailed backtraces in JIT compiled code. Library available from github.com/ianlancetaylor/libbacktrace" OFF)
 
 # Build Artifact Configuration
 set(ARTIFACT_MODE "Multiple" CACHE STRING "Build framework into a single artifact (Single) or multiple artifacts (Multiple)")
@@ -125,9 +126,10 @@ endif()
 ###   Import Dependency: LibBacktrace   ###
 
 IF (CMAKE_BUILD_TYPE MATCHES Debug)
+if (USE_LIBBACKTRACE)
 # MacOS stores debug info in dSYM files but the source of this information is
 # not accessible by libbacktrace without first running dsymutil on the executable.
-    find_package(Libbacktrace REQUIRED)
+    find_package(Libbacktrace)
     if (LIBBACKTRACE_FOUND)
         find_package(Libunwind)
         if (NOT LIBUNWIND_FOUND)
@@ -154,6 +156,7 @@ IF (CMAKE_BUILD_TYPE MATCHES Debug)
             UNSET(LIBBACKTRACE_FOUND)
         endif()
     endif()
+endif()
 endif()
 
 ###   Project Configuration   ###
@@ -183,7 +186,16 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
 
 # Parabix Object Cache default
+if (NOT EXISTS "$ENV{HOME}/.cache/")
+    message("Created $ENV{HOME}/.cache/")
+    MAKE_DIRECTORY("$ENV{HOME}/.cache/")
+endif()
 set(PARABIX_OBJECT_CACHE "$ENV{HOME}/.cache/parabix/")
+if (NOT EXISTS "${PARABIX_OBJECT_CACHE}")
+    MAKE_DIRECTORY("${PARABIX_OBJECT_CACHE}")
+    message("Created: ${PARABIX_OBJECT_CACHE}")
+endif()
+
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DPARABIX_OBJECT_CACHE='\"${PARABIX_OBJECT_CACHE}\"'")
 
 # Use @rpath for dylibs on macOS
@@ -393,6 +405,7 @@ add_subdirectory(lib/re/transforms)
 add_subdirectory(lib/re/unicode)
 add_subdirectory(lib/testing)
 add_subdirectory(lib/toolchain)
+add_subdirectory(lib/unicode/algo)
 add_subdirectory(lib/unicode/core)
 add_subdirectory(lib/unicode/data)
 add_subdirectory(lib/unicode/utf)
@@ -468,6 +481,11 @@ add_test(
   COMMAND ./test_u32u8 "${BIN_DIR}/u32u8")
 
 add_test(
+  NAME nfd_test
+  WORKING_DIRECTORY ${QA_DIR}/nfd
+  COMMAND ./test_nfd "${BIN_DIR}/nfd")
+
+add_test(
     NAME editd_test
     WORKING_DIRECTORY ${QA_DIR}/editd
     COMMAND python3 run_all.py -e ${BIN_DIR})
@@ -525,6 +543,10 @@ add_custom_target (base64_test
 add_custom_target(gb18030_test
   WORKING_DIRECTORY ${QA_DIR}/gb18030
   COMMAND ./run_all "${BIN_DIR}/gb18030")
+
+add_custom_target(nfd_test
+  WORKING_DIRECTORY ${QA_DIR}/nfd
+  COMMAND ./test_nfd "${BIN_DIR}/nfd")
 
 add_custom_target (abc_gen
     WORKING_DIRECTORY ${QA_DIR}

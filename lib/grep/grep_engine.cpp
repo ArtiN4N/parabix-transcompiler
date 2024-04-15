@@ -1,7 +1,6 @@
 /*
- *  Copyright (c) 2022 International Characters.
- *  This software is licensed to the public under the Open Software License 3.0.
- *  icgrep is a trademark of International Characters.
+ *  Part of the Parabix Project, under the Open Software License 3.0.
+ *  SPDX-License-Identifier: OSL-3.0
  */
 
 #include <grep/grep_engine.h>
@@ -136,7 +135,7 @@ extern "C" void set_batch_line_number_wrapper(intptr_t accum_addr, unsigned file
 GrepEngine::GrepEngine(BaseDriver &driver) :
     mSuppressFileMessages(false),
     mBinaryFilesMode(argv::Text),
-    mPreferMMap(true),
+    mPreferMMap(false),
     mColoring(false),
     mShowFileNames(false),
     mStdinLabel("(stdin)"),

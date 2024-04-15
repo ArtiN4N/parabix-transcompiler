@@ -1,10 +1,9 @@
 /*
- *  Copyright (c) 2016 International Characters.
- *  This software is licensed to the public under the Open Software License 3.0.
+ *  Part of the Parabix Project, under the Open Software License 3.0.
+ *  SPDX-License-Identifier: OSL-3.0
  */
 
-#ifndef KERNEL_H
-#define KERNEL_H
+#pragma once
 
 #include "binding_map.hpp"
 #include "relationship.h"
@@ -432,6 +431,10 @@ protected:
 
     llvm::Function * addInitializeDeclaration(BuilderRef b) const;
 
+    llvm::Function * getExpectedOutputSizeFunction(BuilderRef b, const bool alwayReturnDeclaration = true) const;
+
+    llvm::Function * addExpectedOutputSizeDeclaration(BuilderRef b) const;
+
     llvm::Function * getAllocateSharedInternalStreamSetsFunction(BuilderRef b, const bool alwayReturnDeclaration = true) const;
 
     llvm::Function * addAllocateSharedInternalStreamSetsDeclaration(BuilderRef b) const;
@@ -513,6 +516,8 @@ protected:
     void generateOrLoadKernel(BuilderRef b);
 
     virtual void generateInitializeMethod(BuilderRef) { }
+
+    virtual llvm::Value * generateExpectedOutputSizeMethod(BuilderRef);
 
     virtual void generateInitializeThreadLocalMethod(BuilderRef) { }
 
@@ -679,4 +684,3 @@ private:
 
 }
 
-#endif

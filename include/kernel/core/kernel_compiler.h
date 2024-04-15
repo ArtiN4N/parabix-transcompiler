@@ -1,5 +1,4 @@
-#ifndef KERNEL_COMPILER_H
-#define KERNEL_COMPILER_H
+#pragma once
 
 #include <kernel/core/kernel.h>
 #include <kernel/core/binding_map.hpp>
@@ -354,6 +353,8 @@ public:
 
     void callGenerateInitializeMethod(BuilderRef b);
 
+    virtual void callGenerateExpectedOutputSizeMethod(BuilderRef b);
+
     virtual void bindAdditionalInitializationArguments(BuilderRef b, ArgIterator & arg, const ArgIterator & arg_end);
 
     void callGenerateInitializeThreadLocalMethod(BuilderRef b);
@@ -437,4 +438,3 @@ protected:
 
 }
 
-#endif // KERNEL_COMPILER_H

@@ -1,7 +1,6 @@
 /*
- *  Copyright (c) 2014 International Characters.
- *  This software is licensed to the public under the Open Software License 3.0.
- *  icgrep is a trademark of International Characters.
+ *  Part of the Parabix Project, under the Open Software License 3.0.
+ *  SPDX-License-Identifier: OSL-3.0
  */
 
 #include <pablo/pabloAST.h>
@@ -30,6 +29,10 @@ using TypeId = PabloAST::ClassTypeId;
 size_t constexpr __length(const char * const str) {
     return *str ? 1 + __length(str + 1) : 0;
 }
+
+#ifdef USE_THREAD_UNSAFE_CANONICALIZATION
+size_t PabloAST::__AST_NODE_COUNT = 0;
+#endif
 
 /** ------------------------------------------------------------------------------------------------------------- *
  * @brief equals

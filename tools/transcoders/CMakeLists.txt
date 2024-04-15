@@ -1,5 +1,5 @@
-# Copyright (c) 2019 International Characters.
-# This software is licensed to the public under the Open Software License 3.0.
+#  Part of the Parabix Project, under the Open Software License 3.0.
+#  SPDX-License-Identifier: OSL-3.0
 
 # module: transcoders
 
@@ -80,3 +80,38 @@ DEPS
     re.cc
     toolchain
 )
+
+parabix_add_executable(
+NAME
+    xch
+SRC
+    xch.cpp
+DEPS
+    pablo
+    pablo.bixnum
+    kernel.basis
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    re.cc
+    toolchain
+    grep
+)
+
+parabix_add_executable(
+NAME
+    nfd
+SRC
+    nfd.cpp
+DEPS
+    pablo
+    pablo.bixnum
+    kernel.basis
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    re.cc
+    toolchain
+    grep
+)
+

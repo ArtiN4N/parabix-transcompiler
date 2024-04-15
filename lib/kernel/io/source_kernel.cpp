@@ -1,6 +1,6 @@
 /*
- *  Copyright (c) 2018 International Characters.
- *  This software is licensed to the public under the Open Software License 3.0.
+ *  Part of the Parabix Project, under the Open Software License 3.0.
+ *  SPDX-License-Identifier: OSL-3.0
  */
 
 #include <kernel/io/source_kernel.h>
@@ -167,6 +167,10 @@ void MMapSourceKernel::freeBuffer(BuilderRef b, const unsigned codeUnitWidth) {
     Constant * const CODE_UNIT_BYTES = b->getSize(codeUnitWidth / 8);
     Value * const fileSize = b->CreateMul(fileItems, CODE_UNIT_BYTES);
     b->CreateMUnmap(b->getScalarField("buffer"), fileSize);
+}
+
+Value * MMapSourceKernel::generateExpectedOutputSizeMethod(const unsigned codeUnitWidth, BuilderRef b) {
+    return b->getScalarField("fileItems");
 }
 
 void MMapSourceKernel::linkExternalMethods(BuilderRef b) {
@@ -342,6 +346,13 @@ void ReadSourceKernel::freeBuffer(BuilderRef b) {
     b->CreateFree(b->getScalarField("buffer"));
 }
 
+Value * ReadSourceKernel::generateExpectedOutputSizeMethod(const unsigned codeUnitWidth, BuilderRef b) {
+    Value * const fd = b->getScalarField("fileDescriptor");
+    Function * const fileSizeFn = b->getModule()->getFunction("file_size"); assert (fileSizeFn);
+    FunctionType * fTy = fileSizeFn->getFunctionType();
+    return b->CreateZExtOrTrunc(b->CreateCall(fTy, fileSizeFn, fd), b->getSizeTy());
+}
+
 /// Hybrid MMap/Read source kernel
 
 void FDSourceKernel::generateFinalizeMethod(BuilderRef b) {
@@ -411,6 +422,30 @@ void FDSourceKernel::generateDoSegmentMethod(BuilderRef b) {
     ReadSourceKernel::generateDoSegmentMethod(mCodeUnitWidth, mStride, b);
     b->CreateBr(DoSegmentDone);
     b->SetInsertPoint(DoSegmentDone);
+}
+
+Value * FDSourceKernel::generateExpectedOutputSizeMethod(BuilderRef b) {
+    BasicBlock * finalizeRead = b->CreateBasicBlock("finalizeRead");
+    BasicBlock * finalizeMMap = b->CreateBasicBlock("finalizeMMap");
+    BasicBlock * finalizeDone = b->CreateBasicBlock("finalizeDone");
+    Value * const useMMap = b->CreateIsNotNull(b->getScalarField("useMMap"));
+    b->CreateCondBr(useMMap, finalizeMMap, finalizeRead);
+    b->SetInsertPoint(finalizeMMap);
+    Value * mmapVal = MMapSourceKernel::generateExpectedOutputSizeMethod(mCodeUnitWidth, b);
+    b->CreateBr(finalizeDone);
+    b->SetInsertPoint(finalizeRead);
+    Value * readVal = ReadSourceKernel::generateExpectedOutputSizeMethod(mCodeUnitWidth, b);
+    b->CreateBr(finalizeDone);
+    b->SetInsertPoint(finalizeDone);
+    PHINode * const resultPhi = b->CreatePHI(b->getSizeTy(), 2);
+    resultPhi->addIncoming(mmapVal, finalizeMMap);
+    resultPhi->addIncoming(readVal, finalizeRead);
+    return resultPhi;
+}
+
+
+void FDSourceKernel::linkExternalMethods(BuilderRef b) {
+    MMapSourceKernel::generatLinkExternalFunctions(b);
 }
 
 /// MEMORY SOURCE KERNEL
@@ -508,12 +543,12 @@ void MemorySourceKernel::generateDoSegmentMethod(BuilderRef b) {
     b->SetInsertPoint(exit);
 }
 
-void FDSourceKernel::linkExternalMethods(BuilderRef b) {
-    MMapSourceKernel::generatLinkExternalFunctions(b);
-}
-
 void MemorySourceKernel::generateFinalizeMethod(BuilderRef b) {
     b->CreateFree(b->getScalarField("ancillaryBuffer"));
+}
+
+Value * MemorySourceKernel::generateExpectedOutputSizeMethod(BuilderRef b) {
+    return b->getScalarField("fileItems");
 }
 
 std::string makeSourceName(StringRef prefix, const unsigned fieldWidth, const unsigned numOfStreams = 1U) {
