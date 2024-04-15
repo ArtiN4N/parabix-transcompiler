@@ -244,6 +244,40 @@ public:
 
     std::string getKernelName() const noexcept final;
 
+    enum class MemoryOrdering : uint8_t {
+        ColumnMajor
+        , RowMajor
+    };
+
+    void captureByteData(llvm::StringRef streamName, llvm::Value * byteData, llvm::Value * from = nullptr, llvm::Value * to = nullptr, const MemoryOrdering ordering = MemoryOrdering::RowMajor, const char nonASCIIsubstitute = '.') {
+        return captureByteData(streamName, byteData->getType(), byteData, from, to, ordering, nonASCIIsubstitute);
+    }
+
+    void captureByteData(llvm::StringRef streamName, llvm::Type * type, llvm::Value * byteData, llvm::Value * from = nullptr, llvm::Value * to = nullptr, const MemoryOrdering ordering = MemoryOrdering::RowMajor, const char nonASCIIsubstitute = '.');
+
+    void captureBitstream(llvm::StringRef streamName, llvm::Value * bitstream, llvm::Value * from = nullptr, llvm::Value * to = nullptr, const MemoryOrdering ordering = MemoryOrdering::RowMajor, const char zeroCh = '.', const char oneCh = '1') {
+        return captureBitstream(streamName, bitstream->getType(), bitstream, from, to, ordering, zeroCh, oneCh);
+    }
+
+    void captureBitstream(llvm::StringRef streamName, llvm::Type * type, llvm::Value * bitstream, llvm::Value * from = nullptr, llvm::Value * to = nullptr, const MemoryOrdering ordering = MemoryOrdering::RowMajor, const char zeroCh = '.', const char oneCh = '1');
+
+    void captureBixNum(llvm::StringRef streamName, llvm::Value * bixnum, llvm::Value * from = nullptr, llvm::Value * to = nullptr, const MemoryOrdering ordering = MemoryOrdering::RowMajor, const char hexBase = 'A') {
+        captureBixNum(streamName, bixnum->getType(), bixnum, from, to, ordering, hexBase);
+    }
+
+    void captureBixNum(llvm::StringRef streamName, llvm::Type * type, llvm::Value * bixnum, llvm::Value * from = nullptr, llvm::Value * to = nullptr, const MemoryOrdering ordering = MemoryOrdering::RowMajor, const char hexBase = 'A');
+
+
+private:
+
+    struct AddressableValue {
+        llvm::Value * Address;
+        llvm::Value * From;
+        llvm::Value * To;
+    };
+
+    AddressableValue makeAddressableValue(llvm::Type * type, llvm::Value * value, llvm::Value * from, llvm::Value * to, const MemoryOrdering ordering);
+
 protected:
 
     KernelBuilder(llvm::LLVMContext & C, unsigned nativeVectorWidth, unsigned vectorWidth, unsigned laneWidth)

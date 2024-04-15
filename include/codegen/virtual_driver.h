@@ -8,6 +8,10 @@
 #include <llvm/ADT/StringRef.h>
 #include <llvm/IR/Module.h>
 
+namespace kernel {
+    class ParabixIllustrator;
+}
+
 namespace codegen {
 
 class VirtualDriver {

@@ -87,6 +87,7 @@ protected:
 
 class StreamSet : public Relationship {
 public:
+
     static bool classof(const Relationship * e) {
         return e->getClassTypeId() == ClassTypeId::StreamSet;
     }
@@ -194,6 +195,7 @@ enum class CommandLineScalarType {
     , DynamicMultithreadingPeriod
     , DynamicMultithreadingAddSynchronizationThreshold
     , DynamicMultithreadingRemoveSynchronizationThreshold
+    , ParabixIllustratorObject
     #ifdef ENABLE_PAPI
     , PAPIEventSet
     , PAPIEventList

@@ -1,7 +1,7 @@
 #  Part of the Parabix Project, under the Open Software License 3.0.
 #  SPDX-License-Identifier: OSL-3.0
 
-# module: kerenl.core
+# module: kernel.core
 
 parabix_add_module(
 NAME    
@@ -22,4 +22,5 @@ SRC
     streamset.cpp
 DEPS
     idisa
+    kernel.illustrator
 )

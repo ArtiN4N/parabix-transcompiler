@@ -7,12 +7,14 @@
 #include <llvm/ADT/StringMap.h>
 #include <llvm/IR/Function.h>
 #include <llvm/Support/Compiler.h>
+#include <kernel/illustrator/illustrator_binding.h>
 
 namespace kernel {
 
 class KernelCompiler {
 
     friend class PipelineCompiler;
+    friend class KernelBuilder;
 
 public:
 
@@ -43,6 +45,8 @@ public:
     using ParamMap = Kernel::ParamMap;
 
     using ArgIterator = llvm::Function::arg_iterator;
+
+    using MemoryOrdering = KernelBuilder::MemoryOrdering;
 
     template <typename T, unsigned n = 16>
     using Vec = llvm::SmallVector<T, n>;
@@ -374,6 +378,14 @@ public:
     void callGenerateFinalizeMethod(BuilderRef b);
 
     static Rational getLCMOfFixedRateInputs(const Kernel * const target);
+
+protected:
+
+    void registerIllustrator(BuilderRef b, llvm::Constant * kernelName, llvm::Constant * streamName, const size_t rows, const size_t cols, const size_t itemWidth, const MemoryOrdering ordering, IllustratorTypeId illustratorTypeId, const char replacement0, const char replacement1, const llvm::ArrayRef<size_t> loopIds) const;
+
+    void registerIllustrator(BuilderRef b, llvm::Value * illustratorObject, llvm::Constant * kernelName, llvm::Constant * streamName, llvm::Value * handle, const size_t rows, const size_t cols, const size_t itemWidth, const MemoryOrdering ordering, IllustratorTypeId illustratorTypeId, const char replacement0, const char replacement1, const llvm::ArrayRef<size_t> loopIds) const;
+
+    void captureStreamData(BuilderRef b, llvm::Constant * kernelName, llvm::Constant * streamName, llvm::Value * handle, llvm::Value * strideNum, llvm::Type * type, const MemoryOrdering ordering, llvm::Value * streamData, llvm::Value * from, llvm::Value * to) const;
 
 protected:
 

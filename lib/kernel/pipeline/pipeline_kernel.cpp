@@ -222,6 +222,7 @@ void PipelineKernel::linkExternalMethods(BuilderRef b) {
         PipelineCompiler::linkHistogramFunctions(b);
         PipelineCompiler::linkDynamicThreadingReport(b);
     }
+    Kernel::linkExternalMethods(b);
 }
 
 /** ------------------------------------------------------------------------------------------------------------- *
@@ -478,7 +479,7 @@ std::unique_ptr<KernelCompiler> PipelineKernel::instantiateKernelCompiler(Builde
  * @brief isCachable
  ** ------------------------------------------------------------------------------------------------------------- */
 bool PipelineKernel::isCachable() const {
-    return codegen::EnablePipelineObjectCache;
+    return codegen::EnablePipelineObjectCache && !codegen::EnableIllustrator;
 }
 
 /** ------------------------------------------------------------------------------------------------------------- *
@@ -580,6 +581,27 @@ Function * PipelineKernel::addOrDeclareMainFunction(BuilderRef b, const MainMeth
             continue;
         }
         params.push_back(input.getType());
+    }
+
+    Function * createIllustrator = nullptr;
+    Function * displayCapturedData = nullptr;
+    Function * destroyIllustrator = nullptr;
+    if (LLVM_UNLIKELY(codegen::EnableIllustrator)) {
+        PointerType * voidPtrTy = b->getVoidPtrTy();
+        createIllustrator = b->LinkFunction("__createStreamDataIllustrator", FunctionType::get(voidPtrTy, false), (void*)&createStreamDataIllustrator);
+        BEGIN_SCOPED_REGION
+        FixedArray<Type *, 2> args;
+        args[0] = voidPtrTy;
+        args[1] = b->getSizeTy();
+        FunctionType * funTy = FunctionType::get(b->getVoidTy(), args, false);
+        displayCapturedData = b->LinkFunction("__displayCapturedData", funTy, (void*)&illustratorDisplayCapturedData);
+        END_SCOPED_REGION
+        BEGIN_SCOPED_REGION
+        FixedArray<Type *, 1> args;
+        args[0] = voidPtrTy;
+        FunctionType * funTy = FunctionType::get(b->getVoidTy(), args, false);
+        destroyIllustrator = b->LinkFunction("__destroyStreamDataIllustrator", funTy, (void*)&destroyStreamDataIllustrator);
+        END_SCOPED_REGION
     }
 
     const auto linkageType = (method == AddInternal) ? Function::InternalLinkage : Function::ExternalLinkage;
@@ -690,6 +712,8 @@ Function * PipelineKernel::addOrDeclareMainFunction(BuilderRef b, const MainMeth
     }
     #endif
 
+    Value * illustratorObj = nullptr;
+
     for (const auto & input : getInputScalarBindings()) {
         const auto scalar = input.getRelationship(); assert (scalar);
         Value * value = nullptr;
@@ -710,6 +734,12 @@ Function * PipelineKernel::addOrDeclareMainFunction(BuilderRef b, const MainMeth
                     break;
                 case C::DynamicMultithreadingRemoveSynchronizationThreshold:
                     value = ConstantFP::get(b->getFloatTy(), codegen::DynamicMultithreadingRemoveThreshold); // %
+                    break;
+                case C::ParabixIllustratorObject:
+                    assert (createIllustrator);
+                    assert (illustratorObj == nullptr);
+                    illustratorObj = b->CreateCall(createIllustrator->getFunctionType(), createIllustrator);
+                    value = illustratorObj;
                     break;
                 #ifdef ENABLE_PAPI
                 case C::PAPIEventSet:
@@ -808,6 +838,19 @@ Function * PipelineKernel::addOrDeclareMainFunction(BuilderRef b, const MainMeth
         successPhi->addIncoming(b->getFalse(), afterCatch);
     } else {
         b->CreateCall(doSegment->getFunctionType(), doSegment, segmentArgs);
+    }
+    if (LLVM_UNLIKELY(codegen::EnableIllustrator)) {
+        BEGIN_SCOPED_REGION
+        FixedArray<Value *, 2> args;
+        args[0] = illustratorObj;
+        args[1] = b->getSize(b->getBitBlockWidth());
+        b->CreateCall(displayCapturedData->getFunctionType(), displayCapturedData, args);
+        END_SCOPED_REGION
+        BEGIN_SCOPED_REGION
+        FixedArray<Value *, 1> args;
+        args[0] = illustratorObj;
+        b->CreateCall(destroyIllustrator->getFunctionType(), destroyIllustrator, args);
+        END_SCOPED_REGION
     }
     SmallVector<Value *, 3> finalizeArgs;
     if (LLVM_LIKELY(isStateful())) {

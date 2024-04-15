@@ -586,6 +586,163 @@ Value * KernelBuilder::CreateRoundUpRational(Value * const number, const Rationa
     return CreateUDiv(CBuilder::CreateRoundUp(CreateMul(number, d), n, Name), d);
 }
 
+#if 0
+
+/** ------------------------------------------------------------------------------------------------------------- *
+ * @brief makeAddressableValue
+ ** ------------------------------------------------------------------------------------------------------------- */
+KernelBuilder::AddressableValue KernelBuilder::makeAddressableValue(Type * type, Value * value, Value * from, Value * to, const MemoryOrdering ordering) {
+    if (LLVM_UNLIKELY(!!from ^ !!to)) {
+        report_fatal_error("capture functions require either both or neither of the from/to positions to be set");
+    }
+
+    AddressableValue av;
+
+    if (LLVM_UNLIKELY(value->getType()->isPointerTy())) {
+        assert (type->getPointerTo() == value->getType());
+        av.Address = value;
+        av.From = from;
+        av.To = to;
+    } else {
+
+        DataLayout DL(getModule());
+        Type * vecTy = type;
+        size_t rowCount = 1;
+        assert (type->canLosslesslyBitCastTo(value->getType()));
+        if (isa<ArrayType>(type)) {
+            if (ordering == MemoryOrdering::ColumnMajor) {
+                ArrayType * colTy = cast<ArrayType>(type);
+                Type * rowTy = colTy->getArrayElementType();
+                if (isa<ArrayType>(rowTy)) {
+                    vecTy = rowTy->getArrayElementType();
+                    rowCount = rowTy->getArrayNumElements();
+                } else {
+                    vecTy = rowTy;
+                }
+            } else if (ordering == MemoryOrdering::RowMajor) {
+                ArrayType * rowTy = cast<ArrayType>(type);
+                rowCount = rowTy->getArrayNumElements();
+                Type * colTy = rowTy->getArrayElementType();
+                if (isa<ArrayType>(colTy)) {
+                    vecTy = colTy->getArrayElementType();
+                } else {
+                    vecTy = colTy;
+                }
+            }
+            assert (rowCount > 0);
+        }
+
+        const auto a = getTypeSize(DL, vecTy) * 8;
+        Type * elemTy = vecTy;
+        if (LLVM_LIKELY(isa<VectorType>(vecTy))) {
+            elemTy = cast<VectorType>(vecTy)->getElementType();
+        }
+
+        #if LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(11, 0, 0)
+        const auto b = elemTy->getPrimitiveSizeInBits();
+        #elif LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(16, 0, 0)
+        const auto b = elemTy->getPrimitiveSizeInBits().getFixedSize();
+        #else
+        const auto b = elemTy->getPrimitiveSizeInBits().getFixedValue();
+        #endif
+
+        Rational R{a, b};
+        assert (R.denominator() == 1);
+        if (from && to) {
+            av.From = from;
+            av.To = to;
+            if (LLVM_UNLIKELY(codegen::DebugOptionIsSet(codegen::EnableAsserts))) {
+                CreateAssert(CreateICmpULT(av.To, getSize(R.numerator() * rowCount)), "from/to distance exceeds value size");
+            }
+        } else if (from || to) {
+            report_fatal_error("capture functions require either both or neither of the from/to positions to be set");
+        } else {
+            av.From = getSize(0);
+            av.To = getSize(R.numerator() * rowCount);
+        }
+        av.Address = CreateAllocaAtEntryPoint(type);
+        CreateStore(value, av.Address);
+    }
+
+    return av;
+}
+
+/** ------------------------------------------------------------------------------------------------------------- *
+ * @brief captureBitstream
+ ** ------------------------------------------------------------------------------------------------------------- */
+void KernelBuilder::captureBitstream(StringRef streamName, Type * type, Value * bitstream, Value * from, Value * to, const MemoryOrdering ordering, const char zeroCh, const char oneCh) {
+    if (LLVM_UNLIKELY(codegen::EnableIllustrator)) {
+
+        // TODO: should these be varadic functions that accept "indices" to allow users to decide how to name
+        // capture functions that occur within loops? Problem with this is we cannot support this in general
+        // and allow multi-threaded accesses since we cannot identify all of the streamNames at initialization.
+
+        // Moreover, it would be difficult to display said iterated values logically without assuming a format.
+
+        Constant * kernelName = GetString(mCompiler->getName());
+        Constant * dataName = GetString(streamName);
+
+        std::unique_ptr<KernelBuilder> tmp(this);
+        mCompiler->registerIllustrator(tmp, kernelName, dataName,
+                                       1, 1, 1, ordering,
+                                       IllustratorTypeId::Bitstream, zeroCh, oneCh);
+
+        const auto av = makeAddressableValue(type, bitstream, from, to, ordering);
+
+        mCompiler->captureStreamData(tmp, GetString(mCompiler->getName()), GetString(streamName), getHandle(),
+                                     getScalarField(KERNEL_ILLUSTRATOR_STRIDE_NUM),
+                                     type, ordering, av.Address, av.From, av.To);
+        tmp.release();
+    }
+}
+
+/** ------------------------------------------------------------------------------------------------------------- *
+ * @brief captureBixNum
+ ** ------------------------------------------------------------------------------------------------------------- */
+void KernelBuilder::captureBixNum(StringRef streamName, Type * type, Value * bixnum, Value * from, Value * to, const MemoryOrdering ordering, const char hexBase) {
+    if (LLVM_UNLIKELY(codegen::EnableIllustrator)) {
+        Constant * kernelName = GetString(mCompiler->getName());
+        Constant * dataName = GetString(streamName);
+
+        std::unique_ptr<KernelBuilder> tmp(this);
+        mCompiler->registerIllustrator(tmp, kernelName, dataName,
+                                       1, 1, 1, ordering,
+                                       IllustratorTypeId::BixNum, hexBase, '\0');
+
+        const auto av = makeAddressableValue(type, bixnum, from, to, ordering);
+
+        mCompiler->captureStreamData(tmp, kernelName, dataName, getHandle(),
+                                     getScalarField(KERNEL_ILLUSTRATOR_STRIDE_NUM),
+                                     type, ordering, av.Address, av.From, av.To);
+        tmp.release();
+    }
+}
+
+/** ------------------------------------------------------------------------------------------------------------- *
+ * @brief captureByteData
+ ** ------------------------------------------------------------------------------------------------------------- */
+void KernelBuilder::captureByteData(StringRef streamName, Type * type, Value * byteData,  Value * from, Value * to, const MemoryOrdering ordering, const char nonASCIIsubstitute) {
+    if (LLVM_UNLIKELY(codegen::EnableIllustrator)) {
+        // to capture this value, we want to automatically register it in the init phase
+        std::unique_ptr<KernelBuilder> tmp(this);
+
+        Constant * kernelName = GetString(mCompiler->getName());
+        Constant * dataName = GetString(streamName);
+
+        mCompiler->registerIllustrator(tmp, kernelName, dataName,
+                                       1, 1, 1, ordering,
+                                       IllustratorTypeId::ByteData, nonASCIIsubstitute, 0);
+
+        const auto av = makeAddressableValue(type, byteData, from, to, ordering);
+        mCompiler->captureStreamData(tmp, kernelName, dataName, getHandle(),
+                                    getScalarField(KERNEL_ILLUSTRATOR_STRIDE_NUM),
+                                    type, ordering, av.Address, av.From, av.To);
+        tmp.release();
+    }
+}
+
+#endif
+
 /** ------------------------------------------------------------------------------------------------------------- *
  * @brief getKernelName
  ** ------------------------------------------------------------------------------------------------------------- */

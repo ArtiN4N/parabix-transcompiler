@@ -24,6 +24,7 @@ namespace pablo { class If; }
 namespace pablo { class While; }
 namespace pablo { class Count; }
 namespace pablo { class Extract; }
+namespace pablo { class Illustrate; }
 namespace pablo { class InFile; }
 namespace pablo { enum class Intrinsic; class IntrinsicCall; }
 namespace pablo { class LessThan; }
@@ -321,6 +322,12 @@ public:
     }
 
     PackL * createPackL(Integer * fieldWidth, PabloAST * value, const String * const name = nullptr);
+
+    Illustrate * createIllustrateBitstream(PabloAST * value, const llvm::StringRef prefix) {
+        return createIllustrateBitstream(value, makeName(prefix));
+    }
+
+    Illustrate * createIllustrateBitstream(PabloAST * value, const String * const name);
 
     IntrinsicCall * createIntrinsicCall(Intrinsic intrinsic, llvm::ArrayRef<PabloAST *> argv, const llvm::StringRef prefix) {
         return createIntrinsicCall(intrinsic, std::move(argv), makeName(prefix));

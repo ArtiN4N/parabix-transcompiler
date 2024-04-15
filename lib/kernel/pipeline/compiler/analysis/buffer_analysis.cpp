@@ -1,5 +1,6 @@
 #include "pipeline_analysis.hpp"
 #include "lexographic_ordering.hpp"
+#include <boost/container/flat_set.hpp>
 
 // TODO: any buffers that exist only to satisfy the output dependencies are unnecessary.
 // We could prune away kernels if none of their outputs are needed but we'd want some
@@ -861,6 +862,54 @@ void PipelineAnalysis::addStreamSetsToBufferGraph(BuilderRef b) {
             }
             assert ("missing source buffer for truncated streamset?" && buffer);
             bn.Buffer = buffer;
+        }
+    }
+
+}
+
+/** ------------------------------------------------------------------------------------------------------------- *
+ * @brief identifyIllustratedStreamSets
+ ** ------------------------------------------------------------------------------------------------------------- */
+void PipelineAnalysis::identifyIllustratedStreamSets() {
+    const auto & illustratorBindings = mPipelineKernel->getIllustratorBindings();
+
+    if (LLVM_LIKELY(illustratorBindings.empty())) return;
+
+    // TODO: we need to move this up in the analysis phase and mark kernels with illustrated bindings as implicitly
+    // side effecting. Otherwise we may end up not reporting streamsets that the user expects.
+
+    const auto n = illustratorBindings.size();
+    assert (mIllustratedStreamSetBindings.empty());
+    mIllustratedStreamSetBindings.reserve(n);
+
+    for (auto & p : illustratorBindings) {
+        StreamSet * ss = p.StreamSetObj;
+check_for_additional_remapping:
+        auto f = RedundantStreamSets.find(ss);
+        if (LLVM_UNLIKELY(f != RedundantStreamSets.end())) {
+            ss = f->second;
+            assert (ss != p.StreamSetObj);
+            goto check_for_additional_remapping;
+        }
+
+        for (auto streamSet = FirstStreamSet; streamSet <= LastStreamSet; ++streamSet) {
+            const auto & node = mStreamGraph[streamSet];
+            assert (node.Type == RelationshipNode::IsStreamSet);
+            if (node.Relationship == ss) {
+                const auto output = in_edge(streamSet, mBufferGraph);
+                auto & bp = mBufferGraph[output];
+                if (LLVM_UNLIKELY((bp.Flags & BufferPortType::Illustrated) != 0)) {
+                    for (const auto & E : mIllustratedStreamSetBindings) {
+                        if (E.Name.compare(p.Name) == 0) {
+                            goto ignore_duplicate_entry;
+                        }
+                    }
+                }
+                bp.Flags |= BufferPortType::Illustrated;
+                mIllustratedStreamSetBindings.emplace_back(streamSet, p);
+ignore_duplicate_entry:
+                break;
+            }
         }
     }
 

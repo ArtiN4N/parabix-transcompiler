@@ -55,6 +55,7 @@ using StreamSetId = unsigned;
 enum RelationshipNodeFlag {
     IndirectFamily = 1
     , ImplicitlyAdded = 2
+    , IsSideEffecting = 4
 };
 
 struct RelationshipNode {
@@ -354,7 +355,8 @@ enum BufferPortType : unsigned {
     IsDeferred = 4,
     IsShared = 8,
     IsManaged = 16,
-    CanModifySegmentLength = 64
+    CanModifySegmentLength = 64,
+    Illustrated = 128
 };
 
 struct BufferPort {
@@ -401,6 +403,10 @@ struct BufferPort {
 
     bool canModifySegmentLength() const {
         return (Flags & BufferPortType::CanModifySegmentLength) != 0;
+    }
+
+    bool isIllustrated() const {
+        return (Flags & BufferPortType::Illustrated) != 0;
     }
 
     bool operator < (const BufferPort & rn) const {

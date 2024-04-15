@@ -23,7 +23,7 @@ void PipelineCompiler::writeKernelCall(BuilderRef b) {
         b->CreateMProtect(mKernel->getSharedStateType(), mKernelSharedHandle, CBuilder::Protect::WRITE);
     }
 
-    if (mKernelIsInternallySynchronized) {
+    if (LLVM_UNLIKELY(mKernelIsInternallySynchronized || mUsesIllustrator)) {
         // TODO: only needed if its possible to loop back or if we are not guaranteed that this kernel will always fire.
         // even if it can loop back but will only loop back at the final block, we can relax the need for this by adding +1.
         const auto prefix = makeKernelName(mKernelId);
@@ -39,6 +39,8 @@ void PipelineCompiler::writeKernelCall(BuilderRef b) {
     mCurrentNumOfLinearStrides = mNumOfLinearStrides;
 
     if (LLVM_UNLIKELY(mAllowDataParallelExecution)) {
+
+        assert (!mUsesIllustrator);
 
         if (mCurrentKernelIsStateFree) {
             updateProcessedAndProducedItemCounts(b);
@@ -288,6 +290,34 @@ void PipelineCompiler::writeKernelCall(BuilderRef b) {
             outerProducedPhis[br.Port.Number]->addIncoming(mProducedItemCount[br.Port], individualStrideBodyExit);
             if (LLVM_UNLIKELY(mCurrentProducedDeferredItemCountPhi[br.Port] )) {
                 outerProducedDeferredPhis[br.Port.Number]->addIncoming(mProducedDeferredItemCount[br.Port], individualStrideBodyExit);
+            }
+        }
+
+        if (LLVM_UNLIKELY(mUsesIllustrator)) {
+
+            auto isCountableType = [](const Value * const ptr, const Binding & binding) {
+                return ptr ? isCountable(binding) : false;
+            };
+
+            for (const auto e : make_iterator_range(out_edges(mKernelId, mBufferGraph))) {
+                const BufferPort & br = mBufferGraph[e];
+                if (LLVM_UNLIKELY(br.isIllustrated())) {
+                    Value * initial = mCurrentProducedItemCountPhi[br.Port];
+                    Value * produced = mProducedItemCount[br.Port];
+                    if (LLVM_UNLIKELY(mCurrentProducedDeferredItemCountPhi[br.Port] )) {
+                        initial = mCurrentProducedDeferredItemCountPhi[br.Port];
+                        produced = mProducedDeferredItemCount[br.Port];
+                    }
+                    // Normally when a kernel terminates early, we just read the values in the termination block. Since we may need that
+                    // value here, however, read it here.
+                    if (mKernelCanTerminateEarly && isCountableType(mReturnedProducedItemCountPtr[br.Port], getOutputBinding(br.Port))) {
+                        Value * finalItemCount = b->CreateLoad(b->getSizeTy(), mReturnedProducedItemCountPtr[br.Port]);
+                        Value * const isFinal = b->CreateICmpNE(mTerminatedExplicitly, b->getSize(0));
+                        produced = b->CreateSelect(isFinal, finalItemCount, produced);
+                    }
+
+                    illustrateStreamSet(b, target(e, mBufferGraph), initial, produced);
+                }
             }
         }
 

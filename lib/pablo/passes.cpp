@@ -16,6 +16,7 @@
 #include <llvm/Support/raw_ostream.h>
 #include <toolchain/toolchain.h>
 #include <pablo/pablo_toolchain.h>
+#include <pablo/pablo_illustratorpass.h>
 
 #if LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(7, 0, 0)
 #define OF_Append F_Append
@@ -48,7 +49,9 @@ void pablo_function_passes(PabloKernel * kernel) {
 #ifdef NDEBUG
     }
 #endif
-
+    if (LLVM_UNLIKELY(codegen::EnableIllustrator && !pablo::PabloIllustrateBitstreamRegEx.empty())) {
+        runIllustratorPass(kernel);
+    }
     // Scan through the pablo code and perform DCE and CSE
     if (Flatten){
         FlattenIf::transform(kernel);

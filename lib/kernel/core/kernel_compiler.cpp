@@ -15,6 +15,7 @@
 #include <boost/container/flat_set.hpp>
 #include <kernel/core/streamsetptr.h>
 #include <codegen/TypeBuilder.h>
+#include <kernel/illustrator/illustrator.h>
 
 using namespace llvm;
 using namespace boost;
@@ -29,9 +30,9 @@ using RateId = ProcessingRate::KindId;
 using StreamSetPort = Kernel::StreamSetPort;
 using PortType = Kernel::PortType;
 
-const static std::string BUFFER_HANDLE_SUFFIX = "_buffer";
-const static std::string TERMINATION_SIGNAL = "__termination_signal";
-const static std::string INTERNAL_COMMON_THREAD_LOCAL_PREFIX = "!__ctl__";
+constexpr static auto BUFFER_HANDLE_SUFFIX = "_buffer";
+constexpr static auto TERMINATION_SIGNAL = "__termination_signal";
+constexpr static auto INTERNAL_COMMON_THREAD_LOCAL_PREFIX = "!__ctl__";
 
 #define BEGIN_SCOPED_REGION {
 #define END_SCOPED_REGION }
@@ -641,6 +642,7 @@ void KernelCompiler::setDoSegmentProperties(BuilderRef b, const ArrayRef<Value *
         }
         mWritableOutputItems[i] = writable;
     }
+
     assert (arg == args.end());
 
     // initialize the termination signal if this kernel can set it
@@ -1513,8 +1515,128 @@ void KernelCompiler::runInternalOptimizationPasses(Module * const m) {
         PromoteMemToReg(allocas, dt);
         allocas.clear();
     }
+}
+
+/** ------------------------------------------------------------------------------------------------------------- *
+ * @brief registerIllustrator
+ ** ------------------------------------------------------------------------------------------------------------- */
+void KernelCompiler::registerIllustrator(BuilderRef b,
+                                         llvm::Constant * kernelName, llvm::Constant * streamName,
+                                         const size_t rows, const size_t cols, const size_t itemWidth, const MemoryOrdering ordering,
+                                         IllustratorTypeId illustratorTypeId, const char replacement0, const char replacement1,
+                                         const ArrayRef<size_t> loopIds) const {
+
+    auto init = mTarget->getInitializeFunction(b);
+    assert (init);
+    auto arg = init->arg_begin();
+    auto nextArg = [&]() {
+        assert (arg != init->arg_end());
+        Value * const v = &*arg;
+        std::advance(arg, 1);
+        return v;
+    };
+    assert (mTarget->isStateful());
+    Value * handle = nextArg();
+    Instruction * ret = nullptr;
+    for (auto & bb : *init) {
+        assert (bb.getTerminator());
+        if (isa<ReturnInst>(bb.getTerminator())) {
+            ret = bb.getTerminator();
+            break;
+        }
+    }
+    assert (ret && "no return statement found in initialize kernel function?");
+    Value * illustratorObject = nullptr;
+    for (const auto & binding : mInputScalars) {
+        Value * inputArg = nextArg();
+        if (binding.getName() == KERNEL_ILLUSTRATOR_CALLBACK_OBJECT) {
+            illustratorObject = inputArg;
+            break;
+        }
+    }
+    assert (illustratorObject && "no illustrator object found?");
+
+    auto ip = b->saveIP();
+
+    b->SetInsertPoint(ret->getPrevNode());
+
+    registerIllustrator(b, illustratorObject, kernelName, streamName, handle, rows, cols, itemWidth, ordering, illustratorTypeId, replacement0, replacement1, loopIds);
+
+    b->restoreIP(ip);
+}
 
 
+/** ------------------------------------------------------------------------------------------------------------- *
+ * @brief registerIllustrator
+ ** ------------------------------------------------------------------------------------------------------------- */
+void KernelCompiler::registerIllustrator(BuilderRef b,
+                                         Value * illustratorObject,
+                                         Constant * kernelName, Constant * streamName, Value * handle,
+                                         const size_t rows, const size_t cols, const size_t itemWidth, const MemoryOrdering ordering,
+                                         IllustratorTypeId illustratorTypeId,
+                                         const char replacement0, const char replacement1,
+                                         const ArrayRef<size_t> loopIds) const {
+
+    assert (isFromCurrentFunction(b, illustratorObject));
+    assert (isFromCurrentFunction(b, handle));
+
+    Function * regFunc = b->getModule()->getFunction(KERNEL_REGISTER_ILLUSTRATOR_CALLBACK); assert (regFunc);
+    FixedArray<Value *, 12> args;
+    args[0] = illustratorObject;
+    args[1] = kernelName;
+    args[2] = streamName;
+    args[3] = handle;
+    args[4] = b->getSize(rows);
+    args[5] = b->getSize(cols);
+    args[6] = b->getSize(itemWidth);
+    args[7] = b->getInt8((unsigned)ordering);
+    args[8] = b->getInt8((unsigned)illustratorTypeId);
+    args[9] = b->getInt8(replacement0);
+    args[10] = b->getInt8(replacement1);
+
+    IntegerType * const sizeTy = b->getSizeTy();
+    PointerType * const sizePtrTy = sizeTy->getPointerTo();
+    Constant * loopIdConstant = nullptr;
+    if (loopIds.empty()) {
+        loopIdConstant = ConstantPointerNull::get(sizePtrTy);
+    } else {
+        const auto n = loopIds.size();
+        SmallVector<Constant *, 8> ids(n + 1);
+        for (size_t i = 0; i < n; ++i) {
+            assert (loopIds[i] != 0);
+            ids[i] = b->getSize(loopIds[i]);
+        }
+        ids[n] = b->getSize(0);
+        ArrayType * arTy = ArrayType::get(sizeTy, n + 1);
+        Constant * ar = ConstantArray::get(arTy, ids);
+        GlobalVariable * const gv = new GlobalVariable(*b->getModule(), arTy, true, GlobalValue::ExternalLinkage, ar);
+        loopIdConstant = ConstantExpr::getPointerCast(gv, sizePtrTy);
+    }
+    args[11] = loopIdConstant;
+    b->CreateCall(regFunc->getFunctionType(), regFunc, args);
+}
+
+/** ------------------------------------------------------------------------------------------------------------- *
+ * @brief captureStreamData
+ ** ------------------------------------------------------------------------------------------------------------- */
+void KernelCompiler::captureStreamData(BuilderRef b, Constant * kernelName, Constant * streamName, Value * handle,
+                                       Value * strideNum,
+                                       Type * type, const MemoryOrdering ordering,
+                                       Value * streamData, Value * from, Value * to)  const {
+
+    FixedArray<Value *, 9> args;
+    args[0] = b->getScalarField(KERNEL_ILLUSTRATOR_CALLBACK_OBJECT);
+    args[1] = kernelName;
+    args[2] = streamName;
+    args[3] = handle;
+    args[4] = strideNum;
+    args[5] = streamData;
+    args[6] = from;
+    args[7] = to;
+    args[8] = b->getSize(b->getBitBlockWidth());
+
+    Function * func = b->getModule()->getFunction(KERNEL_ILLUSTRATOR_CAPTURE_CALLBACK); assert (func);
+    b->CreateCall(func->getFunctionType(), func, args);
 
 }
 

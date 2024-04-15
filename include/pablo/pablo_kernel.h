@@ -126,6 +126,8 @@ public:
         std::free(ptr);
     }
 
+    bool isCachable() const override;
+
     String * makeName(const llvm::StringRef prefix) const;
 
     Integer * getInteger(const int64_t value, unsigned intWidth = 64) const;
@@ -179,6 +181,8 @@ protected:
     // so that the carry data requirements may be accommodated before
     // finalizing the KernelStateType.
     void addInternalProperties(BuilderRef b) final;
+
+    void linkExternalMethods(BuilderRef b) final;
 
     std::unique_ptr<kernel::KernelCompiler> instantiateKernelCompiler(BuilderRef b) const override;
 

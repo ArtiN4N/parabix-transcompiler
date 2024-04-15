@@ -5,6 +5,7 @@
 
 #include <kernel/core/kernel.h>
 #include <kernel/core/kernel_compiler.h>
+#include <kernel/pipeline/driver/driver.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Module.h>
 #include <boost/container/flat_set.hpp>
@@ -268,6 +269,46 @@ void Kernel::linkExternalMethods(BuilderRef b) {
     Module * const m = b->getModule(); assert (m);
     for (const LinkedFunction & linked : mLinkedFunctions) {
         driver.addLinkFunction(m, linked.Name, linked.Type, linked.FunctionPtr);
+    }
+    if (LLVM_UNLIKELY(codegen::EnableIllustrator)) {
+        PointerType * voidPtrTy = b->getVoidPtrTy();
+        IntegerType * int8Ty = b->getInt8Ty();
+        PointerType * int8PtrTy = b->getInt8PtrTy();
+        IntegerType * sizeTy = b->getSizeTy();
+        Type * const voidTy = b->getVoidTy();
+
+        BEGIN_SCOPED_REGION
+        FixedArray<Type *, 12> params;
+        params[0] = voidPtrTy;
+        params[1] = int8PtrTy;
+        params[2] = int8PtrTy;
+        params[3] = voidPtrTy;
+        params[4] = sizeTy; // num of outer rows/columns
+        params[5] = sizeTy; // inner data size
+        params[6] = sizeTy; // item width
+        params[7] = int8Ty; // memory ordering
+        params[8] = int8Ty; // illustrator type
+        params[9] = int8Ty; // replacement 0
+        params[10] = int8Ty; // replacement 1
+        params[11] = sizeTy->getPointerTo(); // loopId array
+        FunctionType * regFunc = FunctionType::get(voidTy, params, false);
+        driver.addLinkFunction(m, KERNEL_REGISTER_ILLUSTRATOR_CALLBACK, regFunc, (void*)&illustratorRegisterCapturedData);
+        END_SCOPED_REGION
+
+        BEGIN_SCOPED_REGION
+        FixedArray<Type *, 9> params;
+        params[0] = voidPtrTy;
+        params[1] = int8PtrTy;
+        params[2] = int8PtrTy;
+        params[3] = voidPtrTy;
+        params[4] = sizeTy;
+        params[5] = voidPtrTy;
+        params[6] = sizeTy;
+        params[7] = sizeTy;
+        params[8] = sizeTy;
+        FunctionType * func = FunctionType::get(voidTy, params, false);
+        driver.addLinkFunction(m, KERNEL_ILLUSTRATOR_CAPTURE_CALLBACK, func, (void*)&illustratorCaptureStreamData);
+        END_SCOPED_REGION
     }
 }
 
@@ -1492,10 +1533,10 @@ Kernel::~Kernel() { }
 // CONSTRUCTOR
 SegmentOrientedKernel::SegmentOrientedKernel(BuilderRef b,
                                              std::string && kernelName,
-                                             Bindings &&stream_inputs,
-                                             Bindings &&stream_outputs,
-                                             Bindings &&scalar_parameters,
-                                             Bindings &&scalar_outputs,
+                                             Bindings && stream_inputs,
+                                             Bindings && stream_outputs,
+                                             Bindings && scalar_parameters,
+                                             Bindings && scalar_outputs,
                                              InternalScalars && internal_scalars)
 : Kernel(b,
 TypeId::SegmentOriented, std::move(kernelName),

@@ -3,9 +3,6 @@
 
 # module: kernel.pipeline
 
-if (ROOT_FOUND)
-    set(CERN_ROOT_LIB kernel.pipeline.cernroot)
-endif()
 if (ENABLE_PAPI)
     set(PAPI_CPP compiler/statistics/papi_instrumentation_logic.cpp)
 endif()
@@ -52,6 +49,7 @@ SRC
     compiler/codegen/pipeline_optimization_logic.cpp
     compiler/codegen/repeatingstreamset_logic.cpp
     compiler/codegen/scalar_logic.cpp
+    compiler/codegen/streamdata_illustrator_logic.cpp
     compiler/codegen/synchronization_logic.cpp
     compiler/codegen/termination_logic.cpp
     compiler/internal/popcount_kernel.cpp
@@ -65,5 +63,5 @@ SRC
     pipeline_kernel.cpp
 DEPS
     objcache
-    ${CERN_ROOT_LIB}
+    kernel.illustrator
 )

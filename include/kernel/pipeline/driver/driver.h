@@ -7,6 +7,7 @@
 #include <kernel/core/relationship.h>
 #include <util/slab_allocator.h>
 #include <boost/integer.hpp>
+#include <kernel/illustrator/illustrator.h>
 #include <string>
 #include <vector>
 #include <memory>
@@ -26,7 +27,7 @@ public:
     using Kernel = kernel::Kernel;
     using Relationship = kernel::Relationship;
     using Bindings = kernel::Bindings;
-    using BuilderRef = Kernel::BuilderRef;
+    using BuilderRef = kernel::Kernel::BuilderRef;
     using KernelSet = std::vector<std::unique_ptr<Kernel>>;
     using KernelMap = llvm::StringMap<std::unique_ptr<Kernel>>;
 

@@ -22,6 +22,9 @@
 #include <fcntl.h>
 #include <llvm/Support/raw_ostream.h>
 
+#define BEGIN_SCOPED_REGION {
+#define END_SCOPED_REGION }
+
 using namespace kernel;
 using namespace IDISA;
 using namespace llvm;
@@ -188,8 +191,34 @@ void PabloKernel::addInternalProperties(BuilderRef b) {
     mStreamTy = nullptr;
 }
 
-void PabloKernel::generateInitializeMethod(BuilderRef b) {
+bool PabloKernel::isCachable() const {
+    return !codegen::EnableIllustrator;
+}
 
+void PabloKernel::linkExternalMethods(BuilderRef b) {
+    if (LLVM_UNLIKELY(codegen::EnableIllustrator)) {
+        assert (mSharedStateType);
+        BEGIN_SCOPED_REGION
+        FixedArray<Type *, 2> params;
+        params[0] = b->getVoidPtrTy();
+        params[1] = mSharedStateType->getPointerTo();
+        FunctionType * funTy = FunctionType::get(b->getVoidTy(), params, false);
+        b->LinkFunction(KERNEL_ILLUSTRATOR_ENTER_KERNEL, funTy, (void*)&illustratorEnterKernel);
+        b->LinkFunction(KERNEL_ILLUSTRATOR_ENTER_LOOP, funTy, (void*)&illustratorEnterLoop);
+        b->LinkFunction(KERNEL_ILLUSTRATOR_ITERATE_LOOP, funTy, (void*)&illustratorIterateLoop);
+        b->LinkFunction(KERNEL_ILLUSTRATOR_EXIT_LOOP, funTy, (void*)&illustratorExitLoop);
+        b->LinkFunction(KERNEL_ILLUSTRATOR_EXIT_KERNEL, funTy, (void*)&illustratorExitKernel);
+        END_SCOPED_REGION
+    }
+    Kernel::linkExternalMethods(b);
+}
+
+void PabloKernel::generateInitializeMethod(BuilderRef b) {
+    if (LLVM_UNLIKELY(codegen::EnableIllustrator)) {
+        mPabloCompiler = reinterpret_cast<PabloCompiler *>(b->getCompiler());
+        mPabloCompiler->initializeIllustrator(b);
+        mPabloCompiler = nullptr;
+    }
 }
 
 void PabloKernel::generateDoBlockMethod(BuilderRef b) {
@@ -207,6 +236,9 @@ void PabloKernel::generateFinalBlockMethod(BuilderRef b, Value * const remaining
     // the position just past EOF, as well as a mask marking all positions past EOF.
     assert (remainingBytes);
     assert (remainingBytes->getType()->isIntegerTy());
+    if (LLVM_UNLIKELY(codegen::EnableIllustrator)) {
+        b->setScalarField("EOFUnnecessaryData", b->CreateSub(b->getSize(b->getBitBlockWidth()), remainingBytes));
+    }
     b->setScalarField("EOFbit", b->bitblock_set_bit(remainingBytes));
     b->setScalarField("EOFmask", b->bitblock_mask_from(remainingBytes));
     RepeatDoBlockLogic(b);
@@ -328,6 +360,10 @@ PabloKernel::PabloKernel(BuilderRef b,
 , mContext(nullptr) {
     addNonPersistentScalar(b->getBitBlockType(), "EOFbit");
     addNonPersistentScalar(b->getBitBlockType(), "EOFmask");
+    if (LLVM_UNLIKELY(codegen::EnableIllustrator)) {
+        addNonPersistentScalar(b->getSizeTy(), "EOFUnnecessaryData");
+        addInternalScalar(b->getSizeTy(), KERNEL_ILLUSTRATOR_STRIDE_NUM);
+    }
 }
 
 PabloKernel::~PabloKernel() { }

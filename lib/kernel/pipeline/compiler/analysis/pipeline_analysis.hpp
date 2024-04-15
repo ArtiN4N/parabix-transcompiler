@@ -11,6 +11,8 @@ public:
 
     using KernelPartitionIds = flat_map<ProgramGraph::vertex_descriptor, unsigned>;
 
+    using RedundantStreamSetMap = flat_map<const StreamSet *, StreamSet *>;
+
     static PipelineAnalysis analyze(BuilderRef b, PipelineKernel * const pipelineKernel) {
 
         PipelineAnalysis P(pipelineKernel);
@@ -67,7 +69,6 @@ public:
 
         P.identifyInterPartitionSymbolicRates();
 
-
         P.identifyTerminationChecks();
 
         P.determinePartitionJumpIndices();
@@ -82,7 +83,9 @@ public:
         P.identifyOwnedBuffers();
         P.identifyZeroExtendedStreamSets();
         P.identifyLinearBuffers();
-
+        if (codegen::EnableIllustrator) {
+            P.identifyIllustratedStreamSets();
+        }
         P.determineBufferSize(b);
 
         P.makeConsumerGraph();
@@ -97,6 +100,7 @@ public:
 
         // Finish the buffer graph
         P.determineInitialThreadLocalBufferLayout(b, rng);
+
         P.addStreamSetsToBufferGraph(b);
 
         P.scanFamilyKernelBindings();
@@ -199,6 +203,8 @@ private:
 
     void identifyPortsThatModifySegmentLength();
 
+    void identifyIllustratedStreamSets();
+
     // thread local analysis
 
     void determineInitialThreadLocalBufferLayout(BuilderRef b, pipeline_random_engine & rng);
@@ -261,7 +267,6 @@ public:
     const bool                      mTraceProcessedProducedItemCounts;
     const bool                      mTraceDynamicBuffers;
     const bool                      mTraceIndividualConsumedItemCounts;
-
     const bool                      IsNestedPipeline;
 
     static const unsigned           PipelineInput = 0U;
@@ -299,6 +304,7 @@ public:
     BufferGraph                     mBufferGraph;
 
     std::vector<unsigned>           PartitionJumpTargetId;
+    RedundantStreamSetMap           RedundantStreamSets;
 
     ConsumerGraph                   mConsumerGraph;
 
@@ -313,6 +319,8 @@ public:
     BitVector                           HasTerminationSignal;
 
     FamilyScalarGraph               mFamilyScalarGraph;
+
+    IllustratedStreamSetMap         mIllustratedStreamSetBindings;
 
     OwningVector<Kernel>            mInternalKernels;
     OwningVector<Binding>           mInternalBindings;

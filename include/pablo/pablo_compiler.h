@@ -39,6 +39,8 @@ protected:
 
     void initializeKernelData(BuilderRef b);
 
+    void initializeIllustrator(BuilderRef b);
+
     void compile(BuilderRef b);
 
     void releaseKernelData(BuilderRef b);
@@ -46,6 +48,8 @@ protected:
     void clearCarryData(BuilderRef b);
 
 private:
+
+    bool identifyIllustratedValues(BuilderRef b, const PabloBlock * const block, llvm::SmallVector<size_t, 8> & loopIds, size_t & currentLoopId);
 
     void examineBlock(BuilderRef b, const PabloBlock * const block);
 
@@ -70,11 +74,13 @@ private:
 private:
 
     PabloKernel * const                 mKernel;
+    llvm::Value *                       mIllustratorStrideNum;
     std::unique_ptr<CarryManager> const mCarryManager;
     TranslationMap                      mMarker;
     unsigned                            mBranchCount;
     llvm::BasicBlock *                  mEntryBlock;
     std::vector<llvm::BasicBlock *>     mBasicBlock;
+    llvm::SmallVector<const While *, 0> mContainsIllustratedValue;
 };
 
 }

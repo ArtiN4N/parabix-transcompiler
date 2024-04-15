@@ -163,7 +163,7 @@ void PipelineCompiler::addInternalKernelProperties(BuilderRef b, const unsigned 
 
     addFamilyKernelProperties(b, kernelId, groupId);
 
-    if (LLVM_UNLIKELY(isInternallySynchronized)) {
+    if (LLVM_UNLIKELY(isInternallySynchronized || mUsesIllustrator)) {
         // TODO: only needed if its possible to loop back or if we are not guaranteed that this kernel will always fire
         mTarget->addInternalScalar(sizeTy, name + INTERNALLY_SYNCHRONIZED_SUB_SEGMENT_SUFFIX, groupId);
     }
@@ -302,6 +302,15 @@ void PipelineCompiler::generateInitializeMethod(BuilderRef b) {
             }
         }
 
+        if (LLVM_UNLIKELY(mUsesIllustrator)) {
+            for (const auto e : make_iterator_range(out_edges(i, mBufferGraph))) {
+                const BufferPort & br = mBufferGraph[e];
+                if (LLVM_UNLIKELY(br.isIllustrated())) {
+                    registerStreamSetIllustrator(b, target(e, mBufferGraph));
+                }
+            }
+        }
+
         // Is this the last kernel in a partition? If so, store the accumulated
         // termination signal.
         if (terminated && HasTerminationSignal[mKernelId]) {
@@ -309,8 +318,10 @@ void PipelineCompiler::generateInitializeMethod(BuilderRef b) {
             writeTerminationSignal(b, mKernelId, signal);
             terminated = nullptr;
         }
-
     }
+
+
+
     if (LLVM_UNLIKELY(TraceDynamicMultithreading)) {
         initDynamicThreadingReportProperties(b);
     }
