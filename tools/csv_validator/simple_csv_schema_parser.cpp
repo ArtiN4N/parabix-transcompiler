@@ -404,6 +404,8 @@ CSVSchema CSVSchemaParser::load(const llvm::StringRef fileName) {
 
             // White space is not generally important within a Column Rule, but the whole rule must be on a single line.
 
+            re::RE * uuidRE = nullptr;
+
             for (;;) {
                 if (skipSpaceUntilNewLine()) {
                     goto done_parsing_column_rule;
@@ -475,6 +477,62 @@ CSVSchema CSVSchemaParser::load(const llvm::StringRef fileName) {
                     }
 
                     rule.CompositeKey.emplace_back(key);
+                } else if (exprName.equals("uuid4")) {
+                    // [60]	Uuid4Expr	::=	"uuid4"
+
+                    // A UUID4 Expression checks that the data in the column is in the form of a Version 4 UUID (Universally Unique Identifier),
+                    // see [RFC4122]. UUIDs MUST use lowercase hex values.
+
+                    if (LLVM_LIKELY(uuidRE == nullptr)) {
+
+                        //    UUID                   = time-low "-" time-mid "-"
+                        //                             time-high-and-version "-"
+                        //                             clock-seq-and-reserved
+                        //                             clock-seq-low "-" node
+                        //    time-low               = 4hexOctet
+                        //    time-mid               = 2hexOctet
+                        //    time-high-and-version  = 2hexOctet
+                        //    clock-seq-and-reserved = hexOctet
+                        //    clock-seq-low          = hexOctet
+                        //    node                   = 6hexOctet
+                        //    hexOctet               = hexDigit hexDigit
+                        //    hexDigit =
+                        //          "0" / "1" / "2" / "3" / "4" / "5" / "6" / "7" / "8" / "9" /
+                        //          "a" / "b" / "c" / "d" / "e" / "f" /
+                        //          "A" / "B" / "C" / "D" / "E" / "F"
+
+                        // The following is an example of the string representation of a UUID as
+                        // a URN:
+
+                        // urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6
+
+                        re::RE * hexDigit = re::makeCC(re::makeCC('0', '9'), re::makeCC('a', 'z'));
+                        re::RE * dash = re::makeCC('-');
+                        re::RE * hex2Octet = re::makeRep(hexDigit, 2 * 2, 2 * 2);
+                        re::RE * hex6Octet = re::makeRep(hexDigit, 6 * 2, 6 * 2);
+                        std::array<re::RE *, 2> inner;
+                        inner[0] = hex2Octet;
+                        inner[1] = dash;
+                        std::array<re::RE *, 3> outer;
+                        outer[0] = hex2Octet;
+                        outer[1] = re::makeRep(re::makeSeq(inner.begin(), inner.end()), 4, 4);
+                        outer[2] = hex6Octet;
+                        uuidRE = re::makeSeq(outer.begin(), outer.end());
+                    }
+
+                    if (rule.Expression) {
+                        rule.Expression = re::makeAlt({rule.Expression, uuidRE});
+                    } else {
+                        rule.Expression = uuidRE;
+                    }
+
+                    const auto u = findOrAddKey(rule.Name);
+                    CSVSchemaCompositeKey key;
+                    auto & fields = key.Fields;
+                    fields.push_back(u);
+                    rule.CompositeKey.emplace_back(key);
+
+
                 } else {
                     break;
                 }
