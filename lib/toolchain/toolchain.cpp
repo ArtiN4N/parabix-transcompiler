@@ -229,6 +229,16 @@ bool TimeKernelsIsEnabled;
 static cl::opt<bool, true> OptCompileTime("time-kernels", cl::location(TimeKernelsIsEnabled),
                                         cl::desc("Times each kernel, printing elapsed time for each on exit"), cl::init(false));
 
+size_t MMapPrefetchType;
+static cl::opt<size_t, true> OptMmapPrefetchType("mmap-prefetch", cl::location(MMapPrefetchType),
+                                        cl::desc("MMap prefetch test argument"), cl::init(0));
+
+
+bool ReadUsesCircularBuffer;
+static cl::opt<bool, true> OptReadUsesCircularBuffer("read-circular", cl::location(ReadUsesCircularBuffer),
+                                        cl::desc("use mmaped buffers for read kernel"), cl::init(false));
+
+
 CodeGenOpt::Level OptLevel;
 CodeGenOpt::Level BackEndOptLevel;
 

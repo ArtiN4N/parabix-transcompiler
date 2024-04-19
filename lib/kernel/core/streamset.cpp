@@ -94,6 +94,7 @@ void destroy_circular_buffer(uint8_t * base, const size_t size, const size_t has
     if (LLVM_UNLIKELY(base == nullptr)) {
         return;
     }
+    assert (size > 0);
     const size_t n = hasUnderflow ? 1 : 0;
     const size_t m = n + 2;
     const auto ptr = base - (n * size);

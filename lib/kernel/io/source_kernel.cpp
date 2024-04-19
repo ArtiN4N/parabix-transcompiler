@@ -168,10 +168,97 @@ void MMapSourceKernel::generateDoSegmentMethod(const unsigned codeUnitWidth, con
     Value * const producedBytes = b->CreateMul(producedPhi, CODE_UNIT_BYTES);
     Value * const length = b->CreateSub(producedBytes, consumedPageOffset);
 
-    args[0] = b->CreatePointerCast(consumedBuffer, cast<PointerType>(MAdviseFunc->getArg(0)->getType()));
-    args[1] = length;
-    args[2] = b->getInt32(MADV_WILLNEED);
-    b->CreateCall(MAdviseFunc, args);
+    if (codegen::MMapPrefetchType == 0) {
+        /* do nothing */
+    } else if (codegen::MMapPrefetchType == 1) {
+        args[0] = b->CreatePointerCast(consumedBuffer, cast<PointerType>(MAdviseFunc->getArg(0)->getType()));
+        args[1] = length;
+        args[2] = b->getInt32(MADV_WILLNEED);
+        b->CreateCall(MAdviseFunc, args);
+    } else if (codegen::MMapPrefetchType <= 7) {
+
+        PointerType * const int8PtrTy = b->getInt8PtrTy();
+
+        Function * const prefetchFunc = Intrinsic::getDeclaration(m, Intrinsic::prefetch, int8PtrTy); assert (prefetchFunc);
+
+        // declare void @llvm.prefetch(ptr <address>, i32 <rw>, i32 <locality>, i32 <cache type>)
+
+        FixedArray<Value *, 4> params;
+        params[1] = b->getInt32(0);
+        params[2] = b->getInt32(3);
+        params[3] = b->getInt32(1);
+
+        // address is the address to be prefetched, rw is the specifier determining if the fetch should be
+        // for a read (0) or write (1), and locality is a temporal locality specifier ranging from (0) - no locality,
+        // to (3) - extremely local keep in cache. The cache type specifies whether the prefetch is performed on the data (1)
+        // or instruction (0) cache. The rw, locality and cache type arguments must be constant integers.
+
+        Rational itemsPerPage{pageSize * 8, codeUnitWidth};
+        assert (itemsPerPage.denominator() == 1);
+
+        Value * const first = b->CreateRoundUpRational(producedItems, itemsPerPage);
+
+        BasicBlock * prefetchLoop = b->CreateBasicBlock("prefetchLoop");
+        BasicBlock * prefetchLoopExit = b->CreateBasicBlock("prefetchLoopExit");
+
+        b->CreateBr(prefetchLoop);
+
+        b->SetInsertPoint(prefetchLoop);
+        PHINode * prefetchPosPhi = b->CreatePHI(b->getSizeTy(), 2);
+        prefetchPosPhi->addIncoming(first, exit);
+
+        Type * const codeUnitTy = b->getIntNTy(codeUnitWidth);
+
+        if (codegen::MMapPrefetchType == 2 || codegen::MMapPrefetchType == 5) {
+            // prefetch the first address of each page
+            Value * pos = b->getRawOutputPointer("sourceBuffer", prefetchPosPhi);
+            params[0] = b->CreatePointerCast(pos, int8PtrTy);
+
+            if (codegen::MMapPrefetchType == 2) {
+                b->CreateCall(prefetchFunc, params);
+            }  else {
+                b->CreateLoad(codeUnitTy, params[0], true);
+            }
+
+
+        } else {
+            // prefetch all mmaped data
+            size_t limit = 0;
+
+            const size_t cl = b->getCacheAlignment();
+            Rational itemsPerCacheLine(cl * 8, codeUnitWidth);
+            assert (itemsPerCacheLine.denominator() == 1);
+            const auto step = itemsPerCacheLine.numerator();
+
+            if (codegen::MMapPrefetchType == 3 || codegen::MMapPrefetchType == 6) {
+                limit = step * 3;
+            } else {
+                limit = itemsPerPage.numerator();
+            }
+
+            for (size_t offset = 0; offset < limit; offset += step) {
+                Value * pos = b->getRawOutputPointer("sourceBuffer", b->CreateAdd(prefetchPosPhi, b->getSize(offset)));
+                if (codegen::MMapPrefetchType < 5) {
+                    params[0] = b->CreatePointerCast(pos, int8PtrTy);
+                    b->CreateCall(prefetchFunc, params);
+                } else {
+                    b->CreateLoad(codeUnitTy, pos, true);
+                }
+
+            }
+
+        }
+
+        Value * const nextPrefetchPos = b->CreateAdd(prefetchPosPhi, b->getSize(itemsPerPage.numerator()));
+        prefetchPosPhi->addIncoming(nextPrefetchPos, prefetchLoop);
+
+        b->CreateCondBr(b->CreateICmpULT(nextPrefetchPos, producedPhi), prefetchLoop, prefetchLoopExit);
+
+        b->SetInsertPoint(prefetchLoopExit);
+    } else {
+        llvm::report_fatal_error("Unknown mmap prefetch type code");
+    }
+
 
 }
 void MMapSourceKernel::freeBuffer(BuilderRef b, const unsigned codeUnitWidth) {
@@ -197,23 +284,53 @@ void MMapSourceKernel::linkExternalMethods(BuilderRef b) {
 
 /// READ SOURCE KERNEL
 
+constexpr char __MAKE_CIRCULAR_BUFFER[] = "__make_circular_buffer";
+constexpr char __DESTROY_CIRCULAR_BUFFER[] = "__destroy_circular_buffer";
+
 void ReadSourceKernel::generatLinkExternalFunctions(BuilderRef b) {
     #ifdef PREAD
     b->LinkFunction("pread64", PREAD);
     #else
     b->LinkFunction("read", read);
     #endif
+    if (codegen::ReadUsesCircularBuffer) {
+        b->LinkFunction(__MAKE_CIRCULAR_BUFFER, make_circular_buffer);
+        b->LinkFunction(__DESTROY_CIRCULAR_BUFFER, destroy_circular_buffer);
+    }
+}
+
+//uint8_t * make_circular_buffer(const size_t size, const size_t hasUnderflow);
+//void destroy_circular_buffer(uint8_t * base, const size_t size, const size_t hasUnderflow);
+
+template <typename IntTy>
+inline IntTy round_up_to(const IntTy x, const IntTy y) {
+    assert(is_power_2(y));
+    return (x + y - 1) & -y;
 }
 
 void ReadSourceKernel::generateInitializeMethod(const unsigned codeUnitWidth, const unsigned stride, BuilderRef b) {
-    ConstantInt * const bufferItems = b->getSize(stride * 4);
     const auto codeUnitSize = codeUnitWidth / 8;
-    ConstantInt * const bufferBytes = b->getSize(stride * 4 * codeUnitSize);
+    const auto pageSize = getPageSize();
+    const auto minSize = stride * 4 * codeUnitSize;
+    const auto desiredSize = round_up_to(minSize, pageSize);
+    ConstantInt * const bufferBytes = b->getSize(desiredSize);
+    Value * buffer = nullptr;
+    if (codegen::ReadUsesCircularBuffer) {
+        Module * m = b->getModule();
+        FixedArray<Value *, 2> makeArgs;
+        makeArgs[0] = bufferBytes;
+        makeArgs[1] = b->getSize(0);
+        Function * makeBuffer = m->getFunction(__MAKE_CIRCULAR_BUFFER); assert (makeBuffer);
+        buffer = b->CreateCall(makeBuffer, makeArgs);
+    } else {
+        buffer = b->CreatePageAlignedMalloc(bufferBytes);
+    }
     PointerType * const codeUnitPtrTy = b->getIntNTy(codeUnitWidth)->getPointerTo();
-    Value * const buffer = b->CreatePointerCast(b->CreatePageAlignedMalloc(bufferBytes), codeUnitPtrTy);
+    buffer = b->CreatePointerCast(buffer, codeUnitPtrTy);
     b->setBaseAddress("sourceBuffer", buffer);
     b->setScalarField("buffer", buffer);
     b->setScalarField("ancillaryBuffer", ConstantPointerNull::get(codeUnitPtrTy));
+    ConstantInt * const bufferItems = b->getSize(desiredSize / codeUnitSize);
     b->setScalarField("effectiveCapacity", bufferItems);
     b->setCapacity("sourceBuffer", bufferItems);
 }
@@ -232,114 +349,193 @@ void ReadSourceKernel::generateDoSegmentMethod(const unsigned codeUnitWidth, con
     Value * const segmentBytes = b->CreateMul(segmentItems, codeUnitBytes);
 
     BasicBlock * const entryBB = b->GetInsertBlock();
-    BasicBlock * const moveData = b->CreateBasicBlock("MoveData");
-    BasicBlock * const prepareBuffer = b->CreateBasicBlock("PrepareBuffer");
+    BasicBlock * const expandAndCopyBack = b->CreateBasicBlock("ExpandAndCopyBack");
+    BasicBlock * const afterCopyBackOrExpand = b->CreateBasicBlock("AfterCopyBackOrExpand");
     BasicBlock * const readData = b->CreateBasicBlock("ReadData");
     BasicBlock * const readIncomplete = b->CreateBasicBlock("readIncomplete");
     BasicBlock * const setTermination = b->CreateBasicBlock("SetTermination");
     BasicBlock * const readExit = b->CreateBasicBlock("ReadExit");
 
+
     // Can we append to our existing buffer without impacting any subsequent kernel?
     Value * const produced = b->getProducedItemCount("sourceBuffer");
     Value * const itemsPending = b->CreateAdd(produced, segmentItems);
-    Value * const effectiveCapacity = b->getScalarField("effectiveCapacity");
     Value * const baseBuffer = b->getScalarField("buffer");
     Value * const fd = b->getScalarField("fileDescriptor");
 
+    Value * const effectiveCapacity = b->getScalarField("effectiveCapacity");
 
-    Value * const permitted = b->CreateICmpULT(itemsPending, effectiveCapacity);
-    b->CreateLikelyCondBr(permitted, readData, moveData);
+    IntegerType * const sizeTy = b->getSizeTy();
 
-    // No. If we can copy the unconsumed data back to the start of the buffer *and* write a full
-    // segment of data without overwriting the currently unconsumed data, do so since it won't
-    // affect any potential consumer that could be using the "stale" output base pointer.
-    b->SetInsertPoint(moveData);
+    if (codegen::ReadUsesCircularBuffer) {
 
-    // Determine how much data has been consumed and how much needs to be copied back, noting
-    // that our "unproduced" data must be block aligned.
-    BasicBlock * const copyBack = b->CreateBasicBlock("CopyBack");
-    BasicBlock * const expandAndCopyBack = b->CreateBasicBlock("ExpandAndCopyBack");
+        Value * const consumedItems = b->getConsumedItemCount("sourceBuffer");
+        Value * const required = b->CreateSub(itemsPending, consumedItems);
 
-    Value * const capacity = b->getCapacity("sourceBuffer");
+        Value * const permitted = b->CreateICmpULT(required, effectiveCapacity);
+        b->CreateLikelyCondBr(permitted, afterCopyBackOrExpand, expandAndCopyBack);
 
-    const auto blockSize = b->getBitBlockWidth() / 8;
-    Value * const consumedItems = b->getConsumedItemCount("sourceBuffer");
-    ConstantInt * const BLOCK_WIDTH = b->getSize(b->getBitBlockWidth());
-    Constant * const ALIGNMENT_MASK = ConstantExpr::getNeg(BLOCK_WIDTH);
-    Value * const consumed = b->CreateAnd(consumedItems, ALIGNMENT_MASK);
+        // Otherwise, allocate a buffer with twice the capacity and copy the unconsumed data back into it
+        b->SetInsertPoint(expandAndCopyBack);
 
-    Value * const unreadItems = b->CreateSub(produced, consumed);
-    Value * const unreadData = b->getRawOutputPointer("sourceBuffer", consumed);
-    Value * const potentialItems = b->CreateAdd(unreadItems, segmentItems);
+        Value * const expandedCapacity = b->CreateRoundUp(required, effectiveCapacity);
+        Value * const expandedBytes = b->CreateMul(expandedCapacity, codeUnitBytes);
 
-    Value * const toWrite = b->CreateGEP(codeUnitTy, baseBuffer, potentialItems);
-    Value * const canCopy = b->CreateICmpULT(toWrite, unreadData);
+        Module * m = b->getModule();
+        FixedArray<Value *, 2> makeArgs;
+        makeArgs[0] = expandedBytes;
+        makeArgs[1] = b->getSize(0);
+        Function * makeBuffer = m->getFunction(__MAKE_CIRCULAR_BUFFER); assert (makeBuffer);
+        Value * expandedBuffer = b->CreateCall(makeBuffer, makeArgs);
 
-    Value * const remainingBytes = b->CreateMul(unreadItems, codeUnitBytes);
+        Value * const priorBuffer = b->getScalarField("ancillaryBuffer");
+        Value * const priorCapacity = b->getScalarField("ancillaryCapacity");
+        Function * destroyBuffer = m->getFunction(__DESTROY_CIRCULAR_BUFFER); assert (makeBuffer);
+        FixedArray<Value *, 3> destroyArgs;
+        destroyArgs[0] = b->CreatePointerCast(priorBuffer, b->getInt8PtrTy());
+        destroyArgs[1] = b->CreateMul(priorCapacity, codeUnitBytes);
+        destroyArgs[2] = b->getSize(0);
+        b->CreateCall(destroyBuffer, destroyArgs);
 
-    // Have we consumed enough data that we can safely copy back the unconsumed data and still
-    // leave enough space for one segment without needing a temporary buffer?
-    b->CreateLikelyCondBr(canCopy, copyBack, expandAndCopyBack);
+        b->setScalarField("ancillaryBuffer", baseBuffer);
+        b->setScalarField("ancillaryCapacity", effectiveCapacity);
 
-    // If so, just copy the data ...
-    b->SetInsertPoint(copyBack);
-    b->CreateMemCpy(baseBuffer, unreadData, remainingBytes, blockSize);
+        Value * newBufferOffset = b->CreateURem(consumedItems, expandedCapacity);
+        Value * const toCopyPtr = b->CreateInBoundsGEP(codeUnitTy, expandedBuffer, newBufferOffset);
 
-    // Since our consumed count cannot exceed the effective capacity, in order for (consumed % capacity)
-    // to be less than (effective capacity % capacity), we must have fully read all the data past the
-    // effective capacity of the buffer. Thus we can set the effective capacity to the buffer capacity.
-    // If, however, (consumed % capacity) >= (effective capacity % capacity), then we still have some
-    // unconsumed data at the end of the buffer. Here, we can set the reclaimed capacity position to
-    // (consumed % capacity).
+        Value * const oldBufferOffset = b->CreateURem(consumedItems, effectiveCapacity);
+        Value * const unreadDataPtr = b->CreateInBoundsGEP(codeUnitTy, baseBuffer, oldBufferOffset);
 
-    Value * const consumedModCap = b->CreateURem(consumed, capacity);
-    Value * const effectiveCapacityModCap = b->CreateURem(effectiveCapacity, capacity);
-    Value * const reclaimCapacity = b->CreateICmpULT(consumedModCap, effectiveCapacityModCap);
-    Value * const reclaimedCapacity = b->CreateSelect(reclaimCapacity, capacity, consumedModCap);
+        Value * const unreadItems = b->CreateSub(produced, consumedItems);
+        Value * const remainingBytes = b->CreateMul(unreadItems, codeUnitBytes);
 
-    Value * const updatedEffectiveCapacity = b->CreateAdd(consumed, reclaimedCapacity);
-    b->setScalarField("effectiveCapacity", updatedEffectiveCapacity);
-    BasicBlock * const copyBackExit = b->GetInsertBlock();
-    b->CreateBr(prepareBuffer);
+        b->CreateMemCpy(toCopyPtr, unreadDataPtr, remainingBytes, 1);
 
-    // Otherwise, allocate a buffer with twice the capacity and copy the unconsumed data back into it
-    b->SetInsertPoint(expandAndCopyBack);
-    Value * const expandedCapacity = b->CreateShl(capacity, 1);
-    Value * const expandedBytes = b->CreateMul(expandedCapacity, codeUnitBytes);
-    Value * const expandedBuffer = b->CreatePointerCast(b->CreatePageAlignedMalloc(expandedBytes), unreadData->getType());
-    b->CreateMemCpy(expandedBuffer, unreadData, remainingBytes, blockSize);
-    // Free the prior buffer if it exists
-    Value * const ancillaryBuffer = b->getScalarField("ancillaryBuffer");
-    b->setScalarField("ancillaryBuffer", baseBuffer);
-    b->CreateFree(ancillaryBuffer);
-    b->setScalarField("buffer", expandedBuffer);
-    b->setCapacity("sourceBuffer", expandedCapacity);
-    Value * const expandedEffectiveCapacity = b->CreateAdd(consumed, expandedCapacity);
-    b->setScalarField("effectiveCapacity", expandedEffectiveCapacity);
-    BasicBlock * const expandAndCopyBackExit = b->GetInsertBlock();
-    b->CreateBr(prepareBuffer);
+        b->setScalarField("buffer", expandedBuffer);
+        b->setScalarField("effectiveCapacity", expandedCapacity);
 
-    b->SetInsertPoint(prepareBuffer);
-    PHINode * const newBaseBuffer = b->CreatePHI(baseBuffer->getType(), 2);
-    newBaseBuffer->addIncoming(baseBuffer, copyBackExit);
-    newBaseBuffer->addIncoming(expandedBuffer, expandAndCopyBackExit);
-    Value * const newBaseAddress = b->CreateGEP(codeUnitTy, newBaseBuffer, b->CreateNeg(consumed));
-    b->setBaseAddress("sourceBuffer", newBaseAddress);
-    b->CreateBr(readData);
+        b->CreateBr(afterCopyBackOrExpand);
+
+        b->SetInsertPoint(afterCopyBackOrExpand);
+        PHINode * const bufferPhi = b->CreatePHI(unreadDataPtr->getType(), 2);
+        bufferPhi->addIncoming(baseBuffer, entryBB);
+        bufferPhi->addIncoming(expandedBuffer, expandAndCopyBack);
+        PHINode * const capacityPhi = b->CreatePHI(sizeTy, 2);
+        capacityPhi->addIncoming(effectiveCapacity, entryBB);
+        capacityPhi->addIncoming(expandedCapacity, expandAndCopyBack);
+
+        Value * consumedOffset = b->CreateSub(b->CreateURem(consumedItems, capacityPhi), consumedItems);
+        Value * const newBaseAddress = b->CreateInBoundsGEP(codeUnitTy, bufferPhi, consumedOffset);
+        b->setBaseAddress("sourceBuffer", newBaseAddress);
+
+        b->CreateBr(readData);
+
+
+    } else {
+
+        BasicBlock * const moveData = b->CreateBasicBlock("MoveData", expandAndCopyBack);
+
+        Value * const permitted = b->CreateICmpULT(itemsPending, effectiveCapacity);
+        b->CreateLikelyCondBr(permitted, readData, moveData);
+
+        // No. If we can copy the unconsumed data back to the start of the buffer *and* write a full
+        // segment of data without overwriting the currently unconsumed data, do so since it won't
+        // affect any potential consumer that could be using the "stale" output base pointer.
+        b->SetInsertPoint(moveData);
+
+        // Determine how much data has been consumed and how much needs to be copied back, noting
+        // that our "unproduced" data must be block aligned.
+        Value * capacity = b->getCapacity("sourceBuffer");
+
+        const auto blockSize = b->getBitBlockWidth() / 8;
+        Value * const consumedItems = b->getConsumedItemCount("sourceBuffer");
+        ConstantInt * const BLOCK_WIDTH = b->getSize(b->getBitBlockWidth());
+        Constant * const ALIGNMENT_MASK = ConstantExpr::getNeg(BLOCK_WIDTH);
+        Value * const consumed = b->CreateAnd(consumedItems, ALIGNMENT_MASK);
+
+        Value * const unreadItems = b->CreateSub(produced, consumed);
+        Value * const unreadData = b->getRawOutputPointer("sourceBuffer", consumed);
+        Value * const potentialItems = b->CreateAdd(unreadItems, segmentItems);
+
+        Value * const toWrite = b->CreateGEP(codeUnitTy, baseBuffer, potentialItems);
+        Value * const canCopy = b->CreateICmpULT(toWrite, unreadData);
+
+        Value * const remainingBytes = b->CreateMul(unreadItems, codeUnitBytes);
+
+        BasicBlock * const copyBack = b->CreateBasicBlock("CopyBack", expandAndCopyBack);
+
+        // Have we consumed enough data that we can safely copy back the unconsumed data and still
+        // leave enough space for one segment without needing a temporary buffer?
+        b->CreateLikelyCondBr(canCopy, copyBack, expandAndCopyBack);
+
+        // If so, just copy the data ...
+        b->SetInsertPoint(copyBack);
+        b->CreateMemCpy(baseBuffer, unreadData, remainingBytes, blockSize);
+
+        // Since our consumed count cannot exceed the effective capacity, in order for (consumed % capacity)
+        // to be less than (effective capacity % capacity), we must have fully read all the data past the
+        // effective capacity of the buffer. Thus we can set the effective capacity to the buffer capacity.
+        // If, however, (consumed % capacity) >= (effective capacity % capacity), then we still have some
+        // unconsumed data at the end of the buffer. Here, we can set the reclaimed capacity position to
+        // (consumed % capacity).
+
+        Value * const consumedModCap = b->CreateURem(consumed, capacity);
+        Value * const effectiveCapacityModCap = b->CreateURem(effectiveCapacity, capacity);
+        Value * const reclaimCapacity = b->CreateICmpULT(consumedModCap, effectiveCapacityModCap);
+        Value * const reclaimedCapacity = b->CreateSelect(reclaimCapacity, capacity, consumedModCap);
+
+        Value * const updatedEffectiveCapacity = b->CreateAdd(consumed, reclaimedCapacity);
+        b->setScalarField("effectiveCapacity", updatedEffectiveCapacity);
+        BasicBlock * const copyBackExit = b->GetInsertBlock();
+        b->CreateBr(afterCopyBackOrExpand);
+
+        // Otherwise, allocate a buffer with twice the capacity and copy the unconsumed data back into it
+        b->SetInsertPoint(expandAndCopyBack);
+        Value * const expandedCapacity = b->CreateShl(capacity, 1);
+        Value * const expandedBytes = b->CreateMul(expandedCapacity, codeUnitBytes);
+
+        Value * expandedBuffer = b->CreatePageAlignedMalloc(expandedBytes);
+        b->CreateMemCpy(expandedBuffer, unreadData, remainingBytes, blockSize);
+
+        // Free the prior buffer if it exists
+        Value * const ancillaryBuffer = b->getScalarField("ancillaryBuffer");
+        b->setScalarField("ancillaryBuffer", baseBuffer);
+        b->CreateFree(ancillaryBuffer);
+
+        expandedBuffer = b->CreatePointerCast(expandedBuffer, unreadData->getType());
+
+        b->setScalarField("buffer", expandedBuffer);
+        b->setCapacity("sourceBuffer", expandedCapacity);
+        Value * const expandedEffectiveCapacity = b->CreateAdd(consumed, expandedCapacity);
+        b->setScalarField("effectiveCapacity", expandedEffectiveCapacity);
+        BasicBlock * const expandAndCopyBackExit = b->GetInsertBlock();
+        b->CreateBr(afterCopyBackOrExpand);
+
+        b->SetInsertPoint(afterCopyBackOrExpand);
+        PHINode * const newBaseBuffer = b->CreatePHI(baseBuffer->getType(), 2);
+        newBaseBuffer->addIncoming(baseBuffer, copyBackExit);
+        newBaseBuffer->addIncoming(expandedBuffer, expandAndCopyBackExit);
+        Value * const newBaseAddress = b->CreateGEP(codeUnitTy, newBaseBuffer, b->CreateNeg(consumed));
+        b->setBaseAddress("sourceBuffer", newBaseAddress);
+        b->CreateBr(readData);
+
+    }
 
     // Regardless of whether we're simply appending data or had to allocate a new buffer, read a new page
     // of data into the input source buffer. This may involve multiple read calls.
     b->SetInsertPoint(readData);
-    PHINode * const bytesToRead = b->CreatePHI(segmentBytes->getType(), 3);
-    bytesToRead->addIncoming(segmentBytes, entryBB);
-    bytesToRead->addIncoming(segmentBytes, prepareBuffer);
-    PHINode * const producedSoFar = b->CreatePHI(produced->getType(), 3);
-    producedSoFar->addIncoming(produced, entryBB);
-    producedSoFar->addIncoming(produced, prepareBuffer);
+    PHINode * const bytesToRead = b->CreatePHI(sizeTy, 2);
+    if (!codegen::ReadUsesCircularBuffer) {
+        bytesToRead->addIncoming(segmentBytes, entryBB);
+    }
+    bytesToRead->addIncoming(segmentBytes, afterCopyBackOrExpand);
+    PHINode * const producedSoFar = b->CreatePHI(sizeTy, 2);
+    if (!codegen::ReadUsesCircularBuffer) {
+        producedSoFar->addIncoming(produced, entryBB);
+    }
+    producedSoFar->addIncoming(produced, afterCopyBackOrExpand);
+
     Value * const sourceBuffer = b->getRawOutputPointer("sourceBuffer", producedSoFar);
-
-
-
     #ifdef PREAD
     FixedArray<Value *, 4> args;
     args[0] = fd;
@@ -385,9 +581,33 @@ void ReadSourceKernel::generateDoSegmentMethod(const unsigned codeUnitWidth, con
     b->SetInsertPoint(readExit);
 }
 
-void ReadSourceKernel::freeBuffer(BuilderRef b) {
-    b->CreateFree(b->getScalarField("ancillaryBuffer"));
-    b->CreateFree(b->getScalarField("buffer"));
+void ReadSourceKernel::freeBuffer(const unsigned codeUnitWidth, BuilderRef b) {
+
+
+
+    if (codegen::ReadUsesCircularBuffer) {
+        Module * m = b->getModule();
+        ConstantInt * const codeUnitBytes = b->getSize(codeUnitWidth / 8);
+        Value * const buffer = b->getScalarField("buffer");
+        Value * const capacity = b->getScalarField("effectiveCapacity");
+        Function * destroyBuffer = m->getFunction(__DESTROY_CIRCULAR_BUFFER);
+        FixedArray<Value *, 3> destroyArgs;
+        destroyArgs[0] = b->CreatePointerCast(buffer, b->getInt8PtrTy());
+        destroyArgs[1] = b->CreateMul(capacity, codeUnitBytes);
+        destroyArgs[2] = b->getSize(0);
+        b->CreateCall(destroyBuffer, destroyArgs);
+        Value * const priorBuffer = b->getScalarField("ancillaryBuffer");
+        Value * const priorCapacity = b->getScalarField("ancillaryCapacity");
+        destroyArgs[0] = b->CreatePointerCast(priorBuffer, b->getInt8PtrTy());
+        destroyArgs[1] = b->CreateMul(priorCapacity, codeUnitBytes);
+        b->CreateCall(destroyBuffer, destroyArgs);
+    } else {
+        b->CreateFree(b->getScalarField("ancillaryBuffer"));
+        b->CreateFree(b->getScalarField("buffer"));
+    }
+
+
+
 }
 
 Value * ReadSourceKernel::generateExpectedOutputSizeMethod(const unsigned codeUnitWidth, BuilderRef b) {
@@ -413,7 +633,7 @@ void FDSourceKernel::generateFinalizeMethod(BuilderRef b) {
     MMapSourceKernel::freeBuffer(b, mCodeUnitWidth);
     b->CreateBr(finalizeDone);
     b->SetInsertPoint(finalizeRead);
-    ReadSourceKernel::freeBuffer(b);
+    ReadSourceKernel::freeBuffer(mCodeUnitWidth, b);
     b->CreateBr(finalizeDone);
     b->SetInsertPoint(finalizeDone);
 }
@@ -557,7 +777,7 @@ std::string makeSourceName(StringRef prefix, const unsigned fieldWidth, const un
 }
 
 MMapSourceKernel::MMapSourceKernel(BuilderRef b, Scalar * const fd, StreamSet * const outputStream)
-: SegmentOrientedKernel(b, makeSourceName("mmap_source", outputStream->getFieldWidth())
+: SegmentOrientedKernel(b, makeSourceName("mmap_source" + std::to_string(codegen::MMapPrefetchType), outputStream->getFieldWidth())
 // input streams
 ,{}
 // output streams
@@ -578,7 +798,7 @@ MMapSourceKernel::MMapSourceKernel(BuilderRef b, Scalar * const fd, StreamSet * 
 }
 
 ReadSourceKernel::ReadSourceKernel(BuilderRef b, Scalar * const fd, StreamSet * const outputStream)
-: SegmentOrientedKernel(b, makeSourceName("read_source", outputStream->getFieldWidth())
+: SegmentOrientedKernel(b, makeSourceName(std::string("read_source") + (codegen::ReadUsesCircularBuffer ? 'C' : 'L'), outputStream->getFieldWidth())
 // input streams
 ,{}
 // output streams
@@ -595,6 +815,9 @@ ReadSourceKernel::ReadSourceKernel(BuilderRef b, Scalar * const fd, StreamSet * 
     addInternalScalar(codeUnitPtrTy, "ancillaryBuffer");
     IntegerType * const sizeTy = b->getSizeTy();
     addInternalScalar(sizeTy, "effectiveCapacity");
+    if (codegen::ReadUsesCircularBuffer) {
+        addInternalScalar(sizeTy, "ancillaryCapacity");
+    }
     addAttribute(MustExplicitlyTerminate());
     addAttribute(SideEffecting());
     setStride(codegen::SegmentSize);
@@ -603,7 +826,7 @@ ReadSourceKernel::ReadSourceKernel(BuilderRef b, Scalar * const fd, StreamSet * 
 
 
 FDSourceKernel::FDSourceKernel(BuilderRef b, Scalar * const useMMap, Scalar * const fd, StreamSet * const outputStream)
-: SegmentOrientedKernel(b, makeSourceName("FD_source", outputStream->getFieldWidth())
+: SegmentOrientedKernel(b, makeSourceName("FD_source" + std::to_string(codegen::MMapPrefetchType) + (codegen::ReadUsesCircularBuffer ? 'C' : 'L'), outputStream->getFieldWidth())
 // input streams
 ,{}
 // output stream
@@ -621,6 +844,9 @@ FDSourceKernel::FDSourceKernel(BuilderRef b, Scalar * const useMMap, Scalar * co
     addInternalScalar(codeUnitPtrTy, "ancillaryBuffer");
     IntegerType * const sizeTy = b->getSizeTy();
     addInternalScalar(sizeTy, "effectiveCapacity");
+    if (codegen::ReadUsesCircularBuffer) {
+        addInternalScalar(sizeTy, "ancillaryCapacity");
+    }
     addAttribute(MustExplicitlyTerminate());
     addAttribute(SideEffecting());
     setStride(codegen::SegmentSize);

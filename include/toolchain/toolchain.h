@@ -111,6 +111,10 @@ extern float DynamicMultithreadingAddThreshold;
 extern float DynamicMultithreadingRemoveThreshold;
 extern size_t DynamicMultithreadingPeriod;
 
+extern size_t MMapPrefetchType;
+
+extern bool ReadUsesCircularBuffer;
+
 void ParseCommandLineOptions(int argc, const char *const *argv, std::initializer_list<const llvm::cl::OptionCategory *> hiding = {});
 
 void AddParabixVersionPrinter();
