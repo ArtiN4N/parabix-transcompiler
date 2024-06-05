@@ -443,10 +443,52 @@ void CCC_Check::generatePabloMethod() {
         CCC_ahead[i] = pb.createLookahead(CCC[i], 1);
     }
     BixNumCompiler bnc(pb);
-    PabloAST * violation = pb.createAnd(bnc.NEQ(CCC_ahead, 0), bnc.UGT(CCC, CCC_ahead));
-    //PabloAST * violation = bnc.NEQ(CCC_ahead, 0);
-    //PabloAST * violation = bnc.UGT(CCC, CCC_ahead);
+    PabloAST * nonZeroCCC = bnc.NEQ(CCC_ahead, 0);
+    PabloAST * violation = pb.createAnd(nonZeroCCC, bnc.UGT(CCC, CCC_ahead));
+    //
+    // Now mark all positions up to and including the next starter for reordering.
+    //PabloAST * toReorder = pb.createMatchStar(violation, nonZeroCCC);
+    //toReorder = pb.createOr(toReorder, pb.createAdvance(toReorder, 1));
     pb.createAssign(pb.createExtract(getOutputStreamVar("CCC_Violation"), pb.getInteger(0)), violation);
+}
+
+class CCC_Reorder1 : public pablo::PabloKernel {
+public:
+    CCC_Reorder1(KernelBuilder & b, StreamSet * BasisBits, StreamSet * CCC_violation, StreamSet * Reordered_Basis);
+protected:
+    void generatePabloMethod() override;
+private:
+    unsigned mCCC_basis_size;
+};
+
+CCC_Reorder1::CCC_Reorder1 (KernelBuilder & b, StreamSet * BasisBits, StreamSet * CCC_violation, StreamSet * Reordered_Basis)
+: PabloKernel(b, "CCC_Reorder1",
+// inputs
+{Binding{"BasisBits", BasisBits, FixedRate(1), LookAhead(1)}, Binding{"CCC_violation", CCC_violation}},
+// output
+{Binding{"Reordered_Basis", Reordered_Basis}}) {
+}
+
+void CCC_Reorder1::generatePabloMethod() {
+    PabloBuilder pb(getEntryScope());
+    PabloAST * violation = getInputStreamSet("CCC_violation")[0];
+    //
+    std::vector<PabloAST *> Basis = getInputStreamSet("BasisBits");
+    std::vector<Var *> reorderedVar(Basis.size());
+    for (unsigned i = 0; i < Basis.size(); i++) {
+        reorderedVar[i] = pb.createVar("reordered_" + std::to_string(i), Basis[i]);
+    }
+    auto nested = pb.createScope();
+    pb.createIf(violation, nested);
+    PabloAST * violation1 = nested.createAnd(violation, nested.createNot(nested.createAdvance(violation, 1)));
+    for (unsigned i = 0; i < Basis.size(); i++) {
+        PabloAST * bit_diff = nested.createAnd(violation1, nested.createXor(Basis[i], nested.createLookahead(Basis[i], 1)));
+        PabloAST * to_Change = nested.createOr(bit_diff, nested.createAdvance(bit_diff, 1));
+        nested.createAssign(reorderedVar[i], nested.createXor(to_Change, Basis[i]));
+    }
+    for (unsigned i = 0; i < Basis.size(); i++) {
+        pb.createAssign(pb.createExtract(getOutputStreamVar("Reordered_Basis"), pb.getInteger(i)), reorderedVar[i]);
+    }
 }
 
 typedef void (*XfrmFunctionType)(uint32_t fd);
@@ -520,7 +562,8 @@ XfrmFunctionType generate_pipeline(CPUDriver & pxDriver) {
     SHOW_BIXNUM(NFD_Basis);
 
     UCD::EnumeratedPropertyObject * enumObj = llvm::cast<UCD::EnumeratedPropertyObject>(getPropertyObject(UCD::ccc));
-    StreamSet * CCC_Basis = P->CreateStreamSet(enumObj->GetEnumerationBasisSets().size(), 1);
+    unsigned CCC_basis_size = enumObj->GetEnumerationBasisSets().size();
+    StreamSet * CCC_Basis = P->CreateStreamSet(CCC_basis_size, 1);
     P->CreateKernelCall<UnicodePropertyBasis>(enumObj, NFD_Basis, CCC_Basis);
     SHOW_BIXNUM(CCC_Basis);
 
@@ -528,8 +571,13 @@ XfrmFunctionType generate_pipeline(CPUDriver & pxDriver) {
     P->CreateKernelCall<CCC_Check>(CCC_Basis, CCC_Violation);
     SHOW_STREAM(CCC_Violation);
 
+    // Apply one step of reordering based on detected CCC_violations.
+    StreamSet * Reordered_Basis = P->CreateStreamSet(21, 1);
+    P->CreateKernelCall<CCC_Reorder1>(NFD_Basis, CCC_Violation, Reordered_Basis);
+    SHOW_BIXNUM(Reordered_Basis);
+
     StreamSet * const OutputBasis = P->CreateStreamSet(8);
-    U21_to_UTF8(P, NFD_Basis, OutputBasis);
+    U21_to_UTF8(P, Reordered_Basis, OutputBasis);
 
     SHOW_BIXNUM(OutputBasis);
 
