@@ -1,4 +1,4 @@
 git pull; 
 cd build; 
-make latinascii; bin/latinascii ../lasciitest.txt --enable-illstrator; 
+make latinascii; bin/latinascii ../lasciitest.txt --enable-illustrator; 
 cd ../;
