@@ -187,9 +187,11 @@ HexLinesFunctionType generatePipeline(CPUDriver & pxDriver) {
     // A pipeline is construction using a Parabix driver object.
     auto & b = pxDriver.getBuilder();
     auto P = pxDriver.makePipeline({Binding{b.getInt32Ty(), "inputFileDecriptor"}}, {});
+
     //  The program will use a file descriptor as an input.
     Scalar * fileDescriptor = P->getInputScalar("inputFileDecriptor");
     StreamSet * ByteStream = P->CreateStreamSet(1, 8);
+
     //  ReadSourceKernel is a Parabix Kernel that produces a stream of bytes
     //  from a file descriptor.
     P->CreateKernelCall<ReadSourceKernel>(fileDescriptor, ByteStream);
@@ -201,14 +203,16 @@ HexLinesFunctionType generatePipeline(CPUDriver & pxDriver) {
     P->CreateKernelCall<S2PKernel>(ByteStream, BasisBits);
     SHOW_BIXNUM(BasisBits);
 
-    //  We need to know which input positions are LFs and which are not.
-    //  The nonLF positions need to be expanded to generate two hex digits each.
+    // We need to know which input positions belong to the latin non-ascii character set.
+    // The non-ascii positions then need to be swapped with the corresponding ascii symbols
+    // Said ascii symbols are sometimes multiple characters, and so these positions may need to be expanded to 2 or more charcters
+
     //  The Parabix CharacterClassKernelBuilder can create any desired stream for
     //  characters.   Note that the input is the set of byte values in the range
     //  [\x{00}-x{09}\x{0B}-\x{FF}] that is, all byte values except \x{0A}.
     //  For our example input "Wolf!\b", the nonLF stream is "11111."
     StreamSet * nonLF = P->CreateStreamSet(1);
-    std::vector<re::CC *> nonLF_CC = {re::makeCC(re::makeByte(0,9), re::makeByte(0xB, 0xff))};
+    std::vector<re::CC *> nonLF_CC = {re::makeCC(re::makeByte(0x0,0xA0), re::makeByte(0xA2, 0xff))};
     P->CreateKernelCall<CharacterClassKernelBuilder>(nonLF_CC, BasisBits, nonLF);
     SHOW_STREAM(nonLF);
 
@@ -230,7 +234,7 @@ HexLinesFunctionType generatePipeline(CPUDriver & pxDriver) {
 
     // Perform the logic of the Hexify kernel.
     StreamSet * hexBasis = P->CreateStreamSet(8);
-    P->CreateKernelCall<Hexify>(hexInsertMask, spreadBasis, hexBasis);
+    //P->CreateKernelCall<Hexify>(hexInsertMask, spreadBasis, hexBasis);
     SHOW_BIXNUM(hexBasis);
 
     // The computed output can be converted back to byte stream form by the
@@ -248,10 +252,13 @@ int main(int argc, char *argv[]) {
     //  ParseCommandLineOptions uses the LLVM CommandLine processor, but we also add
     //  standard Parabix command line options such as -help, -ShowPablo and many others.
     codegen::ParseCommandLineOptions(argc, argv, {&HexLinesOptions, pablo::pablo_toolchain_flags(), codegen::codegen_flags()});
+
     //  A CPU driver is capable of compiling and running Parabix programs on the CPU.
-    CPUDriver driver("hexlines");
+    CPUDriver driver("latinascii");
+
     //  Build and compile the Parabix pipeline by calling the Pipeline function above.
     HexLinesFunctionType fn = generatePipeline(driver);
+
     //  The compile function "fn"  can now be used.   It takes a file
     //  descriptor as an input, which is specified by the filename given by
     //  the inputFile command line option.
