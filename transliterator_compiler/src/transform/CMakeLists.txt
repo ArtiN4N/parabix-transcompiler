@@ -1,0 +1,88 @@
+#  Part of the Parabix Project, under the Open Software License 3.0.
+#  SPDX-License-Identifier: OSL-3.0
+
+module: util
+
+# parabix_add_executable(
+# NAME
+#     hexlines
+# SRC
+#     hexlines.cpp
+# DEPS
+#     pablo
+#     kernel.basis
+#     kernel.io
+#     kernel.pipeline
+#     kernel.streamutils
+#     kernel.util
+#     toolchain
+# )
+
+
+# parabix_add_executable(
+# NAME
+#     hashdemo
+# SRC
+#     hashdemo.cpp
+# DEPS
+#     grep
+#     pablo
+#     kernel.basis
+#     kernel.io
+#     kernel.pipeline
+#     kernel.streamutils
+#     kernel.util
+#     toolchain
+# )
+
+# parabix_add_executable(
+# NAME
+#     packdemo
+# SRC
+#     packdemo.cpp
+# DEPS
+#     kernel.io
+#     kernel.pipeline
+#     kernel.streamutils
+#     kernel.util
+#     toolchain
+# )
+
+# parabix_add_executable(
+# NAME
+#     expanddemo
+# SRC
+#     expanddemo.cpp
+# DEPS
+#     kernel.io
+#     kernel.pipeline
+#     kernel.streamutils
+#     kernel.util
+#     toolchain
+# )
+
+# parabix_add_executable(
+# NAME
+#     edemo2
+# SRC
+#     edemo2.cpp
+# DEPS
+#     kernel.io
+#     kernel.pipeline
+#     kernel.streamutils
+#     kernel.util
+#     toolchain
+# )
+
+module: transform
+
+parabix_add_executable(
+NAME
+    lower
+SRC
+    lower.cpp
+DEPS
+    
+)
+
+

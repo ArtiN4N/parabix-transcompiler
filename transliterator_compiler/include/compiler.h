@@ -1,13 +1,9 @@
 #ifndef COMPILER_H
 #define COMPILER_H
 
+#include <vector>
 #include <string>
 
-using namespace std;
-
-class TransliteratorCompiler {
-public:
-    void compileAndTransform(string &input);
-};
+void compileAndTransform(const std::vector<std::string> &commands);
 
 #endif // COMPILER_H

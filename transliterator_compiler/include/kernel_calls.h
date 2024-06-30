@@ -3,8 +3,6 @@
 
 #include <string>
 
-using namespace std;
-
-void transformUppercaseToLowercase(string &input);
+std::string transformText(const std::string &input);
 
 #endif // KERNEL_CALLS_H
