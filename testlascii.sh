@@ -1,0 +1,1 @@
+git pull; cd build; make latinascii; bin/latinascii ../lasciitest.txt
