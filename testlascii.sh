@@ -1,1 +1,1 @@
-git pull; cd build; make latinascii; bin/latinascii ../lasciitest.txt
+git pull; cd build; make latinascii; bin/latinascii ../lasciitest.txt; cd ../
