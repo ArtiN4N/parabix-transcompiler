@@ -75,3 +75,16 @@ DEPS
     toolchain
 )
 
+parabix_add_executable(
+NAME
+    lower
+SRC
+    lower.cpp
+DEPS
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    kernel.util
+    toolchain
+)
+
