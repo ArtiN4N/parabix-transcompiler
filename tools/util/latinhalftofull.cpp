@@ -44,6 +44,8 @@ protected:
         // Load input stream block
         Value * inputBlock = b.loadInputStreamBlock("inputStream", b.getInt32(0), b.getInt32(0));
 
+        /*
+
         // Define the mask for 'a' characters
         Value * isA = b.CreateICmpEQ(inputBlock, b.getInt8('a'));
 
@@ -59,8 +61,10 @@ protected:
         // Conditionally store the output blocks based on 'isA' mask
         Value * output = b.CreateSelect(isA, outputBlock2, outputBlock1);
 
+        */
+
         // Store output block
-        b.storeOutputStreamBlock("outputStream", b.getInt32(0), b.getInt32(0), output);
+        b.storeOutputStreamBlock("outputStream", b.getInt32(0), b.getInt32(0), inputBlock);
     }
 };
 
