@@ -65,12 +65,11 @@ void LowerToUpper::generatePabloMethod() {
     // Get the basis bits input stream
     std::vector<PabloAST *> basisBits = getInputStreamSet("basisBits");
 
-    // Define the pattern for lowercase letters: 01100001 to 01111010 (a to z)
-    PabloAST * lowercase_a = pb.createOnes(0x61);
-    PabloAST * lowercase_z = pb.createOnes(0x7A);
-
     // Generate the mask for lowercase letters
-    PabloAST * lowercase_mask = pb.createRange(lowercase_a, lowercase_z);
+    PabloAST * lowercase_mask = pb.createAnd(
+        pb.createAnd(pb.createNot(basisBits[7]), basisBits[6]),
+        pb.createAnd(pb.createNot(basisBits[5]), pb.createAnd(basisBits[4], basisBits[3]))
+    );
 
     // Create the transformation: clear the 6th bit (0x20) to convert to uppercase
     std::vector<PabloAST *> transformedBasisBits(8);
