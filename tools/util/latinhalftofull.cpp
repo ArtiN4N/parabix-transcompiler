@@ -42,27 +42,27 @@ public:
 
 protected:
     void generateMultiBlockLogic(KernelBuilder &b, llvm::Value * const numOfBlocks) override {
-        // bitBlockType is obtained from the KernelBuilder. 
+        // bitBlockType is obtained from the KernelBuilder.
         // This type represents the SIMD width, typically 128 or 256 bits
-        Type * const bitBlockType = b.getBitBlockType(); // 
+        Type * const bitBlockType = b.getBitBlockType();
 
-        // Load input and apply the uppercase transformation
-        for (unsigned i = 0; i < b.getBitBlockWidth(); i += bitBlockType->getPrimitiveSizeInBits()) {
-            // Load input block
-            Value * inputBlock = b.loadInputStreamBlock("inputStream", b.getInt32(0), b.getInt32(i));
+        // Load input block
+        Value * inputBlock = b.loadInputStreamBlock("inputStream", b.getInt32(0), numOfBlocks);
 
-            //Value * uppercaseMask = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0xDF));
-            Value *uppercaseBlock1 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0xEF));
-            Value *uppercaseBlock2 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0xBC));
-            Value *uppercaseBlock3 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0x81));
+        // Define constants for fullwidth transformation
+        Value * baseOffset = b.getInt32(0xEFBC80); // Starting fullwidth offset for halfwidth characters
 
+        // Create masks and transformations
+        Value * isLatinRange = b.CreateAnd(
+            b.CreateICmpUGE(inputBlock, b.getInt8(0x21)),
+            b.CreateICmpULE(inputBlock, b.getInt8(0x7E))
+        );
 
-            // Calculate uppercase values
-            Value * uppercaseBlock = b.CreateOr(uppercaseBlock2, uppercaseBlock1);
+        Value * isHalfwidth = b.CreateAnd(inputBlock, isLatinRange);
+        Value * fullwidthOffset = b.CreateAdd(baseOffset, b.CreateZExt(isHalfwidth, bitBlockType));
 
-            // Store output block
-            b.storeOutputStreamBlock("outputStream", b.getInt32(0), b.getInt32(i), uppercaseBlock);
-        }
+        // Store output block
+        b.storeOutputStreamBlock("outputStream", b.getInt32(0), numOfBlocks, fullwidthOffset);
     }
 };
 
