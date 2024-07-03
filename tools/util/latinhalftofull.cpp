@@ -44,7 +44,9 @@ protected:
     void generateMultiBlockLogic(KernelBuilder &b, llvm::Value * const numOfBlocks) override {
         // bitBlockType represents the SIMD width, typically 128 or 256 bits
         Type * const bitBlockType = b.getBitBlockType();
-        std::cout << "test: " << bitBlockType->getPrimitiveSizeInBits() << std::endl;
+        std::cout << "cond: " << b.getBitBlockWidth() << std::endl;
+        std::cout << "step: " << bitBlockType->getPrimitiveSizeInBits() << std::endl;
+
         for (unsigned i = 0; i < b.getBitBlockWidth(); i += bitBlockType->getPrimitiveSizeInBits()) {
             std::cout << "loop: " << i << std::endl;
             Value * inputBlock = b.loadInputStreamBlock("inputStream", b.getInt32(0), b.getInt32(i));
@@ -82,6 +84,8 @@ protected:
             b.storeOutputStreamBlock("outputStream", b.getInt32(2), b.getInt32(i), outputBlock3);
             std::cout << "  stored to outputblock 3" << std::endl;
         }
+
+        std::cout << "escaped loop" << std::endl;
     }
 };
 
@@ -99,12 +103,16 @@ TransliteratorFunctionType transliterator_gen(CPUDriver & driver) {
     SHOW_BYTES(codeUnitStream);
 
     // Halfwidth to Fullwidth transformation
+    std::cout << "entering transform" << std::endl;
     StreamSet * const fullwidthStream = P->CreateStreamSet(3, 8);
     P->CreateKernelCall<HalfwidthToFullwidthKernel>(codeUnitStream, fullwidthStream);
+    std::cout << "exited transform" << std::endl;
 
     // Output
+    std::cout << "showing output" << std::endl;
     P->CreateKernelCall<StdOutKernel>(fullwidthStream);
     SHOW_BYTES(fullwidthStream);
+    std::cout << "ooutput shown" << std::endl;
 
     return reinterpret_cast<TransliteratorFunctionType>(P->compile());
 }
@@ -122,6 +130,9 @@ int main(int argc, char *argv[]) {
         func = transliterator_gen(pxDriver);
         func(fd);
         close(fd);
+        std::cout << "file descriptor closed" << std::endl;
     }
+
+    std::cout << "exiting" << std::endl;
     return 0;
 }
