@@ -48,7 +48,6 @@ protected:
         std::cout << "step: " << bitBlockType->getPrimitiveSizeInBits() << std::endl;
 
         for (unsigned i = 0; i < b.getBitBlockWidth(); i += bitBlockType->getPrimitiveSizeInBits()) {
-            std::cout << "loop: " << i << std::endl;
             Value * inputBlock = b.loadInputStreamBlock("inputStream", b.getInt32(0), b.getInt32(i));
 
             // Create a new empty block for the output
@@ -58,21 +57,15 @@ protected:
             
             // Transform halfwidth characters to fullwidth characters
             for (unsigned j = 0; j < 64; ++j) {
-                std::cout << "  loop 2: " << j << std::endl;
                 Value * inputChar = b.CreateExtractElement(inputBlock, b.getInt32(j));
                 Value * isHalfwidth = b.CreateICmpUGE(inputChar, b.getInt8(0x21));
                 isHalfwidth = b.CreateAnd(isHalfwidth, b.CreateICmpULE(inputChar, b.getInt8(0x7E)));
                 
                 if (isHalfwidth) {
-                    std::cout << "      is halfwidth" << std::endl;
                     Value * fullwidthChar = b.CreateAdd(inputChar, b.getInt32(0xFFBF));
-                    std::cout << "      created fullwidthChar" << std::endl;
                     b.CreateInsertElement(outputBlock1, fullwidthChar, b.getInt32(j * 3));
-                    std::cout << "      wrote to outputblock 1" << std::endl;
                     b.CreateInsertElement(outputBlock2, b.getInt32(0xBC), b.getInt32(j * 3 + 1));
-                    std::cout << "      wrote to outputblock 2" << std::endl;
                     b.CreateInsertElement(outputBlock3, b.getInt32(0x81), b.getInt32(j * 3 + 2));
-                    std::cout << "      wrote to outputblock 3" << std::endl;
                 }
             }
 
