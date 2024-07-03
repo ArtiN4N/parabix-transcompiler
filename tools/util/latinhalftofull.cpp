@@ -50,8 +50,24 @@ protected:
             Value * outputBlock1 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0x00));
             Value * outputBlock2 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0x00));
             Value * outputBlock3 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0x00));
+
+            Value * outputBlock1 = b.CreateAnd(
+                b.CreateOr(inputBlock, outputBlock1), 
+                outputBlock1
+            );
+
+            Value * outputBlock2 = b.CreateAnd(
+                b.CreateOr(inputBlock, outputBlock2), 
+                outputBlock2
+            );
+
+            Value * outputBlock3 = b.CreateAnd(
+                b.CreateOr(inputBlock, outputBlock3), 
+                outputBlock3
+            );
             
             // Transform halfwidth characters to fullwidth characters
+            /*
             for (unsigned j = 0; j < 64; ++j) {
                 Value * inputChar = b.CreateExtractElement(inputBlock, b.getInt32(j));
                 Value * isHalfwidth = b.CreateAnd(
@@ -82,7 +98,7 @@ protected:
                 outputBlock1 = b.CreateInsertElement(outputBlock1, fullwidthChar1, b.getInt32(j * 3));
                 outputBlock2 = b.CreateInsertElement(outputBlock2, fullwidthChar2, b.getInt32(j * 3 + 1));
                 outputBlock3 = b.CreateInsertElement(outputBlock3, fullwidthChar3, b.getInt32(j * 3 + 2));
-            }
+            }*/
 
             // Store output blocks
             b.storeOutputStreamBlock("outputStream", b.getInt32(0), b.getInt32(i), outputBlock1);
