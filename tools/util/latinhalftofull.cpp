@@ -28,17 +28,16 @@ using namespace kernel;
 using namespace llvm;
 using namespace codegen;
 
-class UppercaseKernel : public MultiBlockKernel {
+class HalfwidthFullwidthKernel : public MultiBlockKernel {
 public:
-    UppercaseKernel(KernelBuilder &b, StreamSet *inputStream, StreamSet *outputStream)
-    : MultiBlockKernel(b, "UppercaseKernel",
+    HalfwidthFullwidthKernel(KernelBuilder &b, StreamSet *inputStream, StreamSet *outputStream)
+    : MultiBlockKernel(b, "HalfwidthFullwidthKernel",
         {Binding{"inputStream", inputStream}}, // input bindings
         {Binding{"outputStream", outputStream}}, // output bindings
         {}, // internal scalar bindings
         {}, // initializer bindings
         {}) // kernel state bindings)
     {}
-
 
 protected:
     void generateMultiBlockLogic(KernelBuilder &b, llvm::Value * const numOfBlocks) override {
@@ -66,7 +65,6 @@ protected:
     }
 };
 
-
 typedef void (*TransliteratorFunctionType)(uint32_t fd);
 
 TransliteratorFunctionType transliterator_gen(CPUDriver & driver) {
@@ -80,14 +78,14 @@ TransliteratorFunctionType transliterator_gen(CPUDriver & driver) {
     P->CreateKernelCall<ReadSourceKernel>(fileDescriptor, codeUnitStream);
     SHOW_BYTES(codeUnitStream);
 
-
-    // Uppercase transformation
-    StreamSet * const upperStream = P->CreateStreamSet(1, 8);
-    P->CreateKernelCall<UppercaseKernel>(codeUnitStream, upperStream);
+    // Halfwidth to Fullwidth transformation
+    StreamSet * const fullwidthStream = P->CreateStreamSet(1, 8);
+    P->CreateKernelCall<HalfwidthFullwidthKernel>(codeUnitStream, fullwidthStream);
+    SHOW_BYTES(fullwidthStream);
 
     // Output
-    P->CreateKernelCall<StdOutKernel>(upperStream);
-    SHOW_BYTES(upperStream);
+    P->CreateKernelCall<StdOutKernel>(fullwidthStream);
+    SHOW_BYTES(fullwidthStream);
 
     return reinterpret_cast<TransliteratorFunctionType>(P->compile());
 }
