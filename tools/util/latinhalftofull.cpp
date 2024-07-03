@@ -227,7 +227,7 @@ HexLinesFunctionType generatePipeline(CPUDriver & pxDriver) {
     // argument (the spread mask).   Zeroes are inserted everywhere else.
     // This function performs STEP 1 in the comments above.
 
-    StreamSet * spreadBasis = P->CreateStreamSet(8);
+    StreamSet * spreadBasis = P->CreateStreamSet(1, 8);
     SpreadByMask(P, hexInsertMask, BasisBits, spreadBasis);
     SHOW_BIXNUM(spreadBasis);
 
