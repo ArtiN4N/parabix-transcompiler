@@ -46,69 +46,36 @@ protected:
         for (unsigned i = 0; i < b.getBitBlockWidth(); i += bitBlockType->getPrimitiveSizeInBits()) {
             Value * inputBlock = b.loadInputStreamBlock("inputStream", b.getInt32(0), b.getInt32(i));
 
-            // Create output blocks
-            Value * outputBlock1 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0x00));
-            llvm::errs() << "outputBlock1: " << *outputBlock1 << "\n"; // for testing
-
-            Value * outputBlock2 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0x00));
-            llvm::errs() << "outputBlock2: " << *outputBlock2 << "\n"; // for testing
-
-            Value * outputBlock3 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0x00));
-            llvm::errs() << "outputBlock3: " << *outputBlock3 << "\n"; // for testing
-
-            outputBlock1 = b.CreateAnd(
-                b.CreateOr(inputBlock, outputBlock1), 
-                outputBlock1
+            Value * halfwidthLatinMask = b.CreateAnd(
+                b.CreateICmpUGE(inputBlock, b.getInt8(0x21)),
+                b.CreateICmpULE(inputBlock, b.getInt8(0x7E))
             );
 
-            outputBlock2 = b.CreateAnd(
-                b.CreateOr(inputBlock, outputBlock2), 
-                outputBlock2
+            Value * fullwidthPrefix = b.getInt8(0xEF);
+            Value * fullwidthMiddle = b.getInt8(0xBC);
+            Value * fullwidthSuffix = b.getInt8(0x81);
+
+            Value * fullwidthCharacters = b.CreateSelect(
+                halfwidthLatinMask,
+                b.CreateOr(inputBlock, fullwidthPrefix),
+                inputBlock
             );
 
-            outputBlock3 = b.CreateAnd(
-                b.CreateOr(inputBlock, outputBlock3), 
-                outputBlock3
+            // Adjust for the other two bytes in the fullwidth character
+            fullwidthCharacters = b.CreateInsertElement(
+                fullwidthCharacters,
+                fullwidthMiddle,
+                b.getInt32(1)
             );
-            
-            // Transform halfwidth characters to fullwidth characters
-            /*
-            for (unsigned j = 0; j < 64; ++j) {
-                Value * inputChar = b.CreateExtractElement(inputBlock, b.getInt32(j));
-                Value * isHalfwidth = b.CreateAnd(
-                    b.CreateICmpUGE(inputChar, b.getInt8(0x21)),
-                    b.CreateICmpULE(inputChar, b.getInt8(0x7E))
-                );
-                
-                // OR operation with input to set fullwidth bits
-                Value * fullwidthChar1 = b.CreateSelect(
-                    isHalfwidth,
-                    b.CreateOr(inputChar, b.getInt32(0xEF)),
-                    inputChar
-                ); // First byte
-
-                Value * fullwidthChar2 = b.CreateSelect(
-                    isHalfwidth,
-                    b.getInt32(0xBC),
-                    b.getInt32(0x00)
-                ); // Second byte
-
-                Value * fullwidthChar3 = b.CreateSelect(
-                    isHalfwidth,
-                    b.getInt32(0x81),
-                    b.getInt32(0x00)
-                ); // Third byte
-                
-                // Conditional assignment based on isHalfwidth
-                outputBlock1 = b.CreateInsertElement(outputBlock1, fullwidthChar1, b.getInt32(j * 3));
-                outputBlock2 = b.CreateInsertElement(outputBlock2, fullwidthChar2, b.getInt32(j * 3 + 1));
-                outputBlock3 = b.CreateInsertElement(outputBlock3, fullwidthChar3, b.getInt32(j * 3 + 2));
-            }*/
+            fullwidthCharacters = b.CreateInsertElement(
+                fullwidthCharacters,
+                fullwidthSuffix,
+                b.getInt32(2)
+            );
 
             // Store output blocks
-            b.storeOutputStreamBlock("outputStream", b.getInt32(0), b.getInt32(i), outputBlock1);
-            b.storeOutputStreamBlock("outputStream", b.getInt32(1), b.getInt32(i), outputBlock2);
-            b.storeOutputStreamBlock("outputStream", b.getInt32(2), b.getInt32(i), outputBlock3);
+            b.storeOutputStreamBlock("outputStream", b.getInt32(0), b.getInt32(i), fullwidthCharacters);
+
         }
     }
 };
@@ -127,7 +94,7 @@ TransliteratorFunctionType transliterator_gen(CPUDriver & driver) {
     SHOW_BYTES(codeUnitStream);
 
     // Halfwidth to Fullwidth transformation
-    StreamSet * const fullwidthStream = P->CreateStreamSet(3, 8);
+    StreamSet * const fullwidthStream = P->CreateStreamSet(1, 8);
     P->CreateKernelCall<HalfwidthToFullwidthKernel>(codeUnitStream, fullwidthStream);
 
     // Output
