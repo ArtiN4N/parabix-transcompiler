@@ -64,11 +64,11 @@ protected:
 
         std::cout << "  doing the stuff" << std::endl;
         Value * isHalfwidth = b.CreateAnd(inputBlock, isLatinRange);
-        Value * fullwidthOffset = b.CreateAdd(baseOffset, b.CreateZExt(isHalfwidth, bitBlockType));
+        //Value * fullwidthOffset = b.CreateAdd(baseOffset, b.CreateZExt(isHalfwidth, bitBlockType));
 
         // Store output block
         std::cout << "  store output" << std::endl;
-        b.storeOutputStreamBlock("outputStream", b.getInt32(0), numOfBlocks, fullwidthOffset);
+        b.storeOutputStreamBlock("outputStream", b.getInt32(0), numOfBlocks, isHalfwidth);
     }
 };
 
