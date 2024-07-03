@@ -123,7 +123,7 @@ TransliteratorFunctionType transliterator_gen(CPUDriver & driver) {
 
     // Uppercase transformation
     StreamSet * const upperStream = P->CreateStreamSet(1, 8);
-    P->CreateKernelCall<UppercaseKernel>(codeUnitStream, upperStream);
+    P->CreateKernelCall<HalfwidthToFullwidthKernel>(codeUnitStream, upperStream);
 
     // Output
     P->CreateKernelCall<StdOutKernel>(upperStream);
