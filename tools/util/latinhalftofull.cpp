@@ -19,6 +19,7 @@
 #include <toolchain/toolchain.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <iostream>
 
 #define SHOW_STREAM(name) if (codegen::EnableIllustrator) P->captureBitstream(#name, name)
 #define SHOW_BIXNUM(name) if (codegen::EnableIllustrator) P->captureBixNum(#name, name)
@@ -44,6 +45,7 @@ protected:
         // bitBlockType represents the SIMD width, typically 128 or 256 bits
         Type * const bitBlockType = b.getBitBlockType();
         for (unsigned i = 0; i < b.getBitBlockWidth(); i += bitBlockType->getPrimitiveSizeInBits()) {
+            std::cout << "loop: " << i << std::endl;
             Value * inputBlock = b.loadInputStreamBlock("inputStream", b.getInt32(0), b.getInt32(i));
 
             // Create a new empty block for the output
@@ -53,6 +55,7 @@ protected:
             
             // Transform halfwidth characters to fullwidth characters
             for (unsigned j = 0; j < 64; ++j) {
+                std::cout << "loop 2: " << j << std::endl;
                 Value * inputChar = b.CreateExtractElement(inputBlock, b.getInt32(j));
                 Value * isHalfwidth = b.CreateICmpUGE(inputChar, b.getInt8(0x21));
                 isHalfwidth = b.CreateAnd(isHalfwidth, b.CreateICmpULE(inputChar, b.getInt8(0x7E)));
