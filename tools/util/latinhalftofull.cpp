@@ -210,7 +210,7 @@ HexLinesFunctionType generatePipeline(CPUDriver & pxDriver) {
     //  [\x{00}-x{09}\x{0B}-\x{FF}] that is, all byte values except \x{0A}.
     //  For our example input "Wolf!\b", the nonLF stream is "11111."
     StreamSet * HLFWDTH = P->CreateStreamSet(1);
-    std::vector<re::CC *> HLFWDTH_CC = {re::makeCC(re::makeByte(0x21, 0x7e))};
+    std::vector<re::CC *> HLFWDTH_CC = { re::makeCC( re::makeByte(0x21) , re::makeByte(0x7e) ) };
     P->CreateKernelCall<CharacterClassKernelBuilder>(HLFWDTH_CC, BasisBits, HLFWDTH);
     SHOW_STREAM(HLFWDTH);
 
