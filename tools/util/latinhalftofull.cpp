@@ -233,7 +233,7 @@ HexLinesFunctionType generatePipeline(CPUDriver & pxDriver) {
 
     // Perform the logic of the Hexify kernel.
     StreamSet * hexBasis = P->CreateStreamSet(8);
-    P->CreateKernelCall<Hexify>(hexInsertMask2, spreadBasis, hexBasis);
+    P->CreateKernelCall<Hexify>(hexInsertMask, spreadBasis, hexBasis);
     SHOW_BIXNUM(hexBasis);
 
     // The computed output can be converted back to byte stream form by the
