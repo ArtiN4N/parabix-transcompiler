@@ -48,7 +48,7 @@ protected:
 
             // Create a new empty block for the output
             Value * outputBlock1 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0xEF));
-            Value * outputBlock2 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits / 8, b.getInt8(0xBC));
+            Value * outputBlock2 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0xBC));
             Value * outputBlock3 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0x81));
             
             // Transform halfwidth characters to fullwidth characters
@@ -58,7 +58,7 @@ protected:
                 isHalfwidth = b.CreateAnd(isHalfwidth, b.CreateICmpULE(inputChar, b.getInt8(0x7E)));
                 
                 if (isHalfwidth) {
-                    Value * fullwidthChar = b.CreateAdd(b.getInt32(inputChar), b.getInt32(0xFFBF));
+                    Value * fullwidthChar = b.CreateAdd(inputChar, b.getInt32(0xFFBF));
                     b.CreateInsertElement(outputBlock1, fullwidthChar, b.getInt32(j * 3));
                     b.CreateInsertElement(outputBlock2, b.getInt32(0xBC), b.getInt32(j * 3 + 1));
                     b.CreateInsertElement(outputBlock3, b.getInt32(0x81), b.getInt32(j * 3 + 2));
