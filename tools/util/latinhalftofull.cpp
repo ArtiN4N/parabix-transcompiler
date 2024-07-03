@@ -84,8 +84,10 @@ typedef void (*TransformFunctionType)(uint32_t fd);
 TransformFunctionType generatePipeline(CPUDriver & pxDriver) {
     auto & b = pxDriver.getBuilder();
     auto P = pxDriver.makePipeline({Binding{b.getInt32Ty(), "inputFileDescriptor"}}, {});
+
     Scalar * fileDescriptor = P->getInputScalar("inputFileDescriptor");
     StreamSet * ByteStream = P->CreateStreamSet(1, 8);
+    
     P->CreateKernelCall<ReadSourceKernel>(fileDescriptor, ByteStream);
     SHOW_BYTES(ByteStream);
 
