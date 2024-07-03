@@ -64,7 +64,7 @@ protected:
             Value * isLowercase = b.CreateICmpEQ(b.CreateAnd(inputBlock, lowercaseMask), lowercaseMask);
 
             // Calculate uppercase values
-            Value * uppercaseBlock = lowercaseMask
+            Value * uppercaseBlock = b.CreateAnd(inputBlock, uppercaseMask);
 
             // Store output block
             b.storeOutputStreamBlock("outputStream", b.getInt32(0), b.getInt32(i), uppercaseBlock);
