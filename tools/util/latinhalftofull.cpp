@@ -44,6 +44,7 @@ protected:
     void generateMultiBlockLogic(KernelBuilder &b, llvm::Value * const numOfBlocks) override {
         // bitBlockType represents the SIMD width, typically 128 or 256 bits
         Type * const bitBlockType = b.getBitBlockType();
+        std::cout << "test: " << bitBlockType->getPrimitiveSizeInBits() << std::endl;
         for (unsigned i = 0; i < b.getBitBlockWidth(); i += bitBlockType->getPrimitiveSizeInBits()) {
             std::cout << "loop: " << i << std::endl;
             Value * inputBlock = b.loadInputStreamBlock("inputStream", b.getInt32(0), b.getInt32(i));
