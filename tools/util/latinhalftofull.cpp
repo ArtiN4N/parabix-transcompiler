@@ -219,7 +219,7 @@ HexLinesFunctionType generatePipeline(CPUDriver & pxDriver) {
     //  takes care of this using a mask of positions for insertion of one position.
     //  We insert one position for eacn nonLF character.    Given the
     //  nonLF stream "11111", the hexInsertMask is "1.1.1.1.1.1"
-    StreamSet * hexInsertMask = InsertionSpreadMask(P, HLFWDTH, InsertPosition::After);
+    StreamSet * hexInsertMask = UnitInsertionSpreadMask(P, HLFWDTH, InsertPosition::After);
     SHOW_STREAM(hexInsertMask);
 
     // The parabix SpreadByMask function copies bits from an input stream
@@ -227,9 +227,13 @@ HexLinesFunctionType generatePipeline(CPUDriver & pxDriver) {
     // argument (the spread mask).   Zeroes are inserted everywhere else.
     // This function performs STEP 1 in the comments above.
 
+    StreamSet * spreadBasis = P->CreateStreamSet(8);
+    SpreadByMask(P, hexInsertMask, BasisBits, spreadBasis);
+    SHOW_BIXNUM(spreadBasis);
+
     // Perform the logic of the Hexify kernel.
     StreamSet * hexBasis = P->CreateStreamSet(8);
-    P->CreateKernelCall<Hexify>(hexInsertMask, spreadBasis, hexBasis);
+    P->CreateKernelCall<Hexify>(hexInsertMask2, spreadBasis, hexBasis);
     SHOW_BIXNUM(hexBasis);
 
     // The computed output can be converted back to byte stream form by the
