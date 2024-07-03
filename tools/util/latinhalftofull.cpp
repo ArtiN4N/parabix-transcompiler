@@ -19,6 +19,7 @@
 #include <toolchain/toolchain.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <iostream>
 
 #define SHOW_STREAM(name) if (codegen::EnableIllustrator) P->captureBitstream(#name, name)
 #define SHOW_BIXNUM(name) if (codegen::EnableIllustrator) P->captureBixNum(#name, name)
@@ -46,21 +47,26 @@ protected:
         Type * const bitBlockType = b.getBitBlockType();
 
         // Load input block
+        std::cout << "  store input" << std::endl;
         Value * inputBlock = b.loadInputStreamBlock("inputStream", b.getInt32(0), numOfBlocks);
 
         // Define constants for fullwidth transformation
+        std::cout << "  consts" << std::endl;
         Value * baseOffset = b.getInt32(0xEFBC80); // Starting fullwidth offset for halfwidth characters
 
         // Create masks and transformations
+        std::cout << "  checking latin range" << std::endl;
         Value * isLatinRange = b.CreateAnd(
             b.CreateICmpUGE(inputBlock, b.getInt8(0x21)),
             b.CreateICmpULE(inputBlock, b.getInt8(0x7E))
         );
 
+        std::cout << "  doing the stuff" << std::endl;
         Value * isHalfwidth = b.CreateAnd(inputBlock, isLatinRange);
         Value * fullwidthOffset = b.CreateAdd(baseOffset, b.CreateZExt(isHalfwidth, bitBlockType));
 
         // Store output block
+        std::cout << "  store output" << std::endl;
         b.storeOutputStreamBlock("outputStream", b.getInt32(0), numOfBlocks, fullwidthOffset);
     }
 };
@@ -74,19 +80,24 @@ TransliteratorFunctionType transliterator_gen(CPUDriver & driver) {
     Scalar * fileDescriptor = P->getInputScalar("inputFileDescriptor");
 
     // Source data
+    std::cout << "Source data" << std::endl;
     StreamSet * const codeUnitStream = P->CreateStreamSet(1, 8);
     P->CreateKernelCall<ReadSourceKernel>(fileDescriptor, codeUnitStream);
     SHOW_BYTES(codeUnitStream);
 
     // Halfwidth to Fullwidth transformation
+    std::cout << "transformation" << std::endl;
     StreamSet * const fullwidthStream = P->CreateStreamSet(1, 8);
     P->CreateKernelCall<HalfwidthFullwidthKernel>(codeUnitStream, fullwidthStream);
     SHOW_BYTES(fullwidthStream);
 
     // Output
+    std::cout << "output" << std::endl;
     P->CreateKernelCall<StdOutKernel>(fullwidthStream);
     SHOW_BYTES(fullwidthStream);
 
+
+    std::cout << "returning cast" << std::endl;
     return reinterpret_cast<TransliteratorFunctionType>(P->compile());
 }
 
@@ -100,7 +111,9 @@ int main(int argc, char *argv[]) {
         errs() << "Error: cannot open " << inputFile << " for processing. Skipped.\n";
     } else {
         TransliteratorFunctionType func = nullptr;
+        std::cout << "Defining func" << std::endl;
         func = transliterator_gen(pxDriver);
+        std::cout << "Calling func" << std::endl;
         func(fd);
         close(fd);
     }
