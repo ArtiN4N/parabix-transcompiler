@@ -50,4 +50,18 @@ DEPS
     toolchain
 )
 
-
+parabix_add_executable(
+NAME
+    latinhalffull
+SRC
+    latinhalftofull.cpp
+DEPS
+    grep
+    pablo
+    kernel.basis
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    kernel.util
+    toolchain
+)
