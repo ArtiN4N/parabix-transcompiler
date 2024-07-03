@@ -57,11 +57,15 @@ protected:
             b.CreateICmpULE(inputBlock, b.getInt8(0x7E))
         );
 
+        // Calculate fullwidth characters
         Value * isHalfwidth = b.CreateAnd(inputBlock, isLatinRange);
         Value * fullwidthOffset = b.CreateAdd(baseOffset, b.CreateZExt(isHalfwidth, bitBlockType));
 
+        // Create output block with sufficient space for fullwidth characters (3 bytes each)
+        Value * outputBlock = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8 * 3, fullwidthOffset);
+
         // Store output block
-        b.storeOutputStreamBlock("outputStream", b.getInt32(0), numOfBlocks, fullwidthOffset);
+        b.storeOutputStreamBlock("outputStream", b.getInt32(0), numOfBlocks, outputBlock);
     }
 };
 
