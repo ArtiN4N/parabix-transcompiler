@@ -117,7 +117,7 @@ int main(int argc, char *argv[]) {
     CPUDriver pxDriver("transliterator");
     const int fd = open(inputFile.c_str(), O_RDONLY);
     if (LLVM_UNLIKELY(fd == -1)) {
-        errs() << "Error: cannot open " << inputFile << " for processing. Skipped.\n";
+        llvm::errs() << "Error: cannot open " << inputFile << " for processing. Skipped.\n";
     } else {
         TransliteratorFunctionType func = nullptr;
         func = transliterator_gen(pxDriver);
