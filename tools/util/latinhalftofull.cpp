@@ -58,13 +58,14 @@ protected:
             //Value * uppercaseBlock3 = inputBlock;
             
             Value * uppercaseBlock1 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0xEF));;
-            Value * uppercaseBlock2 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0xBC));;
-            Value * uppercaseBlock3 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0x81));;
+            llvm::errs() << "uppercaseBlock1: " << *uppercaseBlock1 << "\n"; // for testing
+            //Value * uppercaseBlock2 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0xBC));;
+            //Value * uppercaseBlock3 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0x81));;
 
             // Store output block
             b.storeOutputStreamBlock("outputStream", b.getInt32(0), b.getInt32(i), uppercaseBlock1);
-            b.storeOutputStreamBlock("outputStream", b.getInt32(1), b.getInt32(i), uppercaseBlock2);
-            b.storeOutputStreamBlock("outputStream", b.getInt32(2), b.getInt32(i), uppercaseBlock3);
+            //b.storeOutputStreamBlock("outputStream", b.getInt32(1), b.getInt32(i), uppercaseBlock2);
+            //b.storeOutputStreamBlock("outputStream", b.getInt32(2), b.getInt32(i), uppercaseBlock3);
         }
     }
 };
@@ -85,7 +86,7 @@ TransliteratorFunctionType transliterator_gen(CPUDriver & driver) {
 
 
     // Uppercase transformation
-    StreamSet * const upperStream = P->CreateStreamSet(3, 8);
+    StreamSet * const upperStream = P->CreateStreamSet(1, 8);
     P->CreateKernelCall<UppercaseKernel>(codeUnitStream, upperStream);
 
     // Output
