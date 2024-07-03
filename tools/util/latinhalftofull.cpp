@@ -51,17 +51,17 @@ protected:
             Value * outputBlock2 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0x00));
             Value * outputBlock3 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0x00));
 
-            Value * outputBlock1 = b.CreateAnd(
+            outputBlock1 = b.CreateAnd(
                 b.CreateOr(inputBlock, outputBlock1), 
                 outputBlock1
             );
 
-            Value * outputBlock2 = b.CreateAnd(
+            outputBlock2 = b.CreateAnd(
                 b.CreateOr(inputBlock, outputBlock2), 
                 outputBlock2
             );
 
-            Value * outputBlock3 = b.CreateAnd(
+            outputBlock3 = b.CreateAnd(
                 b.CreateOr(inputBlock, outputBlock3), 
                 outputBlock3
             );
