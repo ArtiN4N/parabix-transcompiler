@@ -226,10 +226,11 @@ HexLinesFunctionType generatePipeline(CPUDriver & pxDriver) {
     // set to an output stream set, to positions marked by 1s in the first
     // argument (the spread mask).   Zeroes are inserted everywhere else.
     // This function performs STEP 1 in the comments above.
-    StreamSet * spreadBasis = P->CreateStreamSet(8);
-    SpreadByMask(P, hexInsertMask, BasisBits, spreadBasis);
+    StreamSet * spreadBasis1 = P->CreateStreamSet(8);
+    SpreadByMask(P, hexInsertMask, BasisBits, spreadBasis1);
 
-    SpreadByMask(P, hexInsertMask, spreadBasis, spreadBasis);
+    StreamSet * spreadBasis = P->CreateStreamSet(8);
+    SpreadByMask(P, hexInsertMask, spreadBasis1, spreadBasis);
     SHOW_BIXNUM(spreadBasis);
 
     // Perform the logic of the Hexify kernel.
