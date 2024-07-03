@@ -64,18 +64,9 @@ protected:
             Value * isLowercase = b.CreateICmpEQ(b.CreateAnd(inputBlock, lowercaseMask), lowercaseMask);
 
             // Calculate uppercase values
-            Value * uppercaseBlock1 = b.CreateOr(
-                b.CreateAnd(inputBlock, uppercaseMask), 
-                b.CreateAnd(isLowercase, lowercaseMask)
-            );
-            Value * uppercaseBlock2 = b.CreateOr(
-                b.CreateAnd(inputBlock, uppercaseMask), 
-                b.CreateAnd(isLowercase, lowercaseMask)
-            );
-            Value * uppercaseBlock3 = b.CreateOr(
-                b.CreateAnd(inputBlock, uppercaseMask), 
-                b.CreateAnd(isLowercase, lowercaseMask)
-            );
+            Value * uppercaseBlock1 = b.CreateAnd(inputBlock, uppercaseMask);
+            Value * uppercaseBlock2 = b.CreateAnd(inputBlock, uppercaseMask);
+            Value * uppercaseBlock3 = b.CreateAnd(inputBlock, uppercaseMask);
 
             // Store output block
             b.storeOutputStreamBlock("outputStream", b.getInt32(0), b.getInt32(i), uppercaseBlock1);
