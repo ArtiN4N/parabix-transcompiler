@@ -1,12 +1,25 @@
 #include <kernel/core/kernel.h>
 #include <kernel/io/source_kernel.h>
-#include <kernel/io/stdout_kernel.h>
+#include <kernel/io/stdout_kernel.h>  
 #include <kernel/core/kernel_builder.h>
 #include <kernel/core/streamset.h>
 #include <kernel/pipeline/driver/cpudriver.h>
 #include <kernel/pipeline/pipeline_builder.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/raw_ostream.h>
+#include <llvm/IR/Module.h>
+#include <llvm/ADT/StringRef.h>
+#include <unicode/algo/decomposition.h>
+#include <unicode/core/unicode_set.h>
+#include <unicode/data/PropertyAliases.h>
+#include <unicode/data/PropertyObjects.h>
+#include <unicode/data/PropertyObjectTable.h>
+#include <unicode/utf/utf_compiler.h>
+#include <unicode/utf/transchar.h>
+#include <toolchain/toolchain.h>
+#include <fcntl.h>
+#include <unistd.h>
+
 
 using namespace kernel;
 using namespace llvm;
