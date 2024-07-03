@@ -45,15 +45,23 @@ protected:
         Type * const bitBlockType = b.getBitBlockType();
         for (unsigned i = 0; i < b.getBitBlockWidth(); i += bitBlockType->getPrimitiveSizeInBits()) {
             Value * inputBlock = b.loadInputStreamBlock("inputStream", b.getInt32(0), b.getInt32(i));
+            llvm::errs() << "inputBlock: " << *inputBlock << "\n"; // for testing
 
             Value * halfwidthLatinMask = b.CreateAnd(
                 b.CreateICmpUGE(inputBlock, b.getInt8(0x21)),
                 b.CreateICmpULE(inputBlock, b.getInt8(0x7E))
             );
+            llvm::errs() << "halfwidthLatinMask: " << *halfwidthLatinMask << "\n"; // for testing
 
             Value * fullwidthPrefix = b.getInt8(0xEF);
             Value * fullwidthMiddle = b.getInt8(0xBC);
             Value * fullwidthSuffix = b.getInt8(0x81);
+            llvm::errs() << "fullwidthPrefix: " << *fullwidthPrefix << "\n"; // for testing
+
+            llvm::errs() << "fullwidthMiddle: " << *fullwidthMiddle << "\n"; // for testing
+
+            llvm::errs() << "fullwidthSuffix: " << *fullwidthSuffix << "\n"; // for testing
+
 
             Value * fullwidthCharacters = b.CreateSelect(
                 halfwidthLatinMask,
