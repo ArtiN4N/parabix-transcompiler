@@ -53,9 +53,13 @@ protected:
 
             // Check if characters are lowercase
             // Calculate uppercase values
-            Value * uppercaseBlock1 = inputBlock;
-            Value * uppercaseBlock2 = inputBlock;
-            Value * uppercaseBlock3 = inputBlock;
+            //Value * uppercaseBlock1 = inputBlock;
+            //Value * uppercaseBlock2 = inputBlock;
+            //Value * uppercaseBlock3 = inputBlock;
+            
+            Value * uppercaseBlock1 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0xEF));;
+            Value * uppercaseBlock2 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0xBC));;
+            Value * uppercaseBlock3 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0x81));;
 
             // Store output block
             b.storeOutputStreamBlock("outputStream", b.getInt32(0), b.getInt32(i), uppercaseBlock1);
