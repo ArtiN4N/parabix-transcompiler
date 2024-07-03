@@ -229,9 +229,17 @@ HexLinesFunctionType generatePipeline(CPUDriver & pxDriver) {
     //StreamSet * spreadBasis1 = P->CreateStreamSet(8);
     //SpreadByMask(P, hexInsertMask, BasisBits, spreadBasis1);
 
+    StreamSet * spreadBasis1 = P->CreateStreamSet(8);
+    SpreadByMask(P, hexInsertMask, BasisBits, spreadBasis1);
+    SHOW_BIXNUM(spreadBasis1);
+
+    P->CreateKernelCall<CharacterClassKernelBuilder>(HLFWDTH_CC, spreadBasis1, HLFWDTH);
+
     StreamSet * spreadBasis = P->CreateStreamSet(8);
     SpreadByMask(P, hexInsertMask, BasisBits, spreadBasis);
     SHOW_BIXNUM(spreadBasis);
+
+
 
     // Perform the logic of the Hexify kernel.
     StreamSet * hexBasis = P->CreateStreamSet(8);
