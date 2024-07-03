@@ -47,13 +47,13 @@ protected:
             Value * inputBlock = b.loadInputStreamBlock("inputStream", b.getInt32(0), b.getInt32(i));
 
             // Create output blocks
-            Value * outputBlock1 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0xEF));
+            Value * outputBlock1 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0x00));
             llvm::errs() << "outputBlock1: " << *outputBlock1 << "\n"; // for testing
 
-            Value * outputBlock2 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0xBC));
+            Value * outputBlock2 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0x00));
             llvm::errs() << "outputBlock2: " << *outputBlock2 << "\n"; // for testing
 
-            Value * outputBlock3 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0x81));
+            Value * outputBlock3 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0x00));
             llvm::errs() << "outputBlock3: " << *outputBlock3 << "\n"; // for testing
 
             outputBlock1 = b.CreateAnd(
