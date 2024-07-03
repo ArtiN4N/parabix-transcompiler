@@ -51,10 +51,14 @@ protected:
             // Load input block
             Value * inputBlock = b.loadInputStreamBlock("inputStream", b.getInt32(0), b.getInt32(i));
 
-            Value * uppercaseMask = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0xDF));
+            //Value * uppercaseMask = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0xDF));
+            Value *uppercaseBlock1 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0xEF));
+            Value *uppercaseBlock2 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0xBC));
+            Value *uppercaseBlock3 = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0x81));
+
 
             // Calculate uppercase values
-            Value * uppercaseBlock = b.CreateOr(inputBlock, uppercaseMask);
+            Value * uppercaseBlock = b.CreateOr(uppercaseBlock2, uppercaseBlock1);
 
             // Store output block
             b.storeOutputStreamBlock("outputStream", b.getInt32(0), b.getInt32(i), uppercaseBlock);
