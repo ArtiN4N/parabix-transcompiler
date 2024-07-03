@@ -84,7 +84,7 @@ protected:
 };
 
 typedef void (*TransliteratorFunctionType)(uint32_t fd);
-
+/*
 TransliteratorFunctionType transliterator_gen(CPUDriver & driver) {
     auto & b = driver.getBuilder();
     auto P = driver.makePipeline({Binding{b.getInt32Ty(), "inputFileDescriptor"}}, {});
@@ -109,6 +109,34 @@ TransliteratorFunctionType transliterator_gen(CPUDriver & driver) {
     std::cout << "ooutput shown" << std::endl;
 
     return reinterpret_cast<TransliteratorFunctionType>(P->compile());
+}*/
+TransliteratorFunctionType transliterator_gen(CPUDriver & driver) {
+    auto & b = driver.getBuilder();
+    auto P = driver.makePipeline({Binding{b.getInt32Ty(), "inputFileDescriptor"}}, {});
+
+    Scalar * fileDescriptor = P->getInputScalar("inputFileDescriptor");
+
+    // Source data
+    StreamSet * const codeUnitStream = P->CreateStreamSet(1, 8);
+    P->CreateKernelCall<ReadSourceKernel>(fileDescriptor, codeUnitStream);
+    SHOW_BYTES(codeUnitStream);
+
+    // Uppercase transformation
+    StreamSet * const upperStream = P->CreateStreamSet(1, 8);
+    P->CreateKernelCall<UppercaseKernel>(codeUnitStream, upperStream);
+
+    // Output
+    P->CreateKernelCall<StdOutKernel>(upperStream);
+    SHOW_BYTES(upperStream);
+
+    // Compile pipeline
+    auto compiledFunc = P->compile();
+    if (!compiledFunc) {
+        llvm::errs() << "Error: Failed to compile pipeline.\n";
+        return nullptr;
+    }
+
+    return reinterpret_cast<TransliteratorFunctionType>(compiledFunc);
 }
 
 int main(int argc, char *argv[]) {
@@ -118,18 +146,19 @@ int main(int argc, char *argv[]) {
     CPUDriver pxDriver("transliterator");
     const int fd = open(inputFile.c_str(), O_RDONLY);
     if (LLVM_UNLIKELY(fd == -1)) {
-        errs() << "Error: cannot open " << inputFile << " for processing. Skipped.\n";
-    } else {
-        TransliteratorFunctionType func = nullptr;
-        std::cout << "defining func" << std::endl;
-        func = transliterator_gen(pxDriver);
-        std::cout << "calling func with fd" << std::endl;
-        func(fd);
-        std::cout << "func finished" << std::endl;
-        close(fd);
-        std::cout << "file descriptor closed" << std::endl;
+        llvm::errs() << "Error: cannot open " << inputFile << " for processing. Skipped.\n";
+        return 1;
     }
 
-    std::cout << "exiting" << std::endl;
+    TransliteratorFunctionType func = transliterator_gen(pxDriver);
+    if (!func) {
+        llvm::errs() << "Error: Failed to generate transliterator function.\n";
+        close(fd);
+        return 1;
+    }
+
+    func(fd);
+    close(fd);
+
     return 0;
 }
