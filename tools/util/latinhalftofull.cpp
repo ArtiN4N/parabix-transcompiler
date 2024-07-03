@@ -1,6 +1,6 @@
 #include <kernel/core/kernel.h>
 #include <kernel/io/source_kernel.h>
-#include <kernel/io/stdout_kernel.h>
+#include <kernel/io/stdout_kernel.h>  
 #include <kernel/core/kernel_builder.h>
 #include <kernel/core/streamset.h>
 #include <kernel/pipeline/driver/cpudriver.h>
@@ -28,65 +28,53 @@ using namespace kernel;
 using namespace llvm;
 using namespace codegen;
 
-class HalfwidthToFullwidthKernel : public MultiBlockKernel {
+class UppercaseKernel : public MultiBlockKernel {
 public:
-    HalfwidthToFullwidthKernel(KernelBuilder &b, StreamSet *inputStream, StreamSet *outputStream)
-    : MultiBlockKernel(b, "HalfwidthToFullwidthKernel",
+    UppercaseKernel(KernelBuilder &b, StreamSet *inputStream, StreamSet *outputStream)
+    : MultiBlockKernel(b, "UppercaseKernel",
         {Binding{"inputStream", inputStream}}, // input bindings
         {Binding{"outputStream", outputStream}}, // output bindings
         {}, // internal scalar bindings
         {}, // initializer bindings
-        {}) // kernel state bindings
+        {}) // kernel state bindings)
     {}
+
 
 protected:
     void generateMultiBlockLogic(KernelBuilder &b, llvm::Value * const numOfBlocks) override {
-        // bitBlockType represents the SIMD width, typically 128 or 256 bits
-        Type * const bitBlockType = b.getBitBlockType();
+        // bitBlockType is obtained from the KernelBuilder. 
+        // This type represents the SIMD width, typically 128 or 256 bits
+        Type * const bitBlockType = b.getBitBlockType(); // 
+
+        // Load input and apply the uppercase transformation
         for (unsigned i = 0; i < b.getBitBlockWidth(); i += bitBlockType->getPrimitiveSizeInBits()) {
+            // Load input block
             Value * inputBlock = b.loadInputStreamBlock("inputStream", b.getInt32(0), b.getInt32(i));
-            llvm::errs() << "inputBlock: " << *inputBlock << "\n"; // for testing
 
-            Value * halfwidthLatinMask = b.CreateAnd(
-                b.CreateICmpUGE(inputBlock, b.getInt8(0x21)),
-                b.CreateICmpULE(inputBlock, b.getInt8(0x7E))
-            );
-            llvm::errs() << "halfwidthLatinMask: " << *halfwidthLatinMask << "\n"; // for testing
+            // Mask to identify lowercase letters (0x20)
+            Value * lowercaseMask = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0x20));
+            llvm::errs() << "lowerCaseMask: " << *lowercaseMask << "\n"; // for testing
+            llvm::errs() << "bitBlockType: " << *bitBlockType << "\n"; // for testing
+            llvm::errs() << "getPrimitiveSizeInBits: " << bitBlockType->getPrimitiveSizeInBits() << "\n"; // for testing
+            llvm::errs() << "getInt8(0x20): " << *b.getInt8(0x20) << "\n"; // for testing
 
-            Value * fullwidthPrefix = b.getInt8(0xEF);
-            Value * fullwidthMiddle = b.getInt8(0xBC);
-            Value * fullwidthSuffix = b.getInt8(0x81);
-            llvm::errs() << "fullwidthPrefix: " << *fullwidthPrefix << "\n"; // for testing
+            Value * uppercaseMask = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0xDF));
 
-            llvm::errs() << "fullwidthMiddle: " << *fullwidthMiddle << "\n"; // for testing
+            // Check if characters are lowercase
+            Value * isLowercase = b.CreateICmpEQ(b.CreateAnd(inputBlock, lowercaseMask), lowercaseMask);
 
-            llvm::errs() << "fullwidthSuffix: " << *fullwidthSuffix << "\n"; // for testing
-
-
-            Value * fullwidthCharacters = b.CreateSelect(
-                halfwidthLatinMask,
-                b.CreateOr(inputBlock, fullwidthPrefix),
-                inputBlock
+            // Calculate uppercase values
+            Value * uppercaseBlock = b.CreateOr(
+                b.CreateAnd(inputBlock, uppercaseMask), 
+                b.CreateAnd(isLowercase, lowercaseMask)
             );
 
-            // Adjust for the other two bytes in the fullwidth character
-            fullwidthCharacters = b.CreateInsertElement(
-                fullwidthCharacters,
-                fullwidthMiddle,
-                b.getInt32(1)
-            );
-            fullwidthCharacters = b.CreateInsertElement(
-                fullwidthCharacters,
-                fullwidthSuffix,
-                b.getInt32(2)
-            );
-
-            // Store output blocks
-            b.storeOutputStreamBlock("outputStream", b.getInt32(0), b.getInt32(i), fullwidthCharacters);
-
+            // Store output block
+            b.storeOutputStreamBlock("outputStream", b.getInt32(0), b.getInt32(i), uppercaseBlock);
         }
     }
 };
+
 
 typedef void (*TransliteratorFunctionType)(uint32_t fd);
 
@@ -101,13 +89,14 @@ TransliteratorFunctionType transliterator_gen(CPUDriver & driver) {
     P->CreateKernelCall<ReadSourceKernel>(fileDescriptor, codeUnitStream);
     SHOW_BYTES(codeUnitStream);
 
-    // Halfwidth to Fullwidth transformation
-    StreamSet * const fullwidthStream = P->CreateStreamSet(1, 8);
-    P->CreateKernelCall<HalfwidthToFullwidthKernel>(codeUnitStream, fullwidthStream);
+
+    // Uppercase transformation
+    StreamSet * const upperStream = P->CreateStreamSet(1, 8);
+    P->CreateKernelCall<UppercaseKernel>(codeUnitStream, upperStream);
 
     // Output
-    P->CreateKernelCall<StdOutKernel>(fullwidthStream);
-    SHOW_BYTES(fullwidthStream);
+    P->CreateKernelCall<StdOutKernel>(upperStream);
+    SHOW_BYTES(upperStream);
 
     return reinterpret_cast<TransliteratorFunctionType>(P->compile());
 }
