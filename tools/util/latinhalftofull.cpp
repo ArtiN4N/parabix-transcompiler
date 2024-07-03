@@ -86,6 +86,7 @@ protected:
         }
 
         std::cout << "escaped loop" << std::endl;
+        return;
     }
 };
 
@@ -127,8 +128,11 @@ int main(int argc, char *argv[]) {
         errs() << "Error: cannot open " << inputFile << " for processing. Skipped.\n";
     } else {
         TransliteratorFunctionType func = nullptr;
+        std::cout << "defining func" << std::endl;
         func = transliterator_gen(pxDriver);
+        std::cout << "calling func with fd" << std::endl;
         func(fd);
+        std::cout << "func finished" << std::endl;
         close(fd);
         std::cout << "file descriptor closed" << std::endl;
     }
