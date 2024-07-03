@@ -51,22 +51,11 @@ protected:
             // Load input block
             Value * inputBlock = b.loadInputStreamBlock("inputStream", b.getInt32(0), b.getInt32(i));
 
-            // Mask to identify lowercase letters (0x20)
-            Value * lowercaseMask = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0x20));
-            llvm::errs() << "lowerCaseMask: " << *lowercaseMask << "\n"; // for testing
-            llvm::errs() << "bitBlockType: " << *bitBlockType << "\n"; // for testing
-            llvm::errs() << "getPrimitiveSizeInBits: " << bitBlockType->getPrimitiveSizeInBits() << "\n"; // for testing
-            llvm::errs() << "getInt8(0x20): " << *b.getInt8(0x20) << "\n"; // for testing
-
-            Value * uppercaseMask = b.CreateVectorSplat(bitBlockType->getPrimitiveSizeInBits() / 8, b.getInt8(0xDF));
-
             // Check if characters are lowercase
-            Value * isLowercase = b.CreateICmpEQ(b.CreateAnd(inputBlock, lowercaseMask), lowercaseMask);
-
             // Calculate uppercase values
-            Value * uppercaseBlock1 = b.CreateAnd(inputBlock, uppercaseMask);
-            Value * uppercaseBlock2 = b.CreateAnd(inputBlock, uppercaseMask);
-            Value * uppercaseBlock3 = b.CreateAnd(inputBlock, uppercaseMask);
+            Value * uppercaseBlock1 = inputBlock;
+            Value * uppercaseBlock2 = inputBlock;
+            Value * uppercaseBlock3 = inputBlock;
 
             // Store output block
             b.storeOutputStreamBlock("outputStream", b.getInt32(0), b.getInt32(i), uppercaseBlock1);
