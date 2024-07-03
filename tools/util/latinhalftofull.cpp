@@ -64,13 +64,23 @@ protected:
             Value * isLowercase = b.CreateICmpEQ(b.CreateAnd(inputBlock, lowercaseMask), lowercaseMask);
 
             // Calculate uppercase values
-            Value * uppercaseBlock = b.CreateOr(
+            Value * uppercaseBlock1 = b.CreateOr(
+                b.CreateAnd(inputBlock, uppercaseMask), 
+                b.CreateAnd(isLowercase, lowercaseMask)
+            );
+            Value * uppercaseBlock2 = b.CreateOr(
+                b.CreateAnd(inputBlock, uppercaseMask), 
+                b.CreateAnd(isLowercase, lowercaseMask)
+            );
+            Value * uppercaseBlock3 = b.CreateOr(
                 b.CreateAnd(inputBlock, uppercaseMask), 
                 b.CreateAnd(isLowercase, lowercaseMask)
             );
 
             // Store output block
-            b.storeOutputStreamBlock("outputStream", b.getInt32(0), b.getInt32(i), uppercaseBlock);
+            b.storeOutputStreamBlock("outputStream", b.getInt32(0), b.getInt32(i), uppercaseBlock1);
+            b.storeOutputStreamBlock("outputStream", b.getInt32(1), b.getInt32(i), uppercaseBlock2);
+            b.storeOutputStreamBlock("outputStream", b.getInt32(2), b.getInt32(i), uppercaseBlock3);
         }
     }
 };
@@ -91,7 +101,7 @@ TransliteratorFunctionType transliterator_gen(CPUDriver & driver) {
 
 
     // Uppercase transformation
-    StreamSet * const upperStream = P->CreateStreamSet(1, 8);
+    StreamSet * const upperStream = P->CreateStreamSet(3, 8);
     P->CreateKernelCall<UppercaseKernel>(codeUnitStream, upperStream);
 
     // Output
