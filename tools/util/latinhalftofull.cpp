@@ -55,23 +55,31 @@ protected:
             
             // Transform halfwidth characters to fullwidth characters
             for (unsigned j = 0; j < 64; ++j) {
-                std::cout << "loop 2: " << j << std::endl;
+                std::cout << "  loop 2: " << j << std::endl;
                 Value * inputChar = b.CreateExtractElement(inputBlock, b.getInt32(j));
                 Value * isHalfwidth = b.CreateICmpUGE(inputChar, b.getInt8(0x21));
                 isHalfwidth = b.CreateAnd(isHalfwidth, b.CreateICmpULE(inputChar, b.getInt8(0x7E)));
                 
                 if (isHalfwidth) {
+                    std::cout << "      is halfwidth" << std::endl;
                     Value * fullwidthChar = b.CreateAdd(inputChar, b.getInt32(0xFFBF));
+                    std::cout << "      created fullwidthChar" << std::endl;
                     b.CreateInsertElement(outputBlock1, fullwidthChar, b.getInt32(j * 3));
+                    std::cout << "      wrote to outputblock 1" << std::endl;
                     b.CreateInsertElement(outputBlock2, b.getInt32(0xBC), b.getInt32(j * 3 + 1));
+                    std::cout << "      wrote to outputblock 2" << std::endl;
                     b.CreateInsertElement(outputBlock3, b.getInt32(0x81), b.getInt32(j * 3 + 2));
+                    std::cout << "      wrote to outputblock 3" << std::endl;
                 }
             }
 
             // Store output block
             b.storeOutputStreamBlock("outputStream", b.getInt32(0), b.getInt32(i), outputBlock1);
+            std::cout << "  stored to outputblock 1" << std::endl;
             b.storeOutputStreamBlock("outputStream", b.getInt32(1), b.getInt32(i), outputBlock2);
+            std::cout << "  stored to outputblock 2" << std::endl;
             b.storeOutputStreamBlock("outputStream", b.getInt32(2), b.getInt32(i), outputBlock3);
+            std::cout << "  stored to outputblock 3" << std::endl;
         }
     }
 };
