@@ -219,42 +219,17 @@ HexLinesFunctionType generatePipeline(CPUDriver & pxDriver) {
     //  takes care of this using a mask of positions for insertion of one position.
     //  We insert one position for eacn nonLF character.    Given the
     //  nonLF stream "11111", the hexInsertMask is "1.1.1.1.1.1"
-    StreamSet * hexInsertMask = UnitInsertionSpreadMask(P, HLFWDTH, InsertPosition::After);
+    StreamSet * hexInsertMask = InsertionSpreadMask(P, HLFWDTH, InsertPosition::After);
     SHOW_STREAM(hexInsertMask);
 
     // The parabix SpreadByMask function copies bits from an input stream
     // set to an output stream set, to positions marked by 1s in the first
     // argument (the spread mask).   Zeroes are inserted everywhere else.
     // This function performs STEP 1 in the comments above.
-    //StreamSet * spreadBasis1 = P->CreateStreamSet(8);
-    //SpreadByMask(P, hexInsertMask, BasisBits, spreadBasis1);
-
-    StreamSet * spreadBasis1 = P->CreateStreamSet(8);
-    SpreadByMask(P, hexInsertMask, BasisBits, spreadBasis1);
-    SHOW_BIXNUM(spreadBasis1);
-
-    StreamSet * HLFWDTH2 = P->CreateStreamSet(1);
-    std::vector<re::CC *> HLFWDTH2_CC = {re::makeCC(re::makeByte(0x21, 0x7d), re::makeByte(0x7d, 0x7e))};
-    P->CreateKernelCall<CharacterClassKernelBuilder>(HLFWDTH2_CC, spreadBasis1, HLFWDTH2);
-    SHOW_STREAM(HLFWDTH2);
-
-    //  We need to spread out the basis bits to make room for two positions for
-    //  each non LF in the input.   The Parabix function UnitInsertionSpreadMask
-    //  takes care of this using a mask of positions for insertion of one position.
-    //  We insert one position for eacn nonLF character.    Given the
-    //  nonLF stream "11111", the hexInsertMask is "1.1.1.1.1.1"
-    StreamSet * hexInsertMask2 = UnitInsertionSpreadMask(P, HLFWDTH2, InsertPosition::After);
-    SHOW_STREAM(hexInsertMask2);
-
-    StreamSet * spreadBasis = P->CreateStreamSet(8);
-    SpreadByMask(P, hexInsertMask2, spreadBasis1, spreadBasis);
-    SHOW_BIXNUM(spreadBasis);
-
-
 
     // Perform the logic of the Hexify kernel.
     StreamSet * hexBasis = P->CreateStreamSet(8);
-    P->CreateKernelCall<Hexify>(hexInsertMask2, spreadBasis, hexBasis);
+    P->CreateKernelCall<Hexify>(hexInsertMask, spreadBasis, hexBasis);
     SHOW_BIXNUM(hexBasis);
 
     // The computed output can be converted back to byte stream form by the
