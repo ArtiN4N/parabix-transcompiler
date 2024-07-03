@@ -1,6 +1,6 @@
 #include <kernel/core/kernel.h>
 #include <kernel/io/source_kernel.h>
-#include <kernel/io/stdout_kernel.h>  
+#include <kernel/io/stdout_kernel.h>
 #include <kernel/core/kernel_builder.h>
 #include <kernel/core/streamset.h>
 #include <kernel/pipeline/driver/cpudriver.h>
@@ -60,9 +60,23 @@ protected:
                 );
                 
                 // OR operation with input to set fullwidth bits
-                Value * fullwidthChar1 = b.CreateOr(inputChar, b.getInt32(0xEF)); // First byte
-                Value * fullwidthChar2 = b.CreateOr(b.getInt32(0xBC), b.getInt32(0x00)); // Second byte
-                Value * fullwidthChar3 = b.CreateOr(b.getInt32(0x81), b.getInt32(0x00)); // Third byte
+                Value * fullwidthChar1 = b.CreateSelect(
+                    isHalfwidth,
+                    b.CreateOr(inputChar, b.getInt32(0xEF)),
+                    inputChar
+                ); // First byte
+
+                Value * fullwidthChar2 = b.CreateSelect(
+                    isHalfwidth,
+                    b.getInt32(0xBC),
+                    b.getInt32(0x00)
+                ); // Second byte
+
+                Value * fullwidthChar3 = b.CreateSelect(
+                    isHalfwidth,
+                    b.getInt32(0x81),
+                    b.getInt32(0x00)
+                ); // Third byte
                 
                 // Conditional assignment based on isHalfwidth
                 outputBlock1 = b.CreateInsertElement(outputBlock1, fullwidthChar1, b.getInt32(j * 3));
