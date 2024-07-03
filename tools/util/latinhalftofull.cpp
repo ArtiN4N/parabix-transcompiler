@@ -52,7 +52,8 @@ protected:
 
         // Define constants for fullwidth transformation
         std::cout << "  consts" << std::endl;
-        Value * baseOffset = b.getInt32(0xEFBC80); // Starting fullwidth offset for halfwidth characters
+        //Value * baseOffset = b.getInt32(0xEFBC80); // Starting fullwidth offset for halfwidth characters
+        Value * baseOffset = b.getInt8(0x01); // Starting fullwidth offset for halfwidth characters
 
         // Create masks and transformations
         std::cout << "  checking latin range" << std::endl;
