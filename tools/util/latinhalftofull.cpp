@@ -84,11 +84,9 @@ void FullWidthIfy::generatePabloMethod() {
 
     std::vector<PabloAST *> fullWidthBasis(8);
 
-    BixNumCompiler bnc(nested);
-
     std::vector<Var *> basisVar(21);
     for (unsigned i = 0; i < 21; i++) {
-        basisVar[i] = pb.createVar("basisVar" + std::to_string(i), basis[i]);
+        basisVar[i] = pb.createVar("basisVar" + std::to_string(i), U21[i]);
     }
 
     /*BixNum VPart = bnc.ZeroExtend(V_index, 21);
