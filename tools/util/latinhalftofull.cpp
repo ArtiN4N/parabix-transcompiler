@@ -82,7 +82,7 @@ void FullWidthIfy::generatePabloMethod() {
     // ccc is an object that can compile character classes from a set of 8 parallel bit streams.
     cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
 
-    int halfToFullGap = 0xFEE0;
+    UCD::codepoint_t halfToFullGap = 0xFEE0;
 
     BixNum basisVar = bnc.AddModular(U21, halfToFullGap);
 
@@ -134,13 +134,20 @@ HalfToFullFunctionType generatePipeline(CPUDriver & pxDriver) {
     P->CreateKernelCall<CharacterClassKernelBuilder>(halfwidths_CC, U21, halfwidths);
     SHOW_STREAM(halfwidths);
 
-    // Perform the logic of the Hexify kernel.
+    // Perform the logic of the FullWidthIfy kernel.
     StreamSet * fullWidthBasis = P->CreateStreamSet(21, 1);
     P->CreateKernelCall<FullWidthIfy>(halfwidths, U21, fullWidthBasis);
     SHOW_BIXNUM(fullWidthBasis);
 
-    //  The StdOut kernel writes a byte stream to standard output.
-    P->CreateKernelCall<StdOutKernel>(fullWidthBasis);
+    StreamSet * const OutputBasis = P->CreateStreamSet(8);
+    U21_to_UTF8(P, fullWidthBasis, OutputBasis);
+
+    SHOW_BIXNUM(OutputBasis);
+
+    StreamSet * OutputBytes = P->CreateStreamSet(1, 8);
+    P->CreateKernelCall<P2SKernel>(OutputBasis, OutputBytes);
+    P->CreateKernelCall<StdOutKernel>(OutputBytes);
+    
     return reinterpret_cast<HalfToFullFunctionType>(P->compile());
 }
 
