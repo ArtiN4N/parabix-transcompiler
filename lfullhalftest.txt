@@ -1,1 +1,3 @@
-ABC Hello hi there ¡¡¡ ＡＡ
+!!! <- thats the first character  
+ABC Hello hi there ¡¡¡ ＡＡ  
+thats the last character --> ~~~
