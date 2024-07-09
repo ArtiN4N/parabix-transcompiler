@@ -59,22 +59,20 @@ HalfToFullFunctionType generatePipeline(CPUDriver & pxDriver) {
     P->CreateKernelCall<ReadSourceKernel>(fileDescriptor, ByteStream);
     SHOW_BYTES(ByteStream);
 
-    //  The Parabix basis bits representation is created by the Parabix S2P kernel.
-    //  S2P stands for serial-to-parallel.
-    StreamSet * BasisBits = P->CreateStreamSet(8);
+    StreamSet * BasisBits = P->CreateStreamSet(8, 1);
     P->CreateKernelCall<S2PKernel>(ByteStream, BasisBits);
     SHOW_BIXNUM(BasisBits);
 
-    //  We need to know which input positions are LFs and which are not.
-    //  The nonLF positions need to be expanded to generate two hex digits each.
-    //  The Parabix CharacterClassKernelBuilder can create any desired stream for
-    //  characters.   Note that the input is the set of byte values in the range
-    //  [\x{00}-x{09}\x{0B}-\x{FF}] that is, all byte values except \x{0A}.
-    //  For our example input "Wolf!\b", the nonLF stream is "11111."
-    StreamSet * nonLF = P->CreateStreamSet(1);
-    std::vector<re::CC *> nonLF_CC = {re::makeCC(re::makeByte(0,9), re::makeByte(0xB, 0xff))};
-    P->CreateKernelCall<CharacterClassKernelBuilder>(nonLF_CC, BasisBits, nonLF);
-    SHOW_STREAM(nonLF);
+    StreamSet * u8index = P->CreateStreamSet(1, 1);
+    P->CreateKernelCall<UTF8_index>(BasisBits, u8index);
+    SHOW_STREAM(u8index);
+
+    StreamSet * U21_u8indexed = P->CreateStreamSet(21, 1);
+    P->CreateKernelCall<UTF8_Decoder>(BasisBits, U21_u8indexed);
+
+    StreamSet * U21 = P->CreateStreamSet(21, 1);
+    FilterByMask(P, u8index, U21_u8indexed, U21);
+    SHOW_BIXNUM(U21);
 
     //  The StdOut kernel writes a byte stream to standard output.
     P->CreateKernelCall<StdOutKernel>(BasisBits);
