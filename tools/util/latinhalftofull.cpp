@@ -86,7 +86,7 @@ void FullWidthIfy::generatePabloMethod() {
 
     std::vector<PabloAST *> basisVar(21);
     for (unsigned i = 0; i < 21; i++) {
-        basisVar[i] = pb.createVar("basisVar" + std::to_string(i), U21[i]);
+        basisVar[i] = U21[i];//pb.createVar("basisVar" + std::to_string(i), U21[i]);
     }
 
     /*BixNum VPart = bnc.ZeroExtend(V_index, 21);
@@ -104,8 +104,10 @@ void FullWidthIfy::generatePabloMethod() {
 
     Var * fullWidthBasisVar = getOutputStreamVar("fullWidthBasis");
     for (unsigned i = 0; i < 21; i++) {
-        basisVar[i] = pb.createAdd(basisVar[i], pb.getInteger(1));
-        //pb.
+
+        basisVar[i] = pb.createAdd(basisVar[i], halfwidths);
+        //pb.createIf(halfwidths);
+        //pb.getPabloBlock()
         
         pb.createAssign(pb.createExtract(fullWidthBasisVar, pb.getInteger(i)), pb.createSel(halfwidths, basisVar[i], U21[i]));
     }
