@@ -85,6 +85,7 @@ HalfToFullFunctionType generatePipeline(CPUDriver & pxDriver) {
 
     StreamSet * U21_u8indexed = P->CreateStreamSet(21, 1);
     P->CreateKernelCall<UTF8_Decoder>(BasisBits, U21_u8indexed);
+    SHOW_BIXNUM(U21_u8indexed);
 
     StreamSet * U21 = P->CreateStreamSet(21, 1);
     FilterByMask(P, u8index, U21_u8indexed, U21);
