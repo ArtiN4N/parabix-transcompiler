@@ -39,8 +39,8 @@ using namespace pablo;
 
 //  These declarations are for command line processing.
 //  See the LLVM CommandLine 2.0 Library Manual https://llvm.org/docs/CommandLine.html
-static cl::OptionCategory LatinHalfToFull("latinhalftofull Options", "latinhalftofull control options.");
-static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), cl::Required, cl::cat(LatinHalfToFull));
+static cl::OptionCategory LatinHalfToFullOptions("latinhalftofull Options", "latinhalftofull control options.");
+static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), cl::Required, cl::cat(LatinHalfToFullOptions));
 
 typedef void (*HalfToFullFunctionType)(uint32_t fd);
 
@@ -49,9 +49,11 @@ HalfToFullFunctionType generatePipeline(CPUDriver & pxDriver) {
     // A pipeline is construction using a Parabix driver object.
     auto & b = pxDriver.getBuilder();
     auto P = pxDriver.makePipeline({Binding{b.getInt32Ty(), "inputFileDecriptor"}}, {});
+
     //  The program will use a file descriptor as an input.
     Scalar * fileDescriptor = P->getInputScalar("inputFileDecriptor");
     StreamSet * ByteStream = P->CreateStreamSet(1, 8);
+
     //  ReadSourceKernel is a Parabix Kernel that produces a stream of bytes
     //  from a file descriptor.
     P->CreateKernelCall<ReadSourceKernel>(fileDescriptor, ByteStream);
@@ -82,7 +84,7 @@ HalfToFullFunctionType generatePipeline(CPUDriver & pxDriver) {
 int main(int argc, char *argv[]) {
     //  ParseCommandLineOptions uses the LLVM CommandLine processor, but we also add
     //  standard Parabix command line options such as -help, -ShowPablo and many others.
-    codegen::ParseCommandLineOptions(argc, argv, {&HexLinesOptions, pablo::pablo_toolchain_flags(), codegen::codegen_flags()});
+    codegen::ParseCommandLineOptions(argc, argv, {&LatinHalfToFullOptions, pablo::pablo_toolchain_flags(), codegen::codegen_flags()});
     //  A CPU driver is capable of compiling and running Parabix programs on the CPU.
     CPUDriver driver("latinhalftofull");
     //  Build and compile the Parabix pipeline by calling the Pipeline function above.
