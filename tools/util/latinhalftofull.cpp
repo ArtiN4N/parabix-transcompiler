@@ -103,7 +103,7 @@ void FullWidthIfy::generatePabloMethod() {
         nested.createAssign(basisVar[i], bit);
     }*/
 
-   BixNum basisVar = bnc.AddModular(U21, 1);
+   BixNum basisVar = bnc.AddModular(U21, 0xFEE0);
 
     Var * fullWidthBasisVar = getOutputStreamVar("fullWidthBasis");
     for (unsigned i = 0; i < 21; i++) {
