@@ -82,38 +82,13 @@ void FullWidthIfy::generatePabloMethod() {
     // ccc is an object that can compile character classes from a set of 8 parallel bit streams.
     cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
 
-    std::vector<PabloAST *> fullWidthBasis(8);
+    int halfToFullGap = 0xFEE0;
 
-    /*
-    std::vector<PabloAST *> basisVar(21);
-    for (unsigned i = 0; i < 21; i++) {
-        basisVar[i] = U21[i];//pb.createVar("basisVar" + std::to_string(i), U21[i]);
-    }*/
-
-    /*BixNum VPart = bnc.ZeroExtend(V_index, 21);
-    VPart = bnc.AddModular(VPart, Hangul_VBase);
-
-    
-    BixNum TPart = bnc.ZeroExtend(T_index, 21);
-    TPart = bnc.AddModular(TPart, Hangul_TBase);
-    for (unsigned i = 0; i < 21; i++) {
-        PabloAST * bit = nested.createSel(Hangul_L, LPart[i], basis[i]);
-        bit = nested.createSel(V_position, VPart[i], bit);
-        bit = nested.createSel(T_position, TPart[i], bit);
-        nested.createAssign(basisVar[i], bit);
-    }*/
-
-   BixNum basisVar = bnc.AddModular(U21, 0xFEE0);
+    BixNum basisVar = bnc.AddModular(U21, halfToFullGap);
 
     Var * fullWidthBasisVar = getOutputStreamVar("fullWidthBasis");
     for (unsigned i = 0; i < 21; i++) {
 
-        //basisVar[i] = pb.createAdd(basisVar[i], halfwidths);
-        
-        //basisVar[i] = pb.createSel(halfwidths, lo1[i], lo[i]);
-        //pb.createIf(halfwidths);
-        //pb.getPabloBlock()
-        
         pb.createAssign(pb.createExtract(fullWidthBasisVar, pb.getInteger(i)), pb.createSel(halfwidths, basisVar[i], U21[i]));
     }
 }
