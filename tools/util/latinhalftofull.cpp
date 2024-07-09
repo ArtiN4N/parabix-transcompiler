@@ -1,14 +1,6 @@
-/*
- *  Part of the Parabix Project, under the Open Software License 3.0.
- *  SPDX-License-Identifier: OSL-3.0
- */
 
 #include <cstdio>
 #include <vector>
-#include <llvm/Support/CommandLine.h>
-#include <llvm/Support/ErrorHandling.h>
-#include <llvm/Support/raw_ostream.h>
-#include <llvm/IR/Module.h>
 #include <re/adt/re_name.h>
 #include <re/adt/re_re.h>
 #include <kernel/core/kernel_builder.h>
@@ -46,83 +38,63 @@ using namespace llvm;
 using namespace pablo;
 
 //  These declarations are for command line processing.
-static cl::OptionCategory TransformOptions("Transform Options", "Transform control options.");
-static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), cl::Required, cl::cat(TransformOptions));
+//  See the LLVM CommandLine 2.0 Library Manual https://llvm.org/docs/CommandLine.html
+static cl::OptionCategory LatinHalfToFull("latinhalftofull Options", "latinhalftofull control options.");
+static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), cl::Required, cl::cat(LatinHalfToFull));
 
-class LowerToUpper : public PabloKernel {
-public:
-    LowerToUpper(KernelBuilder & kb, StreamSet * basisBits, StreamSet * transformedBasisBits)
-        : PabloKernel(kb, "LowerToUpper",
-                      {Binding{"basisBits", basisBits}},
-                      {Binding{"transformedBasisBits", transformedBasisBits}}) {}
-protected:
-    void generatePabloMethod() override;
-};
+typedef void (*HalfToFullFunctionType)(uint32_t fd);
 
-void LowerToUpper::generatePabloMethod() {
-    pablo::PabloBuilder pb(getEntryScope());
-
-    // Get the basis bits input stream
-    std::vector<PabloAST *> basisBits = getInputStreamSet("basisBits");
-
-    // Generate the mask for lowercase letters
-    PabloAST * lowercase_mask = pb.createAnd(
-        pb.createAnd(pb.createNot(basisBits[7]), basisBits[6]),
-        pb.createAnd(pb.createNot(basisBits[5]), pb.createAnd(basisBits[4], basisBits[3]))
-    );
-
-    // Create the transformation: clear the 6th bit (0x20) to convert to uppercase
-    std::vector<PabloAST *> transformedBasisBits(8);
-    for (unsigned i = 0; i < 8; ++i) {
-        if (i == 5) { // Bit position 6 (0-based index 5)
-            transformedBasisBits[i] = pb.createSel(lowercase_mask, pb.createZeroes(), basisBits[i]);
-        } else {
-            transformedBasisBits[i] = basisBits[i];
-        }
-    }
-
-    // Assign the transformed bits to the output stream
-    Var * transformedVar = getOutputStreamVar("transformedBasisBits");
-    for (unsigned i = 0; i < 8; ++i) {
-        pb.createAssign(pb.createExtract(transformedVar, pb.getInteger(i)), transformedBasisBits[i]);
-    }
-}
-
-typedef void (*TransformFunctionType)(uint32_t fd);
-
-TransformFunctionType generatePipeline(CPUDriver & pxDriver) {
+HalfToFullFunctionType generatePipeline(CPUDriver & pxDriver) {
+    // A Parabix program is build as a set of kernel calls called a pipeline.
+    // A pipeline is construction using a Parabix driver object.
     auto & b = pxDriver.getBuilder();
-    auto P = pxDriver.makePipeline({Binding{b.getInt32Ty(), "inputFileDescriptor"}}, {});
-    Scalar * fileDescriptor = P->getInputScalar("inputFileDescriptor");
+    auto P = pxDriver.makePipeline({Binding{b.getInt32Ty(), "inputFileDecriptor"}}, {});
+    //  The program will use a file descriptor as an input.
+    Scalar * fileDescriptor = P->getInputScalar("inputFileDecriptor");
     StreamSet * ByteStream = P->CreateStreamSet(1, 8);
+    //  ReadSourceKernel is a Parabix Kernel that produces a stream of bytes
+    //  from a file descriptor.
     P->CreateKernelCall<ReadSourceKernel>(fileDescriptor, ByteStream);
     SHOW_BYTES(ByteStream);
 
+    //  The Parabix basis bits representation is created by the Parabix S2P kernel.
+    //  S2P stands for serial-to-parallel.
     StreamSet * BasisBits = P->CreateStreamSet(8);
     P->CreateKernelCall<S2PKernel>(ByteStream, BasisBits);
     SHOW_BIXNUM(BasisBits);
 
-    StreamSet * transformedBasisBits = P->CreateStreamSet(8);
-    P->CreateKernelCall<LowerToUpper>(BasisBits, transformedBasisBits);
-    SHOW_BIXNUM(transformedBasisBits);
+    //  We need to know which input positions are LFs and which are not.
+    //  The nonLF positions need to be expanded to generate two hex digits each.
+    //  The Parabix CharacterClassKernelBuilder can create any desired stream for
+    //  characters.   Note that the input is the set of byte values in the range
+    //  [\x{00}-x{09}\x{0B}-\x{FF}] that is, all byte values except \x{0A}.
+    //  For our example input "Wolf!\b", the nonLF stream is "11111."
+    StreamSet * nonLF = P->CreateStreamSet(1);
+    std::vector<re::CC *> nonLF_CC = {re::makeCC(re::makeByte(0,9), re::makeByte(0xB, 0xff))};
+    P->CreateKernelCall<CharacterClassKernelBuilder>(nonLF_CC, BasisBits, nonLF);
+    SHOW_STREAM(nonLF);
 
-    StreamSet * TransformedBytes = P->CreateStreamSet(1, 8);
-    P->CreateKernelCall<P2SKernel>(transformedBasisBits, TransformedBytes);
-    SHOW_BYTES(TransformedBytes);
-
-    P->CreateKernelCall<StdOutKernel>(TransformedBytes);
-
-    return reinterpret_cast<TransformFunctionType>(P->compile());
+    //  The StdOut kernel writes a byte stream to standard output.
+    P->CreateKernelCall<StdOutKernel>(BasisBits);
+    return reinterpret_cast<HalfToFullFunctionType>(P->compile());
 }
 
 int main(int argc, char *argv[]) {
-    codegen::ParseCommandLineOptions(argc, argv, {&TransformOptions, pablo::pablo_toolchain_flags(), codegen::codegen_flags()});
-    CPUDriver driver("transform");
-    TransformFunctionType fn = generatePipeline(driver);
+    //  ParseCommandLineOptions uses the LLVM CommandLine processor, but we also add
+    //  standard Parabix command line options such as -help, -ShowPablo and many others.
+    codegen::ParseCommandLineOptions(argc, argv, {&HexLinesOptions, pablo::pablo_toolchain_flags(), codegen::codegen_flags()});
+    //  A CPU driver is capable of compiling and running Parabix programs on the CPU.
+    CPUDriver driver("latinhalftofull");
+    //  Build and compile the Parabix pipeline by calling the Pipeline function above.
+    HalfToFullFunctionType fn = generatePipeline(driver);
+    //  The compile function "fn"  can now be used.   It takes a file
+    //  descriptor as an input, which is specified by the filename given by
+    //  the inputFile command line option.
     const int fd = open(inputFile.c_str(), O_RDONLY);
     if (LLVM_UNLIKELY(fd == -1)) {
         llvm::errs() << "Error: cannot open " << inputFile << " for processing. Skipped.\n";
     } else {
+        //  Run the pipeline.
         fn(fd);
         close(fd);
     }
