@@ -58,6 +58,34 @@ using namespace pablo;
 static cl::OptionCategory LatinHalfToFullOptions("latinhalftofull Options", "latinhalftofull control options.");
 static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), cl::Required, cl::cat(LatinHalfToFullOptions));
 
+class FullWidthIfy : public pablo::PabloKernel {
+public:
+    FullWidthIfy(KernelBuilder & b, StreamSet * changeMask, StreamSet * U21, StreamSet * fullWidthBasis)
+    : pablo::PabloKernel(b, "FullWidthIfy",
+                         {Binding{"changeMask", changeMask}, Binding{"U21", U21}},
+                      {Binding{"fullWidthBasis", fullWidthBasis}}) {}
+protected:
+    void generatePabloMethod() override;
+};
+
+void FullWidthIfy::generatePabloMethod() {
+    //  pb is an object used for build Pablo language statements
+    pablo::PabloBuilder pb(getEntryScope());
+
+    //  bnc is an object that can perform arithmetic on sets of parallel bit streams
+    BixNumCompiler bnc(pb);
+
+    // Get the input stream sets.
+    PabloAST * changeMask = getInputStreamSet("changeMask")[0];
+    std::vector<PabloAST *> U21 = getInputStreamSet("U21");
+
+    // ccc is an object that can compile character classes from a set of 8 parallel bit streams.
+    cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
+
+    std::vector<PabloAST *> fullWidthBasis(8);
+}
+
+
 typedef void (*HalfToFullFunctionType)(uint32_t fd);
 
 HalfToFullFunctionType generatePipeline(CPUDriver & pxDriver) {
@@ -85,14 +113,29 @@ HalfToFullFunctionType generatePipeline(CPUDriver & pxDriver) {
 
     StreamSet * U21_u8indexed = P->CreateStreamSet(21, 1);
     P->CreateKernelCall<UTF8_Decoder>(BasisBits, U21_u8indexed);
-    SHOW_BIXNUM(U21_u8indexed);
 
     StreamSet * U21 = P->CreateStreamSet(21, 1);
     FilterByMask(P, u8index, U21_u8indexed, U21);
     SHOW_BIXNUM(U21);
 
+    UCD::codepoint_t low_cp = 0x0021;
+    UCD::codepoint_t hi_cp = low_cp + 105;
+
+    StreamSet * halfwidths = P->CreateStreamSet(1);
+    std::vector<re::CC *> halfwidths_CC = {re::makeCC(low_cp, hi_cp, &cc::Unicode)};
+    P->CreateKernelCall<CharacterClassKernelBuilder>(halfwidths_CC, U21, halfwidths);
+    SHOW_STREAM(halfwidths);
+    
+    StreamSet * changeMask = UnitInsertionSpreadMask(P, halfwidths, InsertPosition::After);
+    SHOW_STREAM(changeMask);
+
+    // Perform the logic of the Hexify kernel.
+    StreamSet * fullWidthBasis = P->CreateStreamSet(8);
+    P->CreateKernelCall<FullWidthIfy>(changeMask, U21, fullWidthBasis);
+    SHOW_BIXNUM(fullWidthBasis);
+
     //  The StdOut kernel writes a byte stream to standard output.
-    P->CreateKernelCall<StdOutKernel>(BasisBits);
+    P->CreateKernelCall<StdOutKernel>(fullWidthBasis);
     return reinterpret_cast<HalfToFullFunctionType>(P->compile());
 }
 
