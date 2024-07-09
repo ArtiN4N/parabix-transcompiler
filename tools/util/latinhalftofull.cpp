@@ -83,6 +83,32 @@ void FullWidthIfy::generatePabloMethod() {
     cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
 
     std::vector<PabloAST *> fullWidthBasis(8);
+
+    BixNumCompiler bnc(nested);
+
+    std::vector<Var *> basisVar(21);
+    for (unsigned i = 0; i < 21; i++) {
+        basisVar[i] = pb.createVar("basisVar" + std::to_string(i), basis[i]);
+    }
+
+    /*BixNum VPart = bnc.ZeroExtend(V_index, 21);
+    VPart = bnc.AddModular(VPart, Hangul_VBase);
+
+    
+    BixNum TPart = bnc.ZeroExtend(T_index, 21);
+    TPart = bnc.AddModular(TPart, Hangul_TBase);
+    for (unsigned i = 0; i < 21; i++) {
+        PabloAST * bit = nested.createSel(Hangul_L, LPart[i], basis[i]);
+        bit = nested.createSel(V_position, VPart[i], bit);
+        bit = nested.createSel(T_position, TPart[i], bit);
+        nested.createAssign(basisVar[i], bit);
+    }*/
+
+    Var * fullWidthBasis = getOutputStreamVar("fullWidthBasis");
+    for (unsigned i = 0; i < 21; i++) {
+        basisVar[i] += 1
+        pb.createAssign(pb.createExtract(hexVar, pb.getInteger(i)), pb.createSel(halfwidths, basisVar[i], U21[i]));
+    }
 }
 
 
@@ -127,7 +153,7 @@ HalfToFullFunctionType generatePipeline(CPUDriver & pxDriver) {
     SHOW_STREAM(halfwidths);
 
     // Perform the logic of the Hexify kernel.
-    StreamSet * fullWidthBasis = P->CreateStreamSet(8);
+    StreamSet * fullWidthBasis = P->CreateStreamSet(21, 1);
     P->CreateKernelCall<FullWidthIfy>(halfwidths, U21, fullWidthBasis);
     SHOW_BIXNUM(fullWidthBasis);
 
