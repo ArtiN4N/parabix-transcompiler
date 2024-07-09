@@ -60,9 +60,9 @@ static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), 
 
 class FullWidthIfy : public pablo::PabloKernel {
 public:
-    FullWidthIfy(KernelBuilder & b, StreamSet * changeMask, StreamSet * U21, StreamSet * fullWidthBasis)
+    FullWidthIfy(KernelBuilder & b, StreamSet * halfwidths, StreamSet * U21, StreamSet * fullWidthBasis)
     : pablo::PabloKernel(b, "FullWidthIfy",
-                         {Binding{"changeMask", changeMask}, Binding{"U21", U21}},
+                         {Binding{"halfwidths", halfwidths}, Binding{"U21", U21}},
                       {Binding{"fullWidthBasis", fullWidthBasis}}) {}
 protected:
     void generatePabloMethod() override;
@@ -76,7 +76,7 @@ void FullWidthIfy::generatePabloMethod() {
     BixNumCompiler bnc(pb);
 
     // Get the input stream sets.
-    PabloAST * changeMask = getInputStreamSet("changeMask")[0];
+    PabloAST * halfwidths = getInputStreamSet("halfwidths")[0];
     std::vector<PabloAST *> U21 = getInputStreamSet("U21");
 
     // ccc is an object that can compile character classes from a set of 8 parallel bit streams.
@@ -125,13 +125,10 @@ HalfToFullFunctionType generatePipeline(CPUDriver & pxDriver) {
     std::vector<re::CC *> halfwidths_CC = {re::makeCC(low_cp, hi_cp, &cc::Unicode)};
     P->CreateKernelCall<CharacterClassKernelBuilder>(halfwidths_CC, U21, halfwidths);
     SHOW_STREAM(halfwidths);
-    
-    StreamSet * changeMask = UnitInsertionSpreadMask(P, halfwidths, InsertPosition::After);
-    SHOW_STREAM(changeMask);
 
     // Perform the logic of the Hexify kernel.
     StreamSet * fullWidthBasis = P->CreateStreamSet(8);
-    P->CreateKernelCall<FullWidthIfy>(changeMask, U21, fullWidthBasis);
+    P->CreateKernelCall<FullWidthIfy>(halfwidths, U21, fullWidthBasis);
     SHOW_BIXNUM(fullWidthBasis);
 
     //  The StdOut kernel writes a byte stream to standard output.
