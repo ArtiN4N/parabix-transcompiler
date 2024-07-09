@@ -105,7 +105,7 @@ void FullWidthIfy::generatePabloMethod() {
     Var * fullWidthBasisVar = getOutputStreamVar("fullWidthBasis");
     for (unsigned i = 0; i < 21; i++) {
         basisVar[i] = pb.createAdd(basisVar[i], pb.getInteger(1));
-        pb.
+        //pb.
         
         pb.createAssign(pb.createExtract(fullWidthBasisVar, pb.getInteger(i)), pb.createSel(halfwidths, basisVar[i], U21[i]));
     }
