@@ -77,10 +77,10 @@ void FullWidthIfy::generatePabloMethod() {
 
     // Get the input stream sets.
     //PabloAST * halfwidths = getInputStreamSet("halfwidths")[0];
-    std::vector<PabloAST *> U21 = getInputStreamSet("U21")[0];
+    std::vector<PabloAST *> U21 = getInputStreamSet("U21");
 
     // ccc is an object that can compile character classes from a set of 8 parallel bit streams.
-    //cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
+    cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
 
 
     UCD::codepoint_t low_cp = 0x0021;
