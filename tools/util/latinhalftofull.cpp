@@ -82,19 +82,12 @@ void FullWidthIfy::generatePabloMethod() {
     // ccc is an object that can compile character classes from a set of 8 parallel bit streams.
     cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
 
-
+    // character class for latin halfwidths
     UCD::codepoint_t low_cp = 0x0021;
     UCD::codepoint_t hi_cp = low_cp + 105;
-
     PabloAST * halfwidths = ccc.compileCC(re::makeCC(low_cp, hi_cp, &cc::Unicode));
 
-    
-
-    //StreamSet * halfwidths = P->CreateStreamSet(1);
-    //std::vector<re::CC *> halfwidths_CC = {re::makeCC(low_cp, hi_cp, &cc::Unicode)};
-    //P->CreateKernelCall<CharacterClassKernelBuilder>(halfwidths_CC, U21, halfwidths);
-    //SHOW_STREAM(halfwidths);
-
+    // the gap between half and fullwidth latin characters
     UCD::codepoint_t latinGap = 0xFEE0;
 
     // For anything other than latin, likely will have to use a map
@@ -131,10 +124,12 @@ HalfToFullFunctionType generatePipeline(CPUDriver & pxDriver) {
     P->CreateKernelCall<ReadSourceKernel>(fileDescriptor, ByteStream);
     SHOW_BYTES(ByteStream);
 
+    // Get the basis bits
     StreamSet * BasisBits = P->CreateStreamSet(8, 1);
     P->CreateKernelCall<S2PKernel>(ByteStream, BasisBits);
     SHOW_BIXNUM(BasisBits);
 
+    // Convert into codepoints
     StreamSet * u8index = P->CreateStreamSet(1, 1);
     P->CreateKernelCall<UTF8_index>(BasisBits, u8index);
     SHOW_STREAM(u8index);
@@ -146,19 +141,12 @@ HalfToFullFunctionType generatePipeline(CPUDriver & pxDriver) {
     FilterByMask(P, u8index, U21_u8indexed, U21);
     SHOW_BIXNUM(U21);
 
-    //UCD::codepoint_t low_cp = 0x0021;
-    //UCD::codepoint_t hi_cp = low_cp + 105;
-
-    //StreamSet * halfwidths = P->CreateStreamSet(1);
-    //std::vector<re::CC *> halfwidths_CC = {re::makeCC(low_cp, hi_cp, &cc::Unicode)};
-    //P->CreateKernelCall<CharacterClassKernelBuilder>(halfwidths_CC, U21, halfwidths);
-    //SHOW_STREAM(halfwidths);
-
-    // Perform the logic of the FullWidthIfy kernel.
+    // Perform the logic of the FullWidthIfy kernel on the codepoiont values.
     StreamSet * fullWidthBasis = P->CreateStreamSet(21, 1);
     P->CreateKernelCall<FullWidthIfy>(U21, fullWidthBasis);
     SHOW_BIXNUM(fullWidthBasis);
 
+    // Convert back to UTF8 from codepoints.
     StreamSet * const OutputBasis = P->CreateStreamSet(8);
     U21_to_UTF8(P, fullWidthBasis, OutputBasis);
 
@@ -175,10 +163,13 @@ int main(int argc, char *argv[]) {
     //  ParseCommandLineOptions uses the LLVM CommandLine processor, but we also add
     //  standard Parabix command line options such as -help, -ShowPablo and many others.
     codegen::ParseCommandLineOptions(argc, argv, {&LatinHalfToFullOptions, pablo::pablo_toolchain_flags(), codegen::codegen_flags()});
+
     //  A CPU driver is capable of compiling and running Parabix programs on the CPU.
     CPUDriver driver("latinhalftofull");
+
     //  Build and compile the Parabix pipeline by calling the Pipeline function above.
     HalfToFullFunctionType fn = generatePipeline(driver);
+    
     //  The compile function "fn"  can now be used.   It takes a file
     //  descriptor as an input, which is specified by the filename given by
     //  the inputFile command line option.
