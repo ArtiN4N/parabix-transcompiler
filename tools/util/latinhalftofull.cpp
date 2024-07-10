@@ -104,7 +104,7 @@ void FullWidthIfy::generatePabloMethod() {
     UCD::codepoint_t ideoCommaGap = 0xCF63;
     
 
-    BixNum basisVar = bnc.AddModular(U21, halfToFullGap);
+    BixNum basisVar = bnc.AddModular(U21, latinGap);
 
     Var * fullWidthBasisVar = getOutputStreamVar("fullWidthBasis");
     for (unsigned i = 0; i < 21; i++) {
