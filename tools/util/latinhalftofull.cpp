@@ -60,9 +60,9 @@ static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), 
 
 class FullWidthIfy : public pablo::PabloKernel {
 public:
-    FullWidthIfy(KernelBuilder & b, StreamSet * halfwidths, StreamSet * U21, StreamSet * fullWidthBasis)
+    FullWidthIfy(KernelBuilder & b, StreamSet * U21, StreamSet * fullWidthBasis)
     : pablo::PabloKernel(b, "FullWidthIfy",
-                         {Binding{"halfwidths", halfwidths}, Binding{"U21", U21}},
+                         {Binding{"U21", U21}},
                       {Binding{"fullWidthBasis", fullWidthBasis}}) {}
 protected:
     void generatePabloMethod() override;
@@ -76,13 +76,33 @@ void FullWidthIfy::generatePabloMethod() {
     BixNumCompiler bnc(pb);
 
     // Get the input stream sets.
-    PabloAST * halfwidths = getInputStreamSet("halfwidths")[0];
-    std::vector<PabloAST *> U21 = getInputStreamSet("U21");
+    //PabloAST * halfwidths = getInputStreamSet("halfwidths")[0];
+    std::vector<PabloAST *> U21 = getInputStreamSet("U21")[0];
 
     // ccc is an object that can compile character classes from a set of 8 parallel bit streams.
-    cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
+    //cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
 
-    UCD::codepoint_t halfToFullGap = 0xFEE0;
+
+    UCD::codepoint_t low_cp = 0x0021;
+    UCD::codepoint_t hi_cp = low_cp + 105;
+
+    PabloAST * halfwidths = ccc.compileCC(re::makeCC(low_cp, hi_cp, &cc::Unicode));
+
+    
+
+    //StreamSet * halfwidths = P->CreateStreamSet(1);
+    //std::vector<re::CC *> halfwidths_CC = {re::makeCC(low_cp, hi_cp, &cc::Unicode)};
+    //P->CreateKernelCall<CharacterClassKernelBuilder>(halfwidths_CC, U21, halfwidths);
+    //SHOW_STREAM(halfwidths);
+
+    UCD::codepoint_t latinGap = 0xFEE0;
+
+    // For anything other than latin, likely will have to use a map
+    UCD::codepoint_t whiteParenGap = 0xD5DA;
+    UCD::codepoint_t ideoStopGap = 0xCF5F;
+    UCD::codepoint_t cornerBrakGap = 0xCF56;
+    UCD::codepoint_t ideoCommaGap = 0xCF63;
+    
 
     BixNum basisVar = bnc.AddModular(U21, halfToFullGap);
 
@@ -126,17 +146,17 @@ HalfToFullFunctionType generatePipeline(CPUDriver & pxDriver) {
     FilterByMask(P, u8index, U21_u8indexed, U21);
     SHOW_BIXNUM(U21);
 
-    UCD::codepoint_t low_cp = 0x0021;
-    UCD::codepoint_t hi_cp = low_cp + 105;
+    //UCD::codepoint_t low_cp = 0x0021;
+    //UCD::codepoint_t hi_cp = low_cp + 105;
 
-    StreamSet * halfwidths = P->CreateStreamSet(1);
-    std::vector<re::CC *> halfwidths_CC = {re::makeCC(low_cp, hi_cp, &cc::Unicode)};
-    P->CreateKernelCall<CharacterClassKernelBuilder>(halfwidths_CC, U21, halfwidths);
-    SHOW_STREAM(halfwidths);
+    //StreamSet * halfwidths = P->CreateStreamSet(1);
+    //std::vector<re::CC *> halfwidths_CC = {re::makeCC(low_cp, hi_cp, &cc::Unicode)};
+    //P->CreateKernelCall<CharacterClassKernelBuilder>(halfwidths_CC, U21, halfwidths);
+    //SHOW_STREAM(halfwidths);
 
     // Perform the logic of the FullWidthIfy kernel.
     StreamSet * fullWidthBasis = P->CreateStreamSet(21, 1);
-    P->CreateKernelCall<FullWidthIfy>(halfwidths, U21, fullWidthBasis);
+    P->CreateKernelCall<FullWidthIfy>(U21, fullWidthBasis);
     SHOW_BIXNUM(fullWidthBasis);
 
     StreamSet * const OutputBasis = P->CreateStreamSet(8);
@@ -147,7 +167,7 @@ HalfToFullFunctionType generatePipeline(CPUDriver & pxDriver) {
     StreamSet * OutputBytes = P->CreateStreamSet(1, 8);
     P->CreateKernelCall<P2SKernel>(OutputBasis, OutputBytes);
     P->CreateKernelCall<StdOutKernel>(OutputBytes);
-    
+
     return reinterpret_cast<HalfToFullFunctionType>(P->compile());
 }
 
