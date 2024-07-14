@@ -46,7 +46,9 @@
 #include <kernel/unicode/utf8_decoder.h>
 #include <kernel/unicode/UCD_property_kernel.h>
 #include <unicode/algo/decomposition.h>
+
 #include <unicode/core/unicode_set.h>
+
 #include <unicode/data/PropertyAliases.h>
 #include <unicode/data/PropertyObjects.h>
 #include <unicode/data/PropertyObjectTable.h>

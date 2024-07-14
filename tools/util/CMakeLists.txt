@@ -88,3 +88,51 @@ DEPS
     toolchain
 )
 
+parabix_add_executable(
+NAME
+    greektolatin
+SRC
+    greektolatin.cpp
+DEPS
+    grep
+    pablo
+    kernel.basis
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    kernel.util
+    toolchain
+)
+
+parabix_add_executable(
+NAME
+    latinhalftofull
+SRC
+    latinhalftofull.cpp
+DEPS
+    grep
+    pablo
+    kernel.basis
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    kernel.util
+    toolchain
+)
+
+parabix_add_executable(
+NAME
+    anyname
+SRC
+    anyname.cpp
+DEPS
+    grep
+    pablo
+    kernel.basis
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    kernel.util
+    toolchain
+)
+
