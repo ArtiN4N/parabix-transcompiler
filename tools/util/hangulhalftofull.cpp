@@ -96,7 +96,6 @@ std::unordered_map<UCD::codepoint_t, UCD::codepoint_t> halfwidthToFullwidthHangu
     {0xFFDC, 0x1175}, //ㅣ
 };
 
-
 static cl::OptionCategory HangulHalfToFullOptions("hangulhalftofull Options", "hangulhalftofull control options.");
 static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), cl::Required, cl::cat(HangulHalfToFullOptions));
 
@@ -105,7 +104,7 @@ public:
     FullWidthIfy(KernelBuilder & b, StreamSet * U21, StreamSet * fullWidthBasis)
     : pablo::PabloKernel(b, "FullWidthIfy",
                          {Binding{"U21", U21}},
-                      {Binding{"fullWidthBasis", fullWidthBasis}}) {}
+                         {Binding{"fullWidthBasis", fullWidthBasis}}) {}
 protected:
     void generatePabloMethod() override;
 };
@@ -117,7 +116,7 @@ void FullWidthIfy::generatePabloMethod() {
 
     std::vector<PabloAST *> fullwidthStreams(21, nullptr);
     for (unsigned i = 0; i < 21; i++) {
-        fullwidthStreams[i] = pb.createZeroes();
+        fullwidthStreams[i] = U21[i]; // Initialize to U21 to handle non-mapped characters
     }
 
     for (auto &entry : halfwidthToFullwidthHangulMap) {
@@ -127,7 +126,7 @@ void FullWidthIfy::generatePabloMethod() {
 
         for (unsigned i = 0; i < 21; i++) {
             PabloAST * bitPattern = (fullwidthCodepoint & (1 << i)) ? halfwidthPattern : pb.createZeroes();
-            fullwidthStreams[i] = pb.createOr(fullwidthStreams[i], bitPattern);
+            fullwidthStreams[i] = pb.createSel(halfwidthPattern, bitPattern, fullwidthStreams[i]);
         }
     }
 
@@ -136,6 +135,7 @@ void FullWidthIfy::generatePabloMethod() {
         pb.createAssign(pb.createExtract(fullWidthBasisVar, pb.getInteger(i)), fullwidthStreams[i]);
     }
 }
+
 
 typedef void (*HalfToFullFunctionType)(uint32_t fd);
 
