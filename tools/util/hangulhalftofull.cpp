@@ -126,9 +126,8 @@ void FullWidthIfy::generatePabloMethod() {
         PabloAST * halfwidthPattern = ccc.compileCC(re::makeCC(halfwidthCodepoint, halfwidthCodepoint, &cc::Unicode));
 
         for (unsigned i = 0; i < 21; i++) {
-            PabloAST * fullwidthBitPattern = ccc.compileCC(re::makeCC((fullwidthCodepoint >> i) & 1, (fullwidthCodepoint >> i) & 1, &cc::Unicode));
-            PabloAST * bit = pb.createAnd(halfwidthPattern, fullwidthBitPattern);
-            fullwidthStreams[i] = pb.createOr(fullwidthStreams[i], bit);
+            PabloAST * bitPattern = (fullwidthCodepoint & (1 << i)) ? halfwidthPattern : pb.createZeroes();
+            fullwidthStreams[i] = pb.createOr(fullwidthStreams[i], bitPattern);
         }
     }
 
@@ -137,7 +136,6 @@ void FullWidthIfy::generatePabloMethod() {
         pb.createAssign(pb.createExtract(fullWidthBasisVar, pb.getInteger(i)), fullwidthStreams[i]);
     }
 }
-
 
 typedef void (*HalfToFullFunctionType)(uint32_t fd);
 
@@ -171,7 +169,6 @@ HalfToFullFunctionType generatePipeline(CPUDriver & pxDriver) {
 
     StreamSet * const OutputBasis = P->CreateStreamSet(8);
     U21_to_UTF8(P, fullWidthBasis, OutputBasis);
-    
     SHOW_BIXNUM(OutputBasis);
 
     StreamSet * OutputBytes = P->CreateStreamSet(1, 8);
