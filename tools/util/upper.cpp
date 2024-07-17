@@ -11,49 +11,43 @@
 #include <llvm/IR/Module.h>
 #include <re/adt/re_name.h>
 #include <re/adt/re_re.h>
-#include <re/adt/re_range.h>
+#include <pablo/codegenstate.h>
+#include <pablo/pe_zeroes.h>        // for Zeroes
+#include <pablo/bixnum/bixnum.h>
+#include <grep/grep_kernel.h>
 #include <kernel/core/kernel_builder.h>
 #include <kernel/pipeline/pipeline_builder.h>
 #include <kernel/streamutils/deletion.h>
 #include <kernel/streamutils/pdep_kernel.h>
-#include <kernel/streamutils/stream_select.h>
-#include <kernel/streamutils/stream_shift.h>
+#include <kernel/streamutils/run_index.h>
+#include <kernel/streamutils/string_insert.h>
 #include <kernel/basis/s2p_kernel.h>
 #include <kernel/basis/p2s_kernel.h>
 #include <kernel/io/source_kernel.h>
 #include <kernel/io/stdout_kernel.h>
-#include <kernel/scan/scanmatchgen.h>
-#include <re/adt/re_name.h>
-#include <re/cc/cc_kernel.h>
-#include <re/cc/cc_compiler.h>
-#include <re/transforms/name_intro.h>
-#include <re/transforms/re_transformer.h>
-#include <re/cc/cc_compiler_target.h>
-#include <re/unicode/resolve_properties.h>
-#include <string>
-#include <toolchain/toolchain.h>
-#include <pablo/pablo_toolchain.h>
-#include <pablo/builder.hpp>
-#include <pablo/pe_ones.h>
-#include <pablo/pe_zeroes.h>
-#include <pablo/bixnum/bixnum.h>
-#include <fcntl.h>
-#include <iostream>
-#include <kernel/pipeline/driver/cpudriver.h>
-
 #include <kernel/unicode/charclasses.h>
 #include <kernel/unicode/utf8gen.h>
 #include <kernel/unicode/utf8_decoder.h>
 #include <kernel/unicode/UCD_property_kernel.h>
+#include <re/adt/re_name.h>
+#include <re/cc/cc_kernel.h>
+#include <re/cc/cc_compiler.h>
+#include <re/cc/cc_compiler_target.h>
+#include <string>
+#include <toolchain/toolchain.h>
+#include <pablo/pablo_toolchain.h>
+#include <fcntl.h>
+#include <iostream>
+#include <kernel/pipeline/driver/cpudriver.h>
 #include <unicode/algo/decomposition.h>
-
 #include <unicode/core/unicode_set.h>
-
 #include <unicode/data/PropertyAliases.h>
 #include <unicode/data/PropertyObjects.h>
 #include <unicode/data/PropertyObjectTable.h>
 #include <unicode/utf/utf_compiler.h>
 #include <unicode/utf/transchar.h>
+#include <codecvt>
+#include <re/toolchain/toolchain.h>
 
 #define SHOW_STREAM(name) if (codegen::EnableIllustrator) P->captureBitstream(#name, name)
 #define SHOW_BIXNUM(name) if (codegen::EnableIllustrator) P->captureBixNum(#name, name)
@@ -84,16 +78,16 @@ void ToUpperKernel::generatePabloMethod() {
     //  bnc is an object that can perform arithmetic on sets of parallel bit streams
     BixNumCompiler bnc(pb);
 
-    // ccc is an object that can compile character classes from a set of 8 parallel bit streams.
-    cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
-    
     Var * input = getInputStreamVar("input");
+
+    // ccc is an object that can compile character classes from a set of 8 parallel bit streams.
+    cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), input);
 
     // Create a bitmask for lowercase 'a' to 'z'
     // PabloAST * a_to_z = pb.createAnd(pb.createGT(input, pb.createLiteral(0x60)), pb.createLT(input, pb.createLiteral(0x7B)));
     PabloAST * a_to_z = ccc.compileCC(re::makeCC(0x61, 0x7a, &cc::Unicode));
 
-    BixNum basisVar = bnc.AddModular(input, latinGap);
+    BixNum basisVar = bnc.SubModular(input, 0x20);
 
     Var * fullWidthBasisVar = getOutputStreamVar("output");
     for (unsigned i = 0; i < 21; i++) {
