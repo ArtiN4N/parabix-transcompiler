@@ -82,23 +82,16 @@ void ToUpperKernel::generatePabloMethod() {
     Var * input = getInputStreamVar("input");
 
     // Create a bitmask for lowercase 'a' to 'z'
-    PabloAST * a_to_z = pb.createAnd(pb.createGT(input, pb.createLiteral(0x60)), pb.createLT(input, pb.createLiteral(0x7B)));
+    // PabloAST * a_to_z = pb.createAnd(pb.createGT(input, pb.createLiteral(0x60)), pb.createLT(input, pb.createLiteral(0x7B)));
+    PabloAST * a_to_z = ccc.compileCC(re::makeCC(0x61, 0x7a, &cc::Unicode));
 
-    // Create a constant for the amount to shift lowercase letters to uppercase
-    PabloAST * shiftAmount = pb.createLiteral(0x20);
+    BixNum basisVar = bnc.AddModular(input, latinGap);
 
-    // Determine if characters are lowercase
-    PabloAST * lowerCaseMask = pb.createAnd(input, a_to_z, "lowerCaseMask");
+    Var * fullWidthBasisVar = getOutputStreamVar("output");
+    for (unsigned i = 0; i < 21; i++) {
 
-    // Add shift amount to convert lowercase to uppercase
-    PabloAST * upperCase = pb.createXor(lowerCaseMask, shiftAmount, "upperCase");
-
-    // Combine unchanged upper case characters with converted lower case characters
-    PabloAST * upperCaseStream = pb.createOr(pb.createAnd(pb.createNot(a_to_z), input), upperCase, "upperCaseStream");
-
-    // Set the output
-    Var * output = getOutputStreamVar("output");
-    pb.createAssign(output, upperCaseStream);
+        pb.createAssign(pb.createExtract(fullWidthBasisVar, pb.getInteger(i)), pb.createSel(a_to_z, basisVar[i], input[i]));
+    }
 }
 
 
