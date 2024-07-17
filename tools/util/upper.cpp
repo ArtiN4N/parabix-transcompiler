@@ -1,3 +1,6 @@
+//https://www.unicode.org/Public/14.0.0/ucd/SpecialCasing.txt
+//https://www.unicode.org/Public/14.0.0/ucd/UnicodeData.txt
+//oh no
 
 #include <cstdio>
 #include <vector>
@@ -100,8 +103,10 @@ void FullWidthIfy::generatePabloMethod() {
     BixNum basisVar = bnc.AddModular(U21, latinGap);
 
     Var * fullWidthBasisVar = getOutputStreamVar("fullWidthBasis");
-    for (unsigned i = 0; i < 21; i++)
+    for (unsigned i = 0; i < 21; i++) {
+
         pb.createAssign(pb.createExtract(fullWidthBasisVar, pb.getInteger(i)), pb.createSel(halfwidths, basisVar[i], U21[i]));
+    }
 }
 
 
