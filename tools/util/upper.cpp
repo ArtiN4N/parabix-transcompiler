@@ -78,7 +78,15 @@ protected:
 };
 
 void ToUpperKernel::generatePabloMethod() {
-    PabloBuilder pb(getEntryScope());
+    //  pb is an object used for build Pablo language statements
+    pablo::PabloBuilder pb(getEntryScope());
+
+    //  bnc is an object that can perform arithmetic on sets of parallel bit streams
+    BixNumCompiler bnc(pb);
+
+    // ccc is an object that can compile character classes from a set of 8 parallel bit streams.
+    cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
+    
     Var * input = getInputStreamVar("input");
 
     // Create a bitmask for lowercase 'a' to 'z'
