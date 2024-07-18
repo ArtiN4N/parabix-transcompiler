@@ -87,6 +87,7 @@ void FullWidthIfy::generatePabloMethod() {
     UCD::property_t property = UCD::property_t::Upper;
     UCD::PropertyObject * propObject = UCD::get_UPPER_PropertyObject();
     UCD::UnicodeSet uSet = propObject->GetCodepointSet("what");
+    SHOW_BIXNUM(uSet);
 
 
     // character class for latin halfwidths
