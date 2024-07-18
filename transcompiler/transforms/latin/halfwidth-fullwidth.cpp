@@ -82,6 +82,12 @@ void FullWidthIfy::generatePabloMethod() {
     // ccc is an object that can compile character classes from a set of 8 parallel bit streams.
     cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
 
+    //CodePointPropertyObject(UCD::property_t p, const UnicodeSet && nullSet, const UnicodeSet && mapsToSelf,
+    //const std::unordered_map<UCD::codepoint_t, UCD::codepoint_t> && explicit_map)
+    UCD::property_t property = UCD::property_t::Upper;
+    UCD::PropertyObject * propObject = UCD::get_UPPER_PropertyObject();
+
+
     // character class for latin halfwidths
     UCD::codepoint_t low_cp = 0x0021;
     UCD::codepoint_t hi_cp = low_cp + 105;
