@@ -2,7 +2,7 @@ parabix_add_executable(
 NAME
     latin-halftofull
 SRC
-    halfiwdth-fullwidth.cpp
+    halfwidth-fullwidth.cpp
 DEPS
     grep
     pablo
