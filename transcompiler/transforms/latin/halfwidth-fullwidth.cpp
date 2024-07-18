@@ -44,6 +44,8 @@
 #include <codecvt>
 #include <re/toolchain/toolchain.h>
 
+#include <iostream>
+
 
 #define SHOW_STREAM(name) if (codegen::EnableIllustrator) P->captureBitstream(#name, name)
 #define SHOW_BIXNUM(name) if (codegen::EnableIllustrator) P->captureBixNum(#name, name)
@@ -87,7 +89,9 @@ void FullWidthIfy::generatePabloMethod() {
     UCD::property_t property = UCD::property_t::Upper;
     UCD::PropertyObject * propObject = UCD::get_UPPER_PropertyObject();
     UCD::UnicodeSet uSet = propObject->GetCodepointSet("what");
-    SHOW_BIXNUM(uSet);
+    
+    UCD::codepoint_t test = uSet.at(0);
+    std::cout << test << std::endl;
 
 
     // character class for latin halfwidths
