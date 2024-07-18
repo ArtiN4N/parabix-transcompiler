@@ -59,20 +59,20 @@ using namespace pablo;
 
 //  These declarations are for command line processing.
 //  See the LLVM CommandLine 2.0 Library Manual https://llvm.org/docs/CommandLine.html
-static cl::OptionCategory LatinHalfToFullOptions("latinhalftofull Options", "latinhalftofull control options.");
-static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), cl::Required, cl::cat(LatinHalfToFullOptions));
+static cl::OptionCategory LowerOptions("lower Options", "lower control options.");
+static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), cl::Required, cl::cat(LowerOptions));
 
-class FullWidthIfy : public pablo::PabloKernel {
+class Lowerify : public pablo::PabloKernel {
 public:
-    FullWidthIfy(KernelBuilder & b, StreamSet * U21, StreamSet * fullWidthBasis)
-    : pablo::PabloKernel(b, "FullWidthIfy",
+    Lowerify(KernelBuilder & b, StreamSet * U21, StreamSet * outputBasis)
+    : pablo::PabloKernel(b, "Lowerify",
                          {Binding{"U21", U21}},
-                      {Binding{"fullWidthBasis", fullWidthBasis}}) {}
+                      {Binding{"outputBasis", outputBasis}}) {}
 protected:
     void generatePabloMethod() override;
 };
 
-void FullWidthIfy::generatePabloMethod() {
+void Lowerify::generatePabloMethod() {
     //  pb is an object used for build Pablo language statements
     pablo::PabloBuilder pb(getEntryScope());
 
@@ -103,61 +103,31 @@ void FullWidthIfy::generatePabloMethod() {
     // UCD::UnicodeSet.at(int) --> gets the codepoint at index int
 
     
-
-    //UCD::PropertyObject * upperObject = UCD::get_UPPER_PropertyObject();
-    //UCD::UnicodeSet uSet = upperObject->GetCodepointSet("");
-
     UCD::PropertyObject * lowerObject = UCD::get_LOWER_PropertyObject();
     UCD::UnicodeSet lSet = lowerObject->GetCodepointSet("");
-    //std::string testString = propObject->GetStringValue(0x42);
 
-    // ok wait this crazy
-    UCD::UnicodeSet equivalentCapitalA = UCD::equivalentCodepoints(0x41, UCD::EquivalenceOptions::Caseless);
-    UCD::UnicodeSet lowerCaseA = equivalentCapitalA & lSet;
-    
-    UCD::property_t upperProperty = upperObject->getPropertyCode();
-    UCD::UnicodeSet lInterUSet = lowerObject->GetCodepointSet(UCD::getPropertyEnumName(upperProperty));
-    
-    for (int i = 0; i < 100; i++) {
-        UCD::codepoint_t upp = uSet.at(i);
-        UCD::codepoint_t low = lSet.at(i);
-
-        UCD::codepoint_t lowIntersectUp = lInterUSet.at(i);
-        std::cout << "codepoint map at " << i << ": " << std::hex << low << " --> " << std::hex << upp << " // intersect between low and upp: " << std::hex << lowIntersectUp << std::endl;
-    }
-    //std::cout << "codepoint set end: " << uSet.end() << std::endl;*/
-
-
-    // character class for latin halfwidths
-    UCD::codepoint_t low_cp = 0x0021;
-    UCD::codepoint_t hi_cp = low_cp + 105;
-    PabloAST * halfwidths = ccc.compileCC(re::makeCC(low_cp, hi_cp, &cc::Unicode));
-
+    // ok wait this crazy  
+    UCD::codepoint_t theCodePoint = 0x41;
+    UCD::UnicodeSet equivalentCaselessCharacter = UCD::equivalentCodepoints(theCodePoint, UCD::EquivalenceOptions::Caseless);
+    UCD::UnicodeSet lowerCaseCharacter = equivalentCaselessCharacter & lSet;
     
 
-    // the gap between half and fullwidth latin characters
-    UCD::codepoint_t latinGap = 0xFEE0;
-
-    // For anything other than latin, likely will have to use a map
-    //UCD::codepoint_t whiteParenGap = 0xD5DA;
-    //UCD::codepoint_t ideoStopGap = 0xCF5F;
-    //UCD::codepoint_t cornerBrakGap = 0xCF56;
-    //UCD::codepoint_t ideoCommaGap = 0xCF63;
+    //UCD::property_t upperProperty = upperObject->getPropertyCode();
+    //UCD::UnicodeSet lInterUSet = lowerObject->GetCodepointSet(UCD::getPropertyEnumName(upperProperty));
     
 
-    BixNum basisVar = bnc.AddModular(U21, latinGap);
+    BixNum basisVar;
 
-    Var * fullWidthBasisVar = getOutputStreamVar("fullWidthBasis");
+    Var * outputBasisVar = getOutputStreamVar("outputBasis");
     for (unsigned i = 0; i < 21; i++) {
-
-        pb.createAssign(pb.createExtract(fullWidthBasisVar, pb.getInteger(i)), pb.createSel(halfwidths, basisVar[i], U21[i]));
+        pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), U21[i]);
     }
 }
 
 
-typedef void (*HalfToFullFunctionType)(uint32_t fd);
+typedef void (*ToLowerFunctionType)(uint32_t fd);
 
-HalfToFullFunctionType generatePipeline(CPUDriver & pxDriver) {
+ToLowerFunctionType generatePipeline(CPUDriver & pxDriver) {
     // A Parabix program is build as a set of kernel calls called a pipeline.
     // A pipeline is construction using a Parabix driver object.
     auto & b = pxDriver.getBuilder();
@@ -189,14 +159,14 @@ HalfToFullFunctionType generatePipeline(CPUDriver & pxDriver) {
     FilterByMask(P, u8index, U21_u8indexed, U21);
     SHOW_BIXNUM(U21);
 
-    // Perform the logic of the FullWidthIfy kernel on the codepoiont values.
-    StreamSet * fullWidthBasis = P->CreateStreamSet(21, 1);
-    P->CreateKernelCall<FullWidthIfy>(U21, fullWidthBasis);
-    SHOW_BIXNUM(fullWidthBasis);
+    // Perform the logic of the Lowerify kernel on the codepoiont values.
+    StreamSet * outputBasis = P->CreateStreamSet(21, 1);
+    P->CreateKernelCall<Lowerify>(U21, outputBasis);
+    SHOW_BIXNUM(outputBasis);
 
     // Convert back to UTF8 from codepoints.
     StreamSet * const OutputBasis = P->CreateStreamSet(8);
-    U21_to_UTF8(P, fullWidthBasis, OutputBasis);
+    U21_to_UTF8(P, outputBasis, OutputBasis);
 
     SHOW_BIXNUM(OutputBasis);
 
@@ -204,19 +174,19 @@ HalfToFullFunctionType generatePipeline(CPUDriver & pxDriver) {
     P->CreateKernelCall<P2SKernel>(OutputBasis, OutputBytes);
     P->CreateKernelCall<StdOutKernel>(OutputBytes);
 
-    return reinterpret_cast<HalfToFullFunctionType>(P->compile());
+    return reinterpret_cast<ToLowerFunctionType>(P->compile());
 }
 
 int main(int argc, char *argv[]) {
     //  ParseCommandLineOptions uses the LLVM CommandLine processor, but we also add
     //  standard Parabix command line options such as -help, -ShowPablo and many others.
-    codegen::ParseCommandLineOptions(argc, argv, {&LatinHalfToFullOptions, pablo::pablo_toolchain_flags(), codegen::codegen_flags()});
+    codegen::ParseCommandLineOptions(argc, argv, {&LowerOptions, pablo::pablo_toolchain_flags(), codegen::codegen_flags()});
 
     //  A CPU driver is capable of compiling and running Parabix programs on the CPU.
-    CPUDriver driver("latinhalftofull");
+    CPUDriver driver("tolower");
 
     //  Build and compile the Parabix pipeline by calling the Pipeline function above.
-    HalfToFullFunctionType fn = generatePipeline(driver);
+    ToLowerFunctionType fn = generatePipeline(driver);
     
     //  The compile function "fn"  can now be used.   It takes a file
     //  descriptor as an input, which is specified by the filename given by
