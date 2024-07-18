@@ -86,6 +86,7 @@ void FullWidthIfy::generatePabloMethod() {
     //const std::unordered_map<UCD::codepoint_t, UCD::codepoint_t> && explicit_map)
     UCD::property_t property = UCD::property_t::Upper;
     UCD::PropertyObject * propObject = UCD::get_UPPER_PropertyObject();
+    UCD::UnicodeSet uSet = propObject.GetCodePointSet("what");
 
 
     // character class for latin halfwidths
@@ -93,14 +94,16 @@ void FullWidthIfy::generatePabloMethod() {
     UCD::codepoint_t hi_cp = low_cp + 105;
     PabloAST * halfwidths = ccc.compileCC(re::makeCC(low_cp, hi_cp, &cc::Unicode));
 
+    
+
     // the gap between half and fullwidth latin characters
     UCD::codepoint_t latinGap = 0xFEE0;
 
     // For anything other than latin, likely will have to use a map
-    UCD::codepoint_t whiteParenGap = 0xD5DA;
-    UCD::codepoint_t ideoStopGap = 0xCF5F;
-    UCD::codepoint_t cornerBrakGap = 0xCF56;
-    UCD::codepoint_t ideoCommaGap = 0xCF63;
+    //UCD::codepoint_t whiteParenGap = 0xD5DA;
+    //UCD::codepoint_t ideoStopGap = 0xCF5F;
+    //UCD::codepoint_t cornerBrakGap = 0xCF56;
+    //UCD::codepoint_t ideoCommaGap = 0xCF63;
     
 
     BixNum basisVar = bnc.AddModular(U21, latinGap);
