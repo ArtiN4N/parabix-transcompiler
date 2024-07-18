@@ -91,15 +91,20 @@ void FullWidthIfy::generatePabloMethod() {
     // what are valid inpouts for "getcodepointset"
     // how can i use this to map upper property to lower property, etc.
     // how can i use the unicode set iterator
+    //UCD::property_t property = propObject->getPropertyCode();
 
-    UCD::PropertyObject * propObject = UCD::get_UPPER_PropertyObject();
-    UCD::property_t property = propObject->getPropertyCode();
-    UCD::UnicodeSet uSet = propObject->GetCodepointSet("");
+
+    UCD::PropertyObject * upperObject = UCD::get_UPPER_PropertyObject();
+    UCD::UnicodeSet uSet = upperObject->GetCodepointSet("");
+
+    UCD::PropertyObject * lowerObject = UCD::get_UPPER_PropertyObject();
+    UCD::UnicodeSet lSet = lowerObject->GetCodepointSet("");
     //std::string testString = propObject->GetStringValue(0x42);
     
     for (int i = 0; i < 100; i++) {
-        UCD::codepoint_t test = uSet.at(i);
-        std::cout << "codepoint set at 0: " << test << std::endl;
+        UCD::codepoint_t upp = uSet.at(i);
+        UCD::codepoint_t low = lSet.at(i);
+        std::cout << "codepoint map at " << i << ": " << low << " --> " << upp << std::endl;
     }
     //std::cout << "codepoint set end: " << uSet.end() << std::endl;
 
