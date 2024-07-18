@@ -92,7 +92,7 @@ void FullWidthIfy::generatePabloMethod() {
     // how can i use this to map upper property to lower property, etc.
     // how can i use the unicode set iterator
 
-    UCD::PropertyObject * propObject = UCD::get_UPPER_PropertyObject();
+    UCD::PropertyObject * propObject = UCD::get_LOWER_PropertyObject();
     UCD::property_t property = propObject->getPropertyCode();
     UCD::UnicodeSet uSet = propObject->GetCodepointSet("");
     //std::string testString = propObject->GetStringValue(0x42);
