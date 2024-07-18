@@ -1,0 +1,63 @@
+parabix_add_executable(
+NAME
+    latin-halftofull
+SRC
+    halfiwdth-fullwidth.cpp
+DEPS
+    grep
+    pablo
+    kernel.basis
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    kernel.util
+    toolchain
+)
+
+parabix_add_executable(
+NAME
+    latin-lower
+SRC
+    lower.cpp
+DEPS
+    grep
+    pablo
+    kernel.basis
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    kernel.util
+    toolchain
+)
+
+parabix_add_executable(
+NAME
+    title-lower
+SRC
+    title.cpp
+DEPS
+    grep
+    pablo
+    kernel.basis
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    kernel.util
+    toolchain
+)
+
+parabix_add_executable(
+NAME
+    upper-lower
+SRC
+    upper.cpp
+DEPS
+    grep
+    pablo
+    kernel.basis
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    kernel.util
+    toolchain
+)
