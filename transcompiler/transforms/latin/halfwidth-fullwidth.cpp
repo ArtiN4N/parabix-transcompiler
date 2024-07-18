@@ -112,7 +112,7 @@ void FullWidthIfy::generatePabloMethod() {
     //std::string testString = propObject->GetStringValue(0x42);
 
     // ok wait this crazy
-    UCD::UnicodeSet equivalentCapitalA = UCD::equivalentCodepoints(0x41, 2);
+    UCD::UnicodeSet equivalentCapitalA = UCD::equivalentCodepoints(0x41, UCD::EquivalenceOptions::Compatible);
     UCD::UnicodeSet lowerCaseA = equivalentCapitalA & lSet;
 
     std::cout << "codepoint lowercase a: " << std::hex << lowerCaseA.at(0) << std::endl;
