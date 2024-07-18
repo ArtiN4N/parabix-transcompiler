@@ -86,7 +86,7 @@ void FullWidthIfy::generatePabloMethod() {
     //const std::unordered_map<UCD::codepoint_t, UCD::codepoint_t> && explicit_map)
     UCD::property_t property = UCD::property_t::Upper;
     UCD::PropertyObject * propObject = UCD::get_UPPER_PropertyObject();
-    UnicodeSet uSet = propObject.GetCodePointSet("what");
+    UCD::UnicodeSet uSet = propObject.GetCodePointSet("what");
 
 
     // character class for latin halfwidths
