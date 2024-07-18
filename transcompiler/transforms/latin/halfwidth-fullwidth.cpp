@@ -101,7 +101,7 @@ void FullWidthIfy::generatePabloMethod() {
         UCD::codepoint_t test = uSet.at(i);
         std::cout << "codepoint set at 0: " << test << std::endl;
     }
-    std::cout << "codepoint set end: " << uSet.end() << std::endl;
+    //std::cout << "codepoint set end: " << uSet.end() << std::endl;
 
 
     // character class for latin halfwidths
