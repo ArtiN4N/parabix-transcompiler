@@ -39,6 +39,8 @@
 #include <unicode/data/PropertyAliases.h>
 #include <unicode/data/PropertyObjects.h>
 #include <unicode/data/PropertyObjectTable.h>
+#include <unicode/data/CaseFolding.h>
+#include <unicode/data/Equivalence.h>
 #include <unicode/utf/utf_compiler.h>
 #include <unicode/utf/transchar.h>
 #include <codecvt>
@@ -100,13 +102,21 @@ void FullWidthIfy::generatePabloMethod() {
     // UCD::PropertyObject*->GetPropertyIntersection(UCD::PropertyObject*) --> finds the intersection set between two properties
     // UCD::UnicodeSet.at(int) --> gets the codepoint at index int
 
-    UCD::PropertyObject * upperObject = UCD::get_UPPER_PropertyObject();
-    UCD::UnicodeSet uSet = upperObject->GetCodepointSet("");
+    
+
+    //UCD::PropertyObject * upperObject = UCD::get_UPPER_PropertyObject();
+    //UCD::UnicodeSet uSet = upperObject->GetCodepointSet("");
 
     UCD::PropertyObject * lowerObject = UCD::get_LOWER_PropertyObject();
     UCD::UnicodeSet lSet = lowerObject->GetCodepointSet("");
     //std::string testString = propObject->GetStringValue(0x42);
 
+    // ok wait this crazy
+    UCD::UnicodeSet equivalentCapitalA = UCD::equivalentCodepoints(0x41);
+    UCD::UnicodeSet lowerCaseA = equivalentCapitalA & lSet;
+
+    std::cout << "codepoint lowercase a: " << std::hex << lowerCaseA.at(0) << std::endl;
+    /*
     UCD::property_t upperProperty = upperObject->getPropertyCode();
     UCD::UnicodeSet lInterUSet = lowerObject->GetCodepointSet(UCD::getPropertyEnumName(upperProperty));
     
@@ -117,7 +127,7 @@ void FullWidthIfy::generatePabloMethod() {
         UCD::codepoint_t lowIntersectUp = lInterUSet.at(i);
         std::cout << "codepoint map at " << i << ": " << std::hex << low << " --> " << std::hex << upp << " // intersect between low and upp: " << std::hex << lowIntersectUp << std::endl;
     }
-    //std::cout << "codepoint set end: " << uSet.end() << std::endl;
+    //std::cout << "codepoint set end: " << uSet.end() << std::endl;*/
 
 
     // character class for latin halfwidths
