@@ -86,58 +86,10 @@ void FullWidthIfy::generatePabloMethod() {
     // ccc is an object that can compile character classes from a set of 8 parallel bit streams.
     cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
 
-    //CodePointPropertyObject(UCD::property_t p, const UnicodeSet && nullSet, const UnicodeSet && mapsToSelf,
-    //const std::unordered_map<UCD::codepoint_t, UCD::codepoint_t> && explicit_map)
-    
-    // To ask:
-    // what are valid inpouts for "getcodepointset"
-    // how can i use this to map upper property to lower property, etc.
-    // how can i use the unicode set iterator
-
-    // my own dictionary:
-    // UCD::PropertyObject * --> is a property object, see PropertyObjects.h
-    // UCD::UnicodeSet --> is a set of unicode codepoints
-    // UCD::PropertyObject*->GetCodepointSet(string) --> if empty string, gets the codepoint set of the objects property
-    // UCD::property_t --> is the property
-    // UCD::PropertyObject*->GetPropertyIntersection(UCD::PropertyObject*) --> finds the intersection set between two properties
-    // UCD::UnicodeSet.at(int) --> gets the codepoint at index int
-
-    
-
-    //UCD::PropertyObject * upperObject = UCD::get_UPPER_PropertyObject();
-    //UCD::UnicodeSet uSet = upperObject->GetCodepointSet("");
-
-    UCD::PropertyObject * lowerObject = UCD::get_LOWER_PropertyObject();
-    UCD::UnicodeSet lSet = lowerObject->GetCodepointSet("");
-    //std::string testString = propObject->GetStringValue(0x42);
-
-    // ok wait this crazy
-    UCD::UnicodeSet equivalentCapitalA = UCD::equivalentCodepoints(0x41, UCD::EquivalenceOptions::Caseless);
-    UCD::UnicodeSet lowerCaseA = equivalentCapitalA & lSet;
-
-    for (int i = 0; i < 5; i++) {
-        std::cout << "codepoint lowercase a: " << std::hex << lowerCaseA.at(i) << std::endl;
-        }
-    /*
-    UCD::property_t upperProperty = upperObject->getPropertyCode();
-    UCD::UnicodeSet lInterUSet = lowerObject->GetCodepointSet(UCD::getPropertyEnumName(upperProperty));
-    
-    for (int i = 0; i < 100; i++) {
-        UCD::codepoint_t upp = uSet.at(i);
-        UCD::codepoint_t low = lSet.at(i);
-
-        UCD::codepoint_t lowIntersectUp = lInterUSet.at(i);
-        std::cout << "codepoint map at " << i << ": " << std::hex << low << " --> " << std::hex << upp << " // intersect between low and upp: " << std::hex << lowIntersectUp << std::endl;
-    }
-    //std::cout << "codepoint set end: " << uSet.end() << std::endl;*/
-
-
     // character class for latin halfwidths
     UCD::codepoint_t low_cp = 0x0021;
     UCD::codepoint_t hi_cp = low_cp + 105;
     PabloAST * halfwidths = ccc.compileCC(re::makeCC(low_cp, hi_cp, &cc::Unicode));
-
-    
 
     // the gap between half and fullwidth latin characters
     UCD::codepoint_t latinGap = 0xFEE0;
