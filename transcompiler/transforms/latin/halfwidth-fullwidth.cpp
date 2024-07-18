@@ -92,6 +92,14 @@ void FullWidthIfy::generatePabloMethod() {
     // how can i use this to map upper property to lower property, etc.
     // how can i use the unicode set iterator
 
+    // my own dictionary:
+    // UCD::PropertyObject * --> is a property object, see PropertyObjects.h
+    // UCD::UnicodeSet --> is a set of unicode codepoints
+    // UCD::PropertyObject*->GetCodepointSet(string) --> if empty string, gets the codepoint set of the objects property
+    // UCD::property_t --> is the property
+    // UCD::PropertyObject*->GetPropertyIntersection(UCD::PropertyObject*) --> finds the intersection set between two properties
+    // UCD::UnicodeSet.at(int) --> gets the codepoint at index int
+
     UCD::PropertyObject * upperObject = UCD::get_UPPER_PropertyObject();
     UCD::UnicodeSet uSet = upperObject->GetCodepointSet("");
 
@@ -100,7 +108,7 @@ void FullWidthIfy::generatePabloMethod() {
     //std::string testString = propObject->GetStringValue(0x42);
 
     UCD::property_t upperProperty = upperObject->getPropertyCode();
-    UCD::UnicodeSet lInterUSet = lowerObject->GetPropertyIntersection(upperObject);
+    UCD::UnicodeSet lInterUSet = lowerObject->GetCodepointSet(upperObject->GetPropertyValueGrepString());
     
     for (int i = 0; i < 100; i++) {
         UCD::codepoint_t upp = uSet.at(i);
