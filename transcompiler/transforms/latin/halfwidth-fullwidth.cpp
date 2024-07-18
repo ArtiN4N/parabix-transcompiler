@@ -92,8 +92,10 @@ void FullWidthIfy::generatePabloMethod() {
     UCD::UnicodeSet uSet = propObject->GetCodepointSet("");
     //std::string testString = propObject->GetStringValue(0x42);
     
-    UCD::codepoint_t test = uSet.at(0);
-    std::cout << "Reflexive set at 0: " << test << std::endl;
+    for (i = uSet.begin(); i < uSet.end(); i++) {
+        UCD::codepoint_t test = uSet.at(0);
+        std::cout << "codepoint set at 0: " << test << std::endl;
+    }
 
 
     // character class for latin halfwidths
