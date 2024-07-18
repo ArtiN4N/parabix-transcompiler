@@ -13,7 +13,6 @@ target_name=$1
 build_dir="../../build"
 orig_dir=$(pwd)
 
-"cd $build_dir"
-"make $target_name"
-"cd $orig_dir"
-cd
+cd "$build_dir"
+make "$target_name"
+cd "$orig_dir"
