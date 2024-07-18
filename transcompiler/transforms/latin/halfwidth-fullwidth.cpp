@@ -97,7 +97,7 @@ void FullWidthIfy::generatePabloMethod() {
     UCD::UnicodeSet uSet = propObject->GetCodepointSet("");
     //std::string testString = propObject->GetStringValue(0x42);
     
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 100; i++) {
         UCD::codepoint_t test = uSet.at(i);
         std::cout << "codepoint set at 0: " << test << std::endl;
     }
