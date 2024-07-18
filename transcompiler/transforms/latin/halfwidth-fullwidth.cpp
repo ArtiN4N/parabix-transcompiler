@@ -97,7 +97,7 @@ void FullWidthIfy::generatePabloMethod() {
     UCD::PropertyObject * upperObject = UCD::get_UPPER_PropertyObject();
     UCD::UnicodeSet uSet = upperObject->GetCodepointSet("");
 
-    UCD::PropertyObject * lowerObject = UCD::get_UPPER_PropertyObject();
+    UCD::PropertyObject * lowerObject = UCD::get_LOWER_PropertyObject();
     UCD::UnicodeSet lSet = lowerObject->GetCodepointSet("");
     //std::string testString = propObject->GetStringValue(0x42);
     
