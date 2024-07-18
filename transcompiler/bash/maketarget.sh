@@ -10,6 +10,10 @@ fi
 target_name=$1
 
 # Define the path to the build directory
-build_dir="../../build/"
+build_dir="../../build"
+orig_dir=$(pwd)
 
-"make $build_dir/$target_name"
+"cd $build_dir"
+"make $target_name"
+"cd $orig_dir"
+cd
