@@ -89,7 +89,7 @@ void FullWidthIfy::generatePabloMethod() {
     
     UCD::PropertyObject * propObject = UCD::get_UPPER_PropertyObject();
     UCD::property_t property = propObject->getPropertyCode();
-    UCD::UnicodeSet uSet = propObject->GetCodepointSet("BCDE");
+    UCD::UnicodeSet uSet = propObject->GetCodepointSet("LATIN CAPITAL LETTER H");
     //std::string testString = propObject->GetStringValue(0x42);
     
     UCD::codepoint_t test = uSet.at(0);
