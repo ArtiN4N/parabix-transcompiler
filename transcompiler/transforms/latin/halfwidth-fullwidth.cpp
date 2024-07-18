@@ -31,6 +31,14 @@
 #include <fcntl.h>
 #include <iostream>
 #include <kernel/pipeline/driver/cpudriver.h>
+#include <unicode/algo/decomposition.h>
+#include <unicode/core/unicode_set.h>
+#include <unicode/data/PropertyAliases.h>
+#include <unicode/data/PropertyObjects.h>
+#include <unicode/data/PropertyObjectTable.h>
+#include <unicode/utf/utf_compiler.h>
+#include <unicode/utf/transchar.h>
+
 
 #define SHOW_STREAM(name) if (codegen::EnableIllustrator) P->captureBitstream(#name, name)
 #define SHOW_BIXNUM(name) if (codegen::EnableIllustrator) P->captureBixNum(#name, name)
