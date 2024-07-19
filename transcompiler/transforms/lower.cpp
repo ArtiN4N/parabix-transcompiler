@@ -82,6 +82,8 @@ void Lowerify::generatePabloMethod() {
     std::vector<PabloAST *> translationBasis = getInputStreamSet("translationBasis");
     std::vector<PabloAST *> transformed(U21.size());
 
+    std::cout << "test" << std::endl;
+
     Var * outputBasisVar = getOutputStreamVar("outputBasis");
     for (unsigned i = 0; i < U21.size(); i++) {
         if (i < translationBasis.size()) {
