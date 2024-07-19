@@ -446,6 +446,7 @@ endif()
 
 if (GENERATE_TRANSCOMPILER)
     add_subdirectory(transcompiler/transforms/latin)
+    add_subdirectory(transcompiler/transforms)
 endif()
 
 # Kernel Tests

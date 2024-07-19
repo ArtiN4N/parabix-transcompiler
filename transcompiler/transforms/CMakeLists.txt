@@ -1,0 +1,47 @@
+parabix_add_executable(
+NAME
+    lower
+SRC
+    lower.cpp
+DEPS
+    grep
+    pablo
+    kernel.basis
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    kernel.util
+    toolchain
+)
+
+parabix_add_executable(
+NAME
+    title
+SRC
+    title.cpp
+DEPS
+    grep
+    pablo
+    kernel.basis
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    kernel.util
+    toolchain
+)
+
+parabix_add_executable(
+NAME
+    upper
+SRC
+    upper.cpp
+DEPS
+    grep
+    pablo
+    kernel.basis
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    kernel.util
+    toolchain
+)
