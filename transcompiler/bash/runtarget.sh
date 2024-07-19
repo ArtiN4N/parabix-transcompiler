@@ -15,11 +15,12 @@ bin_dir="../../build/bin"
 
 # Define the path to the input directory
 input_dir="../tests"
+current_dir=$(pwd)
 
 # Check if the executable exists in the bin directory
 if [ -x "$bin_dir/$executable_name" ]; then
     # Run the executable
-    "$bin_dir/$executable_name $input_dir/$2"
+    "$bin_dir/$executable_name" "$current_dir/$input_dir/$2"
 else
     echo "Executable $executable_name not found in $bin_dir or is not executable."
     exit 1
