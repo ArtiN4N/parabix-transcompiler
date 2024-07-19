@@ -187,7 +187,7 @@ int main(int argc, char *argv[]) {
     std::cout << "test13" << std::endl;
 
     // Get the lowercase mapping object, can create a translation set from that
-    UCD::CodePointPropertyObject* lowerPropertyObject = dyn_cast<UCD::CodePointPropertyObject>(UCD::get_LC_PropertyObject());
+    UCD::CodePointPropertyObject* lowerPropertyObject = dyn_cast<UCD::CodePointPropertyObject>(UCD::get_SLC_PropertyObject());
 
     std::cout << "test12" << std::endl;
 
