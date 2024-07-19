@@ -103,6 +103,8 @@ void Lowerify::generatePabloMethod() {
 typedef void (*ToLowerFunctionType)(uint32_t fd);
 
 ToLowerFunctionType generatePipeline(CPUDriver & pxDriver, unicode::BitTranslationSets lowerTranslationSet) {
+    std::cout << "test9.5" << std::endl;
+
     // A Parabix program is build as a set of kernel calls called a pipeline.
     // A pipeline is construction using a Parabix driver object.
     auto & b = pxDriver.getBuilder();
@@ -194,6 +196,8 @@ int main(int argc, char *argv[]) {
     std::cout << "test11" << std::endl;
 
     lowerTranslationSet = lowerPropertyObject->GetBitTransformSets();
+
+    std::cout << "test10.5" << std::endl;
 
     //  Build and compile the Parabix pipeline by calling the Pipeline function above.
     ToLowerFunctionType fn = generatePipeline(driver, lowerTranslationSet);
