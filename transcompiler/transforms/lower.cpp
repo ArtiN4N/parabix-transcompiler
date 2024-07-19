@@ -42,6 +42,11 @@
 #include <unicode/data/CaseFolding.h>
 #include <unicode/data/Equivalence.h>
 #include <unicode/utf/utf_compiler.h>
+#include <unicode/data/PropertyAliases.h>
+#include <unicode/data/PropertyObjects.h>
+#include <unicode/data/PropertyObjectTable.h>
+#include <unicode/utf/utf_compiler.h>
+#include <unicode/utf/transchar.h>
 #include <unicode/utf/transchar.h>
 #include <codecvt>
 #include <re/toolchain/toolchain.h>
@@ -64,10 +69,10 @@ static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), 
 
 class Lowerify : public pablo::PabloKernel {
 public:
-    Lowerify(KernelBuilder & b, StreamSet * U21, StreamSet * outputBasis)
+    Lowerify(KernelBuilder & b, StreamSet * U21, StreamSet * translationBasis, StreamSet * u32Basis)
     : pablo::PabloKernel(b, "Lowerify",
-                         {Binding{"U21", U21}}, {Binding{"translationBasis", translationBasis}}, {Binding{"u32Basis", u32Basis}},
-                         ) {}
+                        {Binding{"U21", U21}, Binding{"translationBasis", translationBasis}},
+                            {Binding{"u32Basis", u32Basis}}) {}
 protected:
     void generatePabloMethod() override;
 };
