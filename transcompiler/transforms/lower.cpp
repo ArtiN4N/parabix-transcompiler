@@ -213,7 +213,10 @@ int main(int argc, char *argv[]) {
 
     // Get the lowercase mapping object, can create a translation set from that
     UCD::CodePointPropertyObject* lowerPropertyObject = dyn_cast<UCD::CodePointPropertyObject>(UCD::get_LC_PropertyObject())
-    unicode::BitTranslationSets lowerTranslationSet = lowerPropertyObject->GetBitTransformSets();
+
+    unicode::BitTranslationSets lowerTranslationSet;
+
+    lowerTranslationSet = lowerPropertyObject->GetBitTransformSets();
 
     //  Build and compile the Parabix pipeline by calling the Pipeline function above.
     ToLowerFunctionType fn = generatePipeline(driver, lowerTranslationSet);
