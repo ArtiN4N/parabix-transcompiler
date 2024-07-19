@@ -66,8 +66,8 @@ class Lowerify : public pablo::PabloKernel {
 public:
     Lowerify(KernelBuilder & b, StreamSet * U21, StreamSet * outputBasis)
     : pablo::PabloKernel(b, "Lowerify",
-                         {Binding{"U21", U21}},
-                      {Binding{"outputBasis", outputBasis}}) {}
+                         {Binding{"U21", U21}}, {Binding{"translationBasis", translationBasis}, {Binding{"u32Basis", u32Basis}}
+                         ) {}
 protected:
     void generatePabloMethod() override;
 };
@@ -76,58 +76,27 @@ void Lowerify::generatePabloMethod() {
     //  pb is an object used for build Pablo language statements
     pablo::PabloBuilder pb(getEntryScope());
 
-    //  bnc is an object that can perform arithmetic on sets of parallel bit streams
-    BixNumCompiler bnc(pb);
-
     // Get the input stream sets.
-    //PabloAST * halfwidths = getInputStreamSet("halfwidths")[0];
     std::vector<PabloAST *> U21 = getInputStreamSet("U21");
 
-    // ccc is an object that can compile character classes from a set of 8 parallel bit streams.
-    cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
-
-    //CodePointPropertyObject(UCD::property_t p, const UnicodeSet && nullSet, const UnicodeSet && mapsToSelf,
-    //const std::unordered_map<UCD::codepoint_t, UCD::codepoint_t> && explicit_map)
-    
-    // To ask:
-    // what are valid inpouts for "getcodepointset"
-    // how can i use this to map upper property to lower property, etc.
-    // how can i use the unicode set iterator
-
-    // my own dictionary:
-    // UCD::PropertyObject * --> is a property object, see PropertyObjects.h
-    // UCD::UnicodeSet --> is a set of unicode codepoints
-    // UCD::PropertyObject*->GetCodepointSet(string) --> if empty string, gets the codepoint set of the objects property
-    // UCD::property_t --> is the property
-    // UCD::PropertyObject*->GetPropertyIntersection(UCD::PropertyObject*) --> finds the intersection set between two properties
-    // UCD::UnicodeSet.at(int) --> gets the codepoint at index int
-
-    
-    UCD::PropertyObject * lowerObject = UCD::get_LOWER_PropertyObject();
-    UCD::UnicodeSet lSet = lowerObject->GetCodepointSet("");
-
-    // ok wait this crazy  
-    UCD::codepoint_t theCodePoint = 0x41;
-    UCD::UnicodeSet equivalentCaselessCharacter = UCD::equivalentCodepoints(theCodePoint, UCD::EquivalenceOptions::Caseless);
-    UCD::UnicodeSet lowerCaseCharacter = equivalentCaselessCharacter & lSet;
-    
-
-    //UCD::property_t upperProperty = upperObject->getPropertyCode();
-    //UCD::UnicodeSet lInterUSet = lowerObject->GetCodepointSet(UCD::getPropertyEnumName(upperProperty));
-    
-
-    BixNum basisVar;
+    std::vector<PabloAST *> translationBasis = getInputStreamSet("translationBasis");
+    std::vector<PabloAST *> transformed(U21.size());
 
     Var * outputBasisVar = getOutputStreamVar("outputBasis");
-    for (unsigned i = 0; i < 21; i++) {
-        pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), U21[i]);
+    for (unsigned i = 0; i < U21.size(); i++) {
+        if (i < translationBasis.size()) {
+            transformed[i] = pb.createXor(translationBasis[i], U21[i]);
+        } else {
+            transformed[i] = U21[i];
+        }
+        pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), transformed[i]);
     }
 }
 
 
 typedef void (*ToLowerFunctionType)(uint32_t fd);
 
-ToLowerFunctionType generatePipeline(CPUDriver & pxDriver) {
+ToLowerFunctionType generatePipeline(CPUDriver & pxDriver, unicode::BitTranslationSets lowerTranslationSet) {
     // A Parabix program is build as a set of kernel calls called a pipeline.
     // A pipeline is construction using a Parabix driver object.
     auto & b = pxDriver.getBuilder();
@@ -159,14 +128,24 @@ ToLowerFunctionType generatePipeline(CPUDriver & pxDriver) {
     FilterByMask(P, u8index, U21_u8indexed, U21);
     SHOW_BIXNUM(U21);
 
+    // Turn the lower translation set into a vector of character classes
+    std::vector<re::CC *> lowerTranslation_ccs;
+    for (auto & b : lowerTranslationSet) {
+        lowerTranslation_ccs.push_back(re::makeCC(b, &cc::Unicode));
+    }
+
+    StreamSet * translationBasis = P->CreateStreamSet(lowerTranslation_ccs.size());
+    P->CreateKernelCall<CharClassesKernel>(lowerTranslation_ccs, U21, translationBasis);
+    SHOW_BIXNUM(translationBasis);
+
     // Perform the logic of the Lowerify kernel on the codepoiont values.
-    StreamSet * outputBasis = P->CreateStreamSet(21, 1);
-    P->CreateKernelCall<Lowerify>(U21, outputBasis);
-    SHOW_BIXNUM(outputBasis);
+    StreamSet * u32Basis = P->CreateStreamSet(21, 1);
+    P->CreateKernelCall<Lowerify>(U21, translationBasis, u32Basis);
+    SHOW_BIXNUM(u32Basis);
 
     // Convert back to UTF8 from codepoints.
     StreamSet * const OutputBasis = P->CreateStreamSet(8);
-    U21_to_UTF8(P, outputBasis, OutputBasis);
+    U21_to_UTF8(P, u32Basis, OutputBasis);
 
     SHOW_BIXNUM(OutputBasis);
 
@@ -185,8 +164,12 @@ int main(int argc, char *argv[]) {
     //  A CPU driver is capable of compiling and running Parabix programs on the CPU.
     CPUDriver driver("tolower");
 
+    // Get the lowercase mapping object, can create a translation set from that
+    UCD::CodePointPropertyObject* lowerPropertyObject = dyn_cast<UCD::CodePointPropertyObject>(UCD::get_LC_PropertyObject())
+    unicode::BitTranslationSets lowerTranslationSet = lowerPropertyObject->GetBitTransformSets();
+
     //  Build and compile the Parabix pipeline by calling the Pipeline function above.
-    ToLowerFunctionType fn = generatePipeline(driver);
+    ToLowerFunctionType fn = generatePipeline(driver, lowerTranslationSet);
     
     //  The compile function "fn"  can now be used.   It takes a file
     //  descriptor as an input, which is specified by the filename given by
