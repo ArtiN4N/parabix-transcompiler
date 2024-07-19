@@ -76,17 +76,11 @@ void Lowerify::generatePabloMethod() {
     //  pb is an object used for build Pablo language statements
     pablo::PabloBuilder pb(getEntryScope());
 
-    std::cout << "test3" << std::endl;
-
     // Get the input stream sets.
     std::vector<PabloAST *> U21 = getInputStreamSet("U21");
 
-    std::cout << "test2" << std::endl;
-
     std::vector<PabloAST *> translationBasis = getInputStreamSet("translationBasis");
     std::vector<PabloAST *> transformed(U21.size());
-
-    std::cout << "test" << std::endl;
 
     Var * outputBasisVar = getOutputStreamVar("u32Basis");
     for (unsigned i = 0; i < U21.size(); i++) {
@@ -103,8 +97,6 @@ void Lowerify::generatePabloMethod() {
 typedef void (*ToLowerFunctionType)(uint32_t fd);
 
 ToLowerFunctionType generatePipeline(CPUDriver & pxDriver, unicode::BitTranslationSets lowerTranslationSet) {
-    std::cout << "test9.5" << std::endl;
-
     // A Parabix program is build as a set of kernel calls called a pipeline.
     // A pipeline is construction using a Parabix driver object.
     auto & b = pxDriver.getBuilder();
@@ -113,8 +105,6 @@ ToLowerFunctionType generatePipeline(CPUDriver & pxDriver, unicode::BitTranslati
     //  The program will use a file descriptor as an input.
     Scalar * fileDescriptor = P->getInputScalar("inputFileDecriptor");
     StreamSet * ByteStream = P->CreateStreamSet(1, 8);
-
-    std::cout << "test9" << std::endl;
 
     //  ReadSourceKernel is a Parabix Kernel that produces a stream of bytes
     //  from a file descriptor.
@@ -126,8 +116,6 @@ ToLowerFunctionType generatePipeline(CPUDriver & pxDriver, unicode::BitTranslati
     P->CreateKernelCall<S2PKernel>(ByteStream, BasisBits);
     SHOW_BIXNUM(BasisBits);
 
-    std::cout << "test8" << std::endl;
-
     // Convert into codepoints
     StreamSet * u8index = P->CreateStreamSet(1, 1);
     P->CreateKernelCall<UTF8_index>(BasisBits, u8index);
@@ -136,13 +124,9 @@ ToLowerFunctionType generatePipeline(CPUDriver & pxDriver, unicode::BitTranslati
     StreamSet * U21_u8indexed = P->CreateStreamSet(21, 1);
     P->CreateKernelCall<UTF8_Decoder>(BasisBits, U21_u8indexed);
 
-    std::cout << "test7" << std::endl;
-
     StreamSet * U21 = P->CreateStreamSet(21, 1);
     FilterByMask(P, u8index, U21_u8indexed, U21);
     SHOW_BIXNUM(U21);
-
-    std::cout << "test6" << std::endl;
 
     // Turn the lower translation set into a vector of character classes
     std::vector<re::CC *> lowerTranslation_ccs;
@@ -150,13 +134,9 @@ ToLowerFunctionType generatePipeline(CPUDriver & pxDriver, unicode::BitTranslati
         lowerTranslation_ccs.push_back(re::makeCC(b, &cc::Unicode));
     }
 
-    std::cout << "test5" << std::endl;
-
     StreamSet * translationBasis = P->CreateStreamSet(lowerTranslation_ccs.size());
     P->CreateKernelCall<CharClassesKernel>(lowerTranslation_ccs, U21, translationBasis);
     SHOW_BIXNUM(translationBasis);
-
-    std::cout << "test4" << std::endl;
 
     // Perform the logic of the Lowerify kernel on the codepoiont values.
     StreamSet * u32Basis = P->CreateStreamSet(21, 1);
@@ -184,26 +164,16 @@ int main(int argc, char *argv[]) {
     //  A CPU driver is capable of compiling and running Parabix programs on the CPU.
     CPUDriver driver("tolower");
 
-    std::cout << "test13" << std::endl;
-
     // Get the lowercase mapping object, can create a translation set from that
     UCD::CodePointPropertyObject* lowerPropertyObject = dyn_cast<UCD::CodePointPropertyObject>(UCD::get_SLC_PropertyObject());
 
-    std::cout << "test12" << std::endl;
-
     unicode::BitTranslationSets lowerTranslationSet;
 
-    std::cout << "test11" << std::endl;
-
     lowerTranslationSet = lowerPropertyObject->GetBitTransformSets();
-
-    std::cout << "test10.5" << std::endl;
 
     //  Build and compile the Parabix pipeline by calling the Pipeline function above.
     ToLowerFunctionType fn = generatePipeline(driver, lowerTranslationSet);
     
-    std::cout << "test10" << std::endl;
-
     //  The compile function "fn"  can now be used.   It takes a file
     //  descriptor as an input, which is specified by the filename given by
     //  the inputFile command line option.
