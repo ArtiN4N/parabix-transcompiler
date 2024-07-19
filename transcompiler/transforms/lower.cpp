@@ -66,7 +66,7 @@ class Lowerify : public pablo::PabloKernel {
 public:
     Lowerify(KernelBuilder & b, StreamSet * U21, StreamSet * outputBasis)
     : pablo::PabloKernel(b, "Lowerify",
-                         {Binding{"U21", U21}}, {Binding{"translationBasis", translationBasis}, {Binding{"u32Basis", u32Basis}}
+                         {Binding{"U21", U21}}, {Binding{"translationBasis", translationBasis}}, {Binding{"u32Basis", u32Basis}},
                          ) {}
 protected:
     void generatePabloMethod() override;
