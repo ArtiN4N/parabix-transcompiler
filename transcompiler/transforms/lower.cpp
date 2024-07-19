@@ -88,7 +88,7 @@ void Lowerify::generatePabloMethod() {
 
     std::cout << "test" << std::endl;
 
-    Var * outputBasisVar = getOutputStreamVar("outputBasis");
+    Var * outputBasisVar = getOutputStreamVar("u32Basis");
     for (unsigned i = 0; i < U21.size(); i++) {
         if (i < translationBasis.size()) {
             transformed[i] = pb.createXor(translationBasis[i], U21[i]);
