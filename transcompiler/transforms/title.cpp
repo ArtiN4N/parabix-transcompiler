@@ -86,7 +86,7 @@ void Titleify::generatePabloMethod() {
 
     std::cout << "doing regex" << std::endl;
     // "(^|\\s)(.)"
-    re::RE * CC_re = re::simplifyRE(re::RE_Parser::parse("[a-p]"));
+    re::RE * CC_re = re::simplifyRE(re::RE_Parser::parse("[^\\s][.]"));
     std::cout << "doing link" << std::endl;
     CC_re = UCD::linkAndResolve(CC_re);
     std::cout << "doing externalize" << std::endl;
