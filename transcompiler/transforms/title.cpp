@@ -133,7 +133,9 @@ void Titleify::generatePabloMethod() {
         //pb.createDebugPrint(pb.createSel(regex, transformed[i+1], U21[i+1]));
         
         //pb.createDebugPrint();
-        pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i+1)), pb.createSel(pb.createAnd(regex, transformed[i]), transformed[i+1], U21[i+1]));
+
+        
+        pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i+1)), pb.createSel(pb.createEquals(pb.createAnd(regex, transformed[i]), regex), transformed[i+1], U21[i+1]));
     }
 
     
