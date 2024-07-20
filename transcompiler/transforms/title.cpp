@@ -107,7 +107,7 @@ void Titleify::generatePabloMethod() {
 
     std::cout << "doing index 0" << std::endl;
 
-    PabloAST * F1start = pb.createAdvance(regex, 1);
+    PabloAST * F1start = pb.createNot(pb.createAdvance(pb.createNot(regex), 1));
 
 
 
