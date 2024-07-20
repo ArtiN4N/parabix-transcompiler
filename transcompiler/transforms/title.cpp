@@ -134,10 +134,6 @@ void Titleify::generatePabloMethod() {
         std::cout << "assigning output" << std::endl;
         // Only select transformed characters when they are title eligible
         //pb.createDebugPrint(pb.createSel(regex, transformed[i+1], U21[i+1]));
-        if (i < 14) {
-            std::cout << "debug print " << i << std::endl;
-            pb.createDebugPrint(pb.createMatchStar(U21[i], regex));
-        }
         
         pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i+1)), pb.createSel(regex, transformed[i+1], U21[i+1]));
     }
