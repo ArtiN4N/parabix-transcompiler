@@ -208,7 +208,7 @@ int main(int argc, char *argv[]) {
 
     re::CC * titlePositions_CC = dyn_cast<re::CC>(CC_re);
 
-    fn = generatePipeline(driver, titleTranslationSet, titlePositions_CC);
+    ToTitleFunctionType fn = generatePipeline(driver, titleTranslationSet, titlePositions_CC);
     
     //  The compile function "fn"  can now be used.   It takes a file
     //  descriptor as an input, which is specified by the filename given by
