@@ -70,16 +70,21 @@ void Titleify::generatePabloMethod() {
     //cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
 
     std::vector<PabloAST *> translationBasis = getInputStreamSet("translationBasis");
-    PabloAST * beforeTitleElig = getInputStreamSet("beforeTitleElig")[0];
     std::vector<PabloAST *> transformed(U21.size());
 
     Var * outputBasisVar = getOutputStreamVar("u32Basis");
 
-    // A character class to find all title eligible characters
-    //PabloAST * titled = ccc.compileCC(re::makeCC(low_cp, hi_cp, &cc::Unicode));
+    // Since beforeTitleElig marks the characters before title eligible characters, we need to shift everything
+    // As well, the first character is title eligible
+    if (0 < translationBasis.size())
+        transformed[0] = pb.createXor(translationBasis[0], U21[0]);
+    else transformed[0] = U21[0];
+    pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(0)), transformed[0]);
 
     // For each bit of the input stream
-    for (unsigned i = 0; i < U21.size(); i++) {
+    for (unsigned i = 1; i < U21.size() - 1; i++) {
+        PabloAST * beforeTitleElig = getInputStreamSet("beforeTitleElig")[i + 1];
+
         // If the translation set covers said bit
         if (i < translationBasis.size()) // XOR the input bit with the transformation bit  
             transformed[i] = pb.createXor(translationBasis[i], U21[i]);
@@ -88,6 +93,11 @@ void Titleify::generatePabloMethod() {
         // Only select transformed characters when they are title eligible
         pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), pb.createSel(beforeTitleElig, transformed[i], U21[i]));
     }
+
+    if (U21.size() - 1 < translationBasis.size())
+        transformed[U21.size() - 1] = pb.createXor(translationBasis[U21.size() - 1], U21[U21.size() - 1]);
+    else transformed[U21.size() - 1] = U21[U21.size() - 1];
+    pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(U21.size() - 1)), transformed[U21.size() - 1]);
 }
 
 
