@@ -1,14 +1,18 @@
-#include <cstdio>
 #include <vector>
+
+#include <pablo/codegenstate.h>
+#include <pablo/pe_zeroes.h>        // for Zeroes
+#include <pablo/bixnum/bixnum.h>
+/*
+#include <cstdio>
+
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/IR/Module.h>
 #include <re/adt/re_name.h>
 #include <re/adt/re_re.h>
-#include <pablo/codegenstate.h>
-#include <pablo/pe_zeroes.h>        // for Zeroes
-#include <pablo/bixnum/bixnum.h>
+
 #include <grep/grep_kernel.h>
 #include <kernel/core/kernel_builder.h>
 #include <kernel/pipeline/pipeline_builder.h>
@@ -43,7 +47,8 @@
 #include <unicode/utf/utf_compiler.h>
 #include <unicode/utf/transchar.h>
 #include <codecvt>
-//#include <re/toolchain/toolchain.h>
+#include <re/toolchain/toolchain.h>
+*/
 
 #define SHOW_STREAM(name) if (codegen::EnableIllustrator) P->captureBitstream(#name, name)
 #define SHOW_BIXNUM(name) if (codegen::EnableIllustrator) P->captureBixNum(#name, name)
