@@ -167,6 +167,7 @@ ToTitleFunctionType generatePipeline(CPUDriver & pxDriver, unicode::BitTranslati
     std::vector<re::CC *> titlePositions_ccs = {titlePositions_CC};
     std::cout << "building elig streamset" << std::endl;
     P->CreateKernelCall<CharacterClassKernelBuilder>(titlePositions_ccs, U21, beforeTitleElig);
+    std::cout << "segflt?" << std::endl;
     SHOW_STREAM(beforeTitleElig);
 
     // Perform the logic of the Titleify kernel on the codepoiont values.
