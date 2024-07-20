@@ -129,12 +129,16 @@ void Titleify::generatePabloMethod() {
         pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), pb.createSel(regex, pb.createLookahead(transformed[i], 1), pb.createLookahead(U21[i], 1)));
     }
 
-    std::cout << "doing index final" << std::endl;
+    pb.
 
+    std::cout << "doing index final" << std::endl;
+    
+    /*
     if (U21.size() - 1 < translationBasis.size())
         transformed[U21.size() - 1] = pb.createXor(translationBasis[U21.size() - 1], U21[U21.size() - 1]);
     else transformed[U21.size() - 1] = U21[U21.size() - 1];
-    pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(U21.size() - 1)), transformed[U21.size() - 1]);
+    */
+    pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(U21.size() - 1)), U21[U21.size() - 1]);
 }
 
 
