@@ -10,10 +10,12 @@
 #include <llvm/Support/raw_ostream.h>
 
 #include <kernel/pipeline/driver/cpudriver.h>
-#include <kernel/core/kernel_builder.h>
 #include <kernel/pipeline/pipeline_builder.h>
+#include <kernel/unicode/utf8_decoder.h>
+#include <kernel/unicode/utf8gen.h>
 #include <kernel/basis/s2p_kernel.h>
 #include <kernel/basis/p2s_kernel.h>
+#include <kernel/core/kernel_builder.h>
 #include <kernel/io/source_kernel.h>
 #include <kernel/io/stdout_kernel.h>
 
@@ -42,8 +44,7 @@
 
 
 #include <kernel/unicode/charclasses.h>
-#include <kernel/unicode/utf8gen.h>
-#include <kernel/unicode/utf8_decoder.h>
+
 #include <kernel/unicode/UCD_property_kernel.h>
 #include <re/adt/re_name.h>
 
