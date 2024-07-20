@@ -23,6 +23,8 @@
 #include <re/cc/cc_compiler.h>
 #include <re/cc/cc_compiler_target.h>
 
+#include <grep/grep_kernel.h>
+
 #include <unicode/data/PropertyObjects.h>
 #include <unicode/data/PropertyObjectTable.h>
 #include <unicode/core/unicode_set.h>
@@ -38,7 +40,7 @@
 #include <re/adt/re_name.h>
 #include <re/adt/re_re.h>
 
-#include <grep/grep_kernel.h>
+
 
 #include <kernel/streamutils/deletion.h>
 #include <kernel/streamutils/pdep_kernel.h>
