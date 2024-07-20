@@ -84,10 +84,12 @@ void Titleify::generatePabloMethod() {
     else transformed[0] = U21[0];
     pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(0)), transformed[0]);
 
+    PabloAST * beforeTitleElig = getInputStreamSet("beforeTitleElig")[0];
+
     // For each bit of the input stream
     for (unsigned i = 1; i < U21.size() - 1; i++) {
         std::cout << "assigning beforeTitleElig: " << i << std::endl;
-        PabloAST * beforeTitleElig = getInputStreamSet("beforeTitleElig")[i + 1];
+        
 
         // If the translation set covers said bit
         if (i < translationBasis.size()) // XOR the input bit with the transformation bit  
