@@ -1,6 +1,7 @@
 #include <vector>
 #include <fcntl.h>
 #include <string>
+#include <iostream>
 
 #include <unicode/data/PropertyObjects.h>
 #include <unicode/data/PropertyObjectTable.h>
@@ -74,6 +75,8 @@ void Titleify::generatePabloMethod() {
 
     Var * outputBasisVar = getOutputStreamVar("u32Basis");
 
+    std::cout << "doing index 0" << std::endl;
+
     // Since beforeTitleElig marks the characters before title eligible characters, we need to shift everything
     // As well, the first character is title eligible
     if (0 < translationBasis.size())
@@ -83,6 +86,7 @@ void Titleify::generatePabloMethod() {
 
     // For each bit of the input stream
     for (unsigned i = 1; i < U21.size() - 1; i++) {
+        std::cout << "assigning beforeTitleElig: " << i << std::endl;
         PabloAST * beforeTitleElig = getInputStreamSet("beforeTitleElig")[i + 1];
 
         // If the translation set covers said bit
@@ -90,9 +94,12 @@ void Titleify::generatePabloMethod() {
             transformed[i] = pb.createXor(translationBasis[i], U21[i]);
         else transformed[i] = U21[i];
 
+        std::cout << "assigning output" << std::endl;
         // Only select transformed characters when they are title eligible
         pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), pb.createSel(beforeTitleElig, transformed[i], U21[i]));
     }
+
+    std::cout << "doing index final" << std::endl;
 
     if (U21.size() - 1 < translationBasis.size())
         transformed[U21.size() - 1] = pb.createXor(translationBasis[U21.size() - 1], U21[U21.size() - 1]);
