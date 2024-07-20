@@ -52,7 +52,7 @@ static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), 
 
 class Titleify : public pablo::PabloKernel {
 public:
-    Titleify(KernelBuilder & b, StreamSet * U21, StreamSet * translationBasis, StreamSet * u32Basis)
+    Titleify(KernelBuilder & b, StreamSet * U21, StreamSet * translationBasis, StreamSet * beforeTitleElig, StreamSet * u32Basis)
     : pablo::PabloKernel(b, "Titleify",
                         {Binding{"U21", U21}, Binding{"translationBasis", translationBasis}, Binding{"beforeTitleElig", beforeTitleElig}},
                             {Binding{"u32Basis", u32Basis}}) {}
