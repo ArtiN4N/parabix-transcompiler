@@ -25,6 +25,9 @@
 
 #include <unicode/data/PropertyObjects.h>
 #include <unicode/data/PropertyObjectTable.h>
+#include <unicode/core/unicode_set.h>
+#include <unicode/utf/utf_compiler.h>
+#include <unicode/utf/transchar.h>
 
 
 /*
@@ -54,13 +57,12 @@
 
 
 #include <unicode/algo/decomposition.h>
-#include <unicode/core/unicode_set.h>
+
 #include <unicode/data/CaseFolding.h>
 #include <unicode/data/Equivalence.h>
 #include <unicode/data/PropertyAliases.h>
 
-#include <unicode/utf/utf_compiler.h>
-#include <unicode/utf/transchar.h>
+
 #include <codecvt>
 #include <re/toolchain/toolchain.h>
 */
