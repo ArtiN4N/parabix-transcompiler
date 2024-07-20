@@ -157,20 +157,21 @@ ToTitleFunctionType generatePipeline(CPUDriver & pxDriver, unicode::BitTranslati
     P->CreateKernelCall<CharClassesKernel>(titleTranslation_ccs, U21, translationBasis);
     SHOW_BIXNUM(translationBasis);
 
-    
-
-
+    std::cout << "creating elig streamset" << std::endl;
     //  We need to know which characters are title eligible
     // Characters are title eligible if they come after a space
     StreamSet * beforeTitleElig = P->CreateStreamSet(1);
     
     //std::vector<re::CC *> beforeTitleElig_CC = {re::makeCC(0x0020, &cc::Unicode)};
+    std::cout << "creating titlepos ccs" << std::endl;
     std::vector<re::CC *> titlePositions_ccs = {titlePositions_CC};
+    std::cout << "building elig streamset" << std::endl;
     P->CreateKernelCall<CharacterClassKernelBuilder>(titlePositions_ccs, U21, beforeTitleElig);
     SHOW_STREAM(beforeTitleElig);
 
     // Perform the logic of the Titleify kernel on the codepoiont values.
     StreamSet * u32Basis = P->CreateStreamSet(21, 1);
+    std::cout << "passing elig streamset" << std::endl;
     P->CreateKernelCall<Titleify>(U21, translationBasis, beforeTitleElig, u32Basis);
     SHOW_BIXNUM(u32Basis);
 
