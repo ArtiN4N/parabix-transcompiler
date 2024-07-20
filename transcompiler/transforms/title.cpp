@@ -86,8 +86,8 @@ void Titleify::generatePabloMethod() {
 
     std::cout << "doing regex" << std::endl;
     // "(^|\\s)(.)\\X"
-    re::RE * CC_re = re::simplifyRE(re::RE_Parser::parse("[:.,;]"));
-    std::cout << "\\u0020.*$" << std::endl;
+    re::RE * CC_re = re::simplifyRE(re::RE_Parser::parse("\\s"));
+    std::cout << "\\s" << std::endl;
     std::cout << "doing link" << std::endl;
     CC_re = UCD::linkAndResolve(CC_re);
     std::cout << "doing externalize" << std::endl;
@@ -97,7 +97,9 @@ void Titleify::generatePabloMethod() {
     re::CC * titlePositions_CC = dyn_cast<re::CC>(CC_re);
     std::cout << "compiling regex" << std::endl;
 
-    PabloAST * regex = ccc.compileCC(titlePositions_CC);
+    PabloAST * re = ccc.compileCC(titlePositions_CC);
+    PabloAST * regex = pb.createLookahead(re, 1)
+    
 
     std::cout << "compiled regex" << std::endl;
 
