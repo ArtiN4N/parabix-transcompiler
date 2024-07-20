@@ -84,9 +84,12 @@ void Titleify::generatePabloMethod() {
     // These characters are valid for title case, and the rest will become lowercase
     // "^" is the start of a line, "\\s" is any whitespace character, "." is any char except for a newline
 
+    UCD::PropertyObject * whiteSpaces = UCD::get_WSPACE_propertyObject();
+    CD::UnicodeSet wspaceSet = whiteSpaces->GetCodepointSet("");
+    /*
     std::cout << "doing regex" << std::endl;
     // "(^|\\s)(.)\\X"
-    re::RE * CC_re = re::simplifyRE(re::RE_Parser::parse("[ ]"));
+    re::RE * CC_re = re::simplifyRE(re::RE_Parser::parse("\\u0020"));
     std::cout << "\\s" << std::endl;
     std::cout << "doing link" << std::endl;
     CC_re = UCD::linkAndResolve(CC_re);
@@ -98,6 +101,8 @@ void Titleify::generatePabloMethod() {
     std::cout << "compiling regex" << std::endl;
 
     PabloAST * regex = ccc.compileCC(titlePositions_CC);
+    */
+    PabloAST * whitespaces = ccc.compileCC(re::makeCC(wspaceSet));
     //PabloAST * regex = pb.createLookahead(re, 1);
     
 
@@ -107,7 +112,8 @@ void Titleify::generatePabloMethod() {
 
     std::cout << "doing index 0" << std::endl;
 
-    PabloAST * F1start = pb.createNot(pb.createAdvance(pb.createNot(regex), 1));
+    PabloAST * F1start = pb.createNot(pb.createAdvance(pb.createNot(whitespaces), 1));
+    //PabloAST * F2start = pb.createNot(pb.createAdvance(pb.createNot(regex2), 1));
 
 
 
@@ -243,6 +249,7 @@ int main(int argc, char *argv[]) {
     CPUDriver driver("toTitle");
 
     // Get the titlecase mapping object, can create a translation set from that
+
     UCD::CodePointPropertyObject* titlePropertyObject = dyn_cast<UCD::CodePointPropertyObject>(UCD::get_SUC_PropertyObject());
 
     unicode::BitTranslationSets titleTranslationSet;
