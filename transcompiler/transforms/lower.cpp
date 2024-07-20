@@ -36,6 +36,10 @@
 #include <unicode/utf/utf_compiler.h>
 #include <unicode/utf/transchar.h>
 
+#include <unicode/algo/decomposition.h>
+#include <unicode/data/CaseFolding.h>
+#include <unicode/data/Equivalence.h>
+#include <unicode/data/PropertyAliases.h>
 /*
 #include <cstdio>
 #include <llvm/IR/Module.h>
@@ -43,13 +47,9 @@
 #include <kernel/streamutils/pdep_kernel.h>
 #include <kernel/streamutils/run_index.h>
 #include <kernel/streamutils/string_insert.h>
-
 #include <toolchain/toolchain.h>
 #include <pablo/pablo_toolchain.h>
-#include <unicode/algo/decomposition.h>
-#include <unicode/data/CaseFolding.h>
-#include <unicode/data/Equivalence.h>
-#include <unicode/data/PropertyAliases.h>
+
 #include <codecvt>
 */
 
