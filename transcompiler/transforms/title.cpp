@@ -129,7 +129,7 @@ void Titleify::generatePabloMethod() {
         pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), pb.createSel(regex, pb.createLookahead(transformed[i], 1), pb.createLookahead(U21[i], 1)));
     }
 
-    pb.
+    
 
     std::cout << "doing index final" << std::endl;
     
