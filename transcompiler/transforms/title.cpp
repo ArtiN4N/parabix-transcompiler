@@ -138,7 +138,7 @@ void Titleify::generatePabloMethod() {
         transformed[U21.size() - 1] = pb.createXor(translationBasis[U21.size() - 1], U21[U21.size() - 1]);
     else transformed[U21.size() - 1] = U21[U21.size() - 1];
     */
-    pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(U21.size() - 1)), U21[U21.size() - 1]);
+    pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(U21.size() - 1)), transformed[U21.size() - 1]);
 }
 
 
