@@ -98,7 +98,7 @@ void Titleify::generatePabloMethod() {
     std::cout << "compiling regex" << std::endl;
 
     PabloAST * re = ccc.compileCC(titlePositions_CC);
-    PabloAST * regex = pb.createLookahead(re, 1)
+    PabloAST * regex = pb.createLookahead(re, 1);
     
 
     std::cout << "compiled regex" << std::endl;
