@@ -70,7 +70,7 @@ void Titleify::generatePabloMethod() {
     //cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
 
     std::vector<PabloAST *> translationBasis = getInputStreamSet("translationBasis");
-    std::vector<PabloAST *> beforeTitleElig = getInputStreamSet("beforeTitleElig");
+    PabloAST * beforeTitleElig = getInputStreamSet("beforeTitleElig")[0];
     std::vector<PabloAST *> transformed(U21.size());
 
     Var * outputBasisVar = getOutputStreamVar("u32Basis");
@@ -86,7 +86,7 @@ void Titleify::generatePabloMethod() {
         else transformed[i] = U21[i];
 
         // Only select transformed characters when they are title eligible
-        pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), pb.createSel(beforeTitleElig[i], transformed[i], U21[i]));
+        pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), pb.createSel(beforeTitleElig, transformed[i], U21[i]));
     }
 }
 
