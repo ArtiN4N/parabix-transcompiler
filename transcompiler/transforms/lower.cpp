@@ -43,7 +43,7 @@
 #include <unicode/utf/utf_compiler.h>
 #include <unicode/utf/transchar.h>
 #include <codecvt>
-#include <re/toolchain/toolchain.h>
+//#include <re/toolchain/toolchain.h>
 
 #define SHOW_STREAM(name) if (codegen::EnableIllustrator) P->captureBitstream(#name, name)
 #define SHOW_BIXNUM(name) if (codegen::EnableIllustrator) P->captureBixNum(#name, name)
