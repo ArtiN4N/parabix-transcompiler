@@ -32,7 +32,6 @@
 #include <toolchain/toolchain.h>
 #include <pablo/pablo_toolchain.h>
 #include <fcntl.h>
-#include <iostream>
 #include <kernel/pipeline/driver/cpudriver.h>
 #include <unicode/algo/decomposition.h>
 #include <unicode/core/unicode_set.h>
@@ -45,9 +44,6 @@
 #include <unicode/utf/transchar.h>
 #include <codecvt>
 #include <re/toolchain/toolchain.h>
-
-#include <iostream>
-
 
 #define SHOW_STREAM(name) if (codegen::EnableIllustrator) P->captureBitstream(#name, name)
 #define SHOW_BIXNUM(name) if (codegen::EnableIllustrator) P->captureBixNum(#name, name)
@@ -83,12 +79,14 @@ void Lowerify::generatePabloMethod() {
     std::vector<PabloAST *> transformed(U21.size());
 
     Var * outputBasisVar = getOutputStreamVar("u32Basis");
+
+    // For each bit of the input stream
     for (unsigned i = 0; i < U21.size(); i++) {
-        if (i < translationBasis.size()) {
+        // If the translation set covers said bit
+        if (i < translationBasis.size()) // XOR the input bit with the transformation bit  
             transformed[i] = pb.createXor(translationBasis[i], U21[i]);
-        } else {
-            transformed[i] = U21[i];
-        }
+        else transformed[i] = U21[i];
+
         pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), transformed[i]);
     }
 }
