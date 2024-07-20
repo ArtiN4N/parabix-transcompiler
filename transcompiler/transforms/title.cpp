@@ -208,7 +208,7 @@ int main(int argc, char *argv[]) {
 
     std::cout << "doing regex" << std::endl;
     // "(^|\\s)(.)"
-    re::RE * CC_re = re::simplifyRE(re::RE_Parser::parse("^"));
+    re::RE * CC_re = re::simplifyRE(re::RE_Parser::parse("(.)"));
     std::cout << "doing link" << std::endl;
     CC_re = UCD::linkAndResolve(CC_re);
     std::cout << "doing externalize" << std::endl;
