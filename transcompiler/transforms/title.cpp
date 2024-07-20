@@ -105,9 +105,6 @@ void Titleify::generatePabloMethod() {
 
     Var * outputBasisVar = getOutputStreamVar("u32Basis");
 
-    Var * U21Var = getOutputStreamVar("U21");
-    Var * transformedVar = getOutputStreamVar("U21");
-
     std::cout << "doing index 0" << std::endl;
 
     // Since beforeTitleElig marks the characters before title eligible characters, we need to shift everything
@@ -135,8 +132,8 @@ void Titleify::generatePabloMethod() {
         // Only select transformed characters when they are title eligible
         //pb.createDebugPrint(pb.createSel(regex, transformed[i+1], U21[i+1]));
         
-        pb.createDebugPrint(pb.createAnd(regex, transformed[i]));
-        pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i+1)), pb.createSel(regex, transformed[i+1], U21[i+1]));
+        pb.createDebugPrint();
+        pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i+1)), pb.createSel(pb.createAnd(regex, transformed[i]), transformed[i+1], U21[i+1]));
     }
 
     
