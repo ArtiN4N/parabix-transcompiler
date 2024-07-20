@@ -54,7 +54,7 @@ class Titleify : public pablo::PabloKernel {
 public:
     Titleify(KernelBuilder & b, StreamSet * U21, StreamSet * translationBasis, StreamSet * u32Basis)
     : pablo::PabloKernel(b, "Titleify",
-                        {Binding{"U21", U21}, Binding{"translationBasis", translationBasis}},
+                        {Binding{"U21", U21}, Binding{"translationBasis", translationBasis}, Binding{"beforeTitleElig", beforeTitleElig}},
                             {Binding{"u32Basis", u32Basis}}) {}
 protected:
     void generatePabloMethod() override;
@@ -67,10 +67,16 @@ void Titleify::generatePabloMethod() {
     // Get the input stream sets.
     std::vector<PabloAST *> U21 = getInputStreamSet("U21");
 
+    //cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
+
     std::vector<PabloAST *> translationBasis = getInputStreamSet("translationBasis");
+    std::vector<PabloAST *> beforeTitleElig = getInputStreamSet("beforeTitleElig");
     std::vector<PabloAST *> transformed(U21.size());
 
     Var * outputBasisVar = getOutputStreamVar("u32Basis");
+
+    // A character class to find all title eligible characters
+    //PabloAST * titled = ccc.compileCC(re::makeCC(low_cp, hi_cp, &cc::Unicode));
 
     // For each bit of the input stream
     for (unsigned i = 0; i < U21.size(); i++) {
@@ -79,7 +85,8 @@ void Titleify::generatePabloMethod() {
             transformed[i] = pb.createXor(translationBasis[i], U21[i]);
         else transformed[i] = U21[i];
 
-        pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), transformed[i]);
+        // Only select transformed characters when they are title eligible
+        pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), pb.createSel(beforeTitleElig[i], transformed[i], U21[i]));
     }
 }
 
@@ -128,9 +135,16 @@ ToTitleFunctionType generatePipeline(CPUDriver & pxDriver, unicode::BitTranslati
     P->CreateKernelCall<CharClassesKernel>(titleTranslation_ccs, U21, translationBasis);
     SHOW_BIXNUM(translationBasis);
 
+    //  We need to know which characters are title eligible
+    // Characters are title eligible if they come after a space
+    StreamSet * beforeTitleElig = P->CreateStreamSet(1);
+    std::vector<re::CC *> beforeTitleElig_CC = {re::makeCC(0x0020, &cc::Unicode)};
+    P->CreateKernelCall<CharacterClassKernelBuilder>(beforeTitleElig_CC, U21, beforeTitleElig);
+    SHOW_STREAM(beforeTitleElig);
+
     // Perform the logic of the Titleify kernel on the codepoiont values.
     StreamSet * u32Basis = P->CreateStreamSet(21, 1);
-    P->CreateKernelCall<Titleify>(U21, translationBasis, u32Basis);
+    P->CreateKernelCall<Titleify>(U21, translationBasis, beforeTitleElig, u32Basis);
     SHOW_BIXNUM(u32Basis);
 
     // Convert back to UTF8 from codepoints.
