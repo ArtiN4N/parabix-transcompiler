@@ -56,9 +56,9 @@ static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), 
 
 class Titleify : public pablo::PabloKernel {
 public:
-    Titleify(KernelBuilder & b, StreamSet * U21, StreamSet * translationBasis, re::CC * regex, StreamSet * u32Basis)
+    Titleify(KernelBuilder & b, StreamSet * U21, StreamSet * translationBasis, StreamSet * u32Basis)
     : pablo::PabloKernel(b, "Titleify",
-                        {Binding{"U21", U21}, Binding{"translationBasis", translationBasis}, Binding{"regex", regex}},
+                        {Binding{"U21", U21}, Binding{"translationBasis", translationBasis}},
                             {Binding{"u32Basis", u32Basis}}) {}
 protected:
     void generatePabloMethod() override;
@@ -79,7 +79,24 @@ void Titleify::generatePabloMethod() {
 
     //PabloAST * beforeTitleElig = getInputStreamSet("beforeTitleElig")[0];
     cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
-    PabloAST * regex = ccc.compileCC(getInput("regex"));
+
+    // We use regex to find the first charatcer, and every character after a space
+    // These characters are valid for title case, and the rest will become lowercase
+    // "^" is the start of a line, "\\s" is any whitespace character, "." is any char except for a newline
+
+    std::cout << "doing regex" << std::endl;
+    // "(^|\\s)(.)"
+    re::RE * CC_re = re::simplifyRE(re::RE_Parser::parse("(.)"));
+    std::cout << "doing link" << std::endl;
+    CC_re = UCD::linkAndResolve(CC_re);
+    std::cout << "doing externalize" << std::endl;
+    CC_re = UCD::externalizeProperties(CC_re);
+
+    std::cout << "doing recast" << std::endl;
+    re::CC * titlePositions_CC = dyn_cast<re::CC>(CC_re);
+    std::cout << "doing fn" << std::endl;
+
+    PabloAST * regex = ccc.compileCC(titlePositions_CC);
 
     Var * outputBasisVar = getOutputStreamVar("u32Basis");
 
@@ -118,7 +135,7 @@ void Titleify::generatePabloMethod() {
 
 typedef void (*ToTitleFunctionType)(uint32_t fd);
 
-ToTitleFunctionType generatePipeline(CPUDriver & pxDriver, unicode::BitTranslationSets titleTranslationSet, re::CC * titlePositions_CC) {
+ToTitleFunctionType generatePipeline(CPUDriver & pxDriver, unicode::BitTranslationSets titleTranslationSet) {
     // A Parabix program is build as a set of kernel calls called a pipeline.
     // A pipeline is construction using a Parabix driver object.
     auto & b = pxDriver.getBuilder();
@@ -176,7 +193,7 @@ ToTitleFunctionType generatePipeline(CPUDriver & pxDriver, unicode::BitTranslati
     // Perform the logic of the Titleify kernel on the codepoiont values.
     StreamSet * u32Basis = P->CreateStreamSet(21, 1);
     std::cout << "passing elig streamset" << std::endl;
-    P->CreateKernelCall<Titleify>(U21, translationBasis, titlePositions_CC, u32Basis);
+    P->CreateKernelCall<Titleify>(U21, translationBasis, u32Basis);
     SHOW_BIXNUM(u32Basis);
 
     // Convert back to UTF8 from codepoints.
@@ -207,22 +224,8 @@ int main(int argc, char *argv[]) {
 
     titleTranslationSet = titlePropertyObject->GetBitTransformSets();
 
-    // We use regex to find the first charatcer, and every character after a space
-    // These characters are valid for title case, and the rest will become lowercase
-    // "^" is the start of a line, "\\s" is any whitespace character, "." is any char except for a newline
-
-    std::cout << "doing regex" << std::endl;
-    // "(^|\\s)(.)"
-    re::RE * CC_re = re::simplifyRE(re::RE_Parser::parse("(.)"));
-    std::cout << "doing link" << std::endl;
-    CC_re = UCD::linkAndResolve(CC_re);
-    std::cout << "doing externalize" << std::endl;
-    CC_re = UCD::externalizeProperties(CC_re);
-
-    std::cout << "doing recast" << std::endl;
-    re::CC * titlePositions_CC = dyn_cast<re::CC>(CC_re);
-    std::cout << "doing fn" << std::endl;
-    ToTitleFunctionType fn = generatePipeline(driver, titleTranslationSet, titlePositions_CC);
+    
+    ToTitleFunctionType fn = generatePipeline(driver, titleTranslationSet);
     
     //  The compile function "fn"  can now be used.   It takes a file
     //  descriptor as an input, which is specified by the filename given by
