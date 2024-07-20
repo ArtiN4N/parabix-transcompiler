@@ -56,9 +56,9 @@ static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), 
 
 class Titleify : public pablo::PabloKernel {
 public:
-    Titleify(KernelBuilder & b, StreamSet * U21, StreamSet * translationBasis, StreamSet * beforeTitleElig, StreamSet * u32Basis)
+    Titleify(KernelBuilder & b, StreamSet * U21, StreamSet * translationBasis, re::CC * regex, StreamSet * u32Basis)
     : pablo::PabloKernel(b, "Titleify",
-                        {Binding{"U21", U21}, Binding{"translationBasis", translationBasis}, Binding{"beforeTitleElig", beforeTitleElig}},
+                        {Binding{"U21", U21}, Binding{"translationBasis", translationBasis}, Binding{"regex", regex}},
                             {Binding{"u32Basis", u32Basis}}) {}
 protected:
     void generatePabloMethod() override;
@@ -70,13 +70,16 @@ void Titleify::generatePabloMethod() {
 
     // Get the input stream sets.
     std::vector<PabloAST *> U21 = getInputStreamSet("U21");
+    
 
     //cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
 
     std::vector<PabloAST *> translationBasis = getInputStreamSet("translationBasis");
     std::vector<PabloAST *> transformed(U21.size());
 
-    PabloAST * beforeTitleElig = getInputStreamSet("beforeTitleElig")[0];
+    //PabloAST * beforeTitleElig = getInputStreamSet("beforeTitleElig")[0];
+    cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
+    PabloAST * regex = ccc.compileCC(getInput("regex"));
 
     Var * outputBasisVar = getOutputStreamVar("u32Basis");
 
@@ -101,7 +104,7 @@ void Titleify::generatePabloMethod() {
 
         std::cout << "assigning output" << std::endl;
         // Only select transformed characters when they are title eligible
-        pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), pb.createSel(beforeTitleElig, transformed[i], U21[i]));
+        pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), pb.createSel(regex, transformed[i], U21[i]));
     }
 
     std::cout << "doing index final" << std::endl;
@@ -160,20 +163,20 @@ ToTitleFunctionType generatePipeline(CPUDriver & pxDriver, unicode::BitTranslati
     std::cout << "creating elig streamset" << std::endl;
     //  We need to know which characters are title eligible
     // Characters are title eligible if they come after a space
-    StreamSet * beforeTitleElig = P->CreateStreamSet(1);
+    //StreamSet * beforeTitleElig = P->CreateStreamSet(1);
     
     //std::vector<re::CC *> beforeTitleElig_CC = {re::makeCC(0x0020, &cc::Unicode)};
     std::cout << "creating titlepos ccs" << std::endl;
-    std::vector<re::CC *> titlePositions_ccs = {titlePositions_CC};
+    //std::vector<re::CC *> titlePositions_ccs = {titlePositions_CC};
     std::cout << "building elig streamset" << std::endl;
-    P->CreateKernelCall<CharacterClassKernelBuilder>(titlePositions_ccs, U21, beforeTitleElig);
+    //P->CreateKernelCall<CharacterClassKernelBuilder>(titlePositions_ccs, U21, beforeTitleElig);
     std::cout << "segflt?" << std::endl;
-    SHOW_STREAM(beforeTitleElig);
+    //SHOW_STREAM(beforeTitleElig);
 
     // Perform the logic of the Titleify kernel on the codepoiont values.
     StreamSet * u32Basis = P->CreateStreamSet(21, 1);
     std::cout << "passing elig streamset" << std::endl;
-    P->CreateKernelCall<Titleify>(U21, translationBasis, beforeTitleElig, u32Basis);
+    P->CreateKernelCall<Titleify>(U21, translationBasis, titlePositions_CC, u32Basis);
     SHOW_BIXNUM(u32Basis);
 
     // Convert back to UTF8 from codepoints.
