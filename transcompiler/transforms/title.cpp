@@ -123,17 +123,19 @@ void Titleify::generatePabloMethod() {
     pb.createDebugPrint(regex);
 
     for (unsigned i = 0; i < U21.size() - 1; i++) {
-        std::cout << "assigning beforeTitleElig: " << i << std::endl;
+        
         
 
         // If the translation set covers said bit
-        if (i+1 < translationBasis.size()) // XOR the input bit with the transformation bit  
+        if (i < translationBasis.size()) // XOR the input bit with the transformation bit  
             transformed[i+1] = pb.createXor(translationBasis[i+1], U21[i+1]);
         else transformed[i+1] = U21[i+1];
 
         std::cout << "assigning output" << std::endl;
         // Only select transformed characters when they are title eligible
         //pb.createDebugPrint(pb.createSel(regex, transformed[i+1], U21[i+1]));
+        std::cout << "debug print " << i << std::endl;
+        pb.createDebugPrint(pb.createMatchStar(U21[i], regex));
         pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i+1)), pb.createSel(regex, transformed[i+1], U21[i+1]));
     }
 
