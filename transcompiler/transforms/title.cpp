@@ -94,9 +94,11 @@ void Titleify::generatePabloMethod() {
 
     std::cout << "doing recast" << std::endl;
     re::CC * titlePositions_CC = dyn_cast<re::CC>(CC_re);
-    std::cout << "doing fn" << std::endl;
+    std::cout << "compiled regex" << std::endl;
 
     PabloAST * regex = ccc.compileCC(titlePositions_CC);
+
+    std::cout << "compiled regex" << std::endl;
 
     Var * outputBasisVar = getOutputStreamVar("u32Basis");
 
