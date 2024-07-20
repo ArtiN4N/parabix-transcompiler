@@ -202,10 +202,10 @@ int main(int argc, char *argv[]) {
 
     titleTranslationSet = titlePropertyObject->GetBitTransformSets();
 
-    //  Build and compile the Parabix pipeline by calling the Pipeline function above.
-    //ToTitleFunctionType fn = generatePipeline(driver, titleTranslationSet);
-
-    re::RE * CC_re = re::simplifyRE(re::RE_Parser::parse("[a-p]"));
+    // We use regex to find the first charatcer, and every character after a space
+    // These characters are valid for title case, and the rest will become lowercase
+    // "^" is the start of a line, "\\s" is any whitespace character, "." is any char except for a newline
+    re::RE * CC_re = re::simplifyRE(re::RE_Parser::parse("(^|\\s)(.)"));
     CC_re = UCD::linkAndResolve(CC_re);
     CC_re = UCD::externalizeProperties(CC_re);
 
