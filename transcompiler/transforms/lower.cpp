@@ -11,6 +11,8 @@
 
 #include <kernel/pipeline/driver/cpudriver.h>
 #include <kernel/pipeline/pipeline_builder.h>
+#include <kernel/unicode/UCD_property_kernel.h>
+#include <kernel/unicode/charclasses.h>
 #include <kernel/unicode/utf8_decoder.h>
 #include <kernel/unicode/utf8gen.h>
 #include <kernel/basis/s2p_kernel.h>
@@ -19,6 +21,9 @@
 #include <kernel/io/source_kernel.h>
 #include <kernel/io/stdout_kernel.h>
 
+#include <re/toolchain/toolchain.h>
+#include <re/adt/re_name.h>
+#include <re/adt/re_re.h>
 #include <re/cc/cc_kernel.h>
 #include <re/cc/cc_compiler.h>
 #include <re/cc/cc_compiler_target.h>
@@ -31,42 +36,21 @@
 #include <unicode/utf/utf_compiler.h>
 #include <unicode/utf/transchar.h>
 
-
 /*
 #include <cstdio>
-
-
 #include <llvm/IR/Module.h>
-#include <re/adt/re_name.h>
-#include <re/adt/re_re.h>
-
-
-
 #include <kernel/streamutils/deletion.h>
 #include <kernel/streamutils/pdep_kernel.h>
 #include <kernel/streamutils/run_index.h>
 #include <kernel/streamutils/string_insert.h>
 
-
-#include <kernel/unicode/charclasses.h>
-
-#include <kernel/unicode/UCD_property_kernel.h>
-#include <re/adt/re_name.h>
-
-
 #include <toolchain/toolchain.h>
 #include <pablo/pablo_toolchain.h>
-
-
 #include <unicode/algo/decomposition.h>
-
 #include <unicode/data/CaseFolding.h>
 #include <unicode/data/Equivalence.h>
 #include <unicode/data/PropertyAliases.h>
-
-
 #include <codecvt>
-#include <re/toolchain/toolchain.h>
 */
 
 #define SHOW_STREAM(name) if (codegen::EnableIllustrator) P->captureBitstream(#name, name)
