@@ -73,6 +73,8 @@ void Titleify::generatePabloMethod() {
     std::vector<PabloAST *> translationBasis = getInputStreamSet("translationBasis");
     std::vector<PabloAST *> transformed(U21.size());
 
+    PabloAST * beforeTitleElig = getInputStreamSet("beforeTitleElig")[0];
+
     Var * outputBasisVar = getOutputStreamVar("u32Basis");
 
     std::cout << "doing index 0" << std::endl;
@@ -83,8 +85,6 @@ void Titleify::generatePabloMethod() {
         transformed[0] = pb.createXor(translationBasis[0], U21[0]);
     else transformed[0] = U21[0];
     pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(0)), transformed[0]);
-
-    PabloAST * beforeTitleElig = getInputStreamSet("beforeTitleElig")[0];
 
     // For each bit of the input stream
     for (unsigned i = 1; i < U21.size() - 1; i++) {
@@ -112,7 +112,7 @@ void Titleify::generatePabloMethod() {
 
 typedef void (*ToTitleFunctionType)(uint32_t fd);
 
-ToTitleFunctionType generatePipeline(CPUDriver & pxDriver, unicode::BitTranslationSets titleTranslationSet) {
+ToTitleFunctionType generatePipeline(CPUDriver & pxDriver, unicode::BitTranslationSets titleTranslationSet, re::CC * titlePositions_CC) {
     // A Parabix program is build as a set of kernel calls called a pipeline.
     // A pipeline is construction using a Parabix driver object.
     auto & b = pxDriver.getBuilder();
@@ -154,11 +154,16 @@ ToTitleFunctionType generatePipeline(CPUDriver & pxDriver, unicode::BitTranslati
     P->CreateKernelCall<CharClassesKernel>(titleTranslation_ccs, U21, translationBasis);
     SHOW_BIXNUM(translationBasis);
 
+    
+
+
     //  We need to know which characters are title eligible
     // Characters are title eligible if they come after a space
     StreamSet * beforeTitleElig = P->CreateStreamSet(1);
-    std::vector<re::CC *> beforeTitleElig_CC = {re::makeCC(0x0020, &cc::Unicode)};
-    P->CreateKernelCall<CharacterClassKernelBuilder>(beforeTitleElig_CC, U21, beforeTitleElig);
+    
+    //std::vector<re::CC *> beforeTitleElig_CC = {re::makeCC(0x0020, &cc::Unicode)};
+    std::vector<re::CC *> titlePositions_ccs = {titlePositions_CC};
+    P->CreateKernelCall<CharacterClassKernelBuilder>(titlePositions_ccs, U21, beforeTitleElig);
     SHOW_STREAM(beforeTitleElig);
 
     // Perform the logic of the Titleify kernel on the codepoiont values.
@@ -195,7 +200,15 @@ int main(int argc, char *argv[]) {
     titleTranslationSet = titlePropertyObject->GetBitTransformSets();
 
     //  Build and compile the Parabix pipeline by calling the Pipeline function above.
-    ToTitleFunctionType fn = generatePipeline(driver, titleTranslationSet);
+    //ToTitleFunctionType fn = generatePipeline(driver, titleTranslationSet);
+
+    re::RE * CC_re = re::simplifyRE(re::RE_Parser::parse("[a-p]"));
+    CC_re = UCD::linkAndResolve(CC_re);
+    CC_re = UCD::externalizeProperties(CC_re);
+
+    re::CC * titlePositions_CC = dyn_cast<re::CC>(CC_re);
+
+    fn = generatePipeline(driver, titleTranslationSet, titlePositions_CC);
     
     //  The compile function "fn"  can now be used.   It takes a file
     //  descriptor as an input, which is specified by the filename given by
