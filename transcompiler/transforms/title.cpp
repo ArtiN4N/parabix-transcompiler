@@ -126,7 +126,7 @@ void Titleify::generatePabloMethod() {
 
         std::cout << "assigning output" << std::endl;
         // Only select transformed characters when they are title eligible
-        pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), pb.createSel(regex, pb.createAdvance(transformed[i], 1), pb.createAdvance(U21[i], 1)));
+        pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), pb.createSel(regex, pb.createLookahead(transformed[i], 1), pb.createLookahead(U21[i], 1)));
     }
 
     std::cout << "doing index final" << std::endl;
