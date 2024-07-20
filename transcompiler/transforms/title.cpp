@@ -125,7 +125,7 @@ void Titleify::generatePabloMethod() {
         
 
         // If the translation set covers said bit
-        if (i < translationBasis.size()) // XOR the input bit with the transformation bit  
+        if (i+1 < translationBasis.size()) // XOR the input bit with the transformation bit  
             transformed[i+1] = pb.createXor(translationBasis[i+1], U21[i+1]);
         else transformed[i+1] = U21[i+1];
 
