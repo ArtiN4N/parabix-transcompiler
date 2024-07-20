@@ -1,4 +1,6 @@
 #include <vector>
+#include <fcntl.h>
+#include <string>
 
 #include <pablo/codegenstate.h>
 //#include <pablo/pe_zeroes.h>        // for Zeroes
@@ -45,10 +47,10 @@
 #include <kernel/unicode/UCD_property_kernel.h>
 #include <re/adt/re_name.h>
 
-#include <string>
+
 #include <toolchain/toolchain.h>
 #include <pablo/pablo_toolchain.h>
-#include <fcntl.h>
+
 
 #include <unicode/algo/decomposition.h>
 #include <unicode/core/unicode_set.h>
