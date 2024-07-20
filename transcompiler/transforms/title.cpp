@@ -205,12 +205,17 @@ int main(int argc, char *argv[]) {
     // We use regex to find the first charatcer, and every character after a space
     // These characters are valid for title case, and the rest will become lowercase
     // "^" is the start of a line, "\\s" is any whitespace character, "." is any char except for a newline
+
+    std::cout << "doing regex" << std::endl;
     re::RE * CC_re = re::simplifyRE(re::RE_Parser::parse("(^|\\s)(.)"));
+    std::cout << "doing link" << std::endl;
     CC_re = UCD::linkAndResolve(CC_re);
+    std::cout << "doing externalize" << std::endl;
     CC_re = UCD::externalizeProperties(CC_re);
 
+    std::cout << "doing recast" << std::endl;
     re::CC * titlePositions_CC = dyn_cast<re::CC>(CC_re);
-
+    std::cout << "doing fn" << std::endl;
     ToTitleFunctionType fn = generatePipeline(driver, titleTranslationSet, titlePositions_CC);
     
     //  The compile function "fn"  can now be used.   It takes a file
