@@ -36,11 +36,13 @@
 #include <unicode/utf/utf_compiler.h>
 #include <unicode/utf/transchar.h>
 
+
+/*
 #include <unicode/algo/decomposition.h>
 #include <unicode/data/CaseFolding.h>
 #include <unicode/data/Equivalence.h>
 #include <unicode/data/PropertyAliases.h>
-/*
+
 #include <cstdio>
 #include <llvm/IR/Module.h>
 #include <kernel/streamutils/deletion.h>
