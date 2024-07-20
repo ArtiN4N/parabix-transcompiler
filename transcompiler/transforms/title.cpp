@@ -97,8 +97,8 @@ void Titleify::generatePabloMethod() {
     re::CC * titlePositions_CC = dyn_cast<re::CC>(CC_re);
     std::cout << "compiling regex" << std::endl;
 
-    PabloAST * re = ccc.compileCC(titlePositions_CC);
-    PabloAST * regex = pb.createLookahead(re, 1);
+    PabloAST * regex = ccc.compileCC(titlePositions_CC);
+    //PabloAST * regex = pb.createLookahead(re, 1);
     
 
     std::cout << "compiled regex" << std::endl;
@@ -126,7 +126,7 @@ void Titleify::generatePabloMethod() {
 
         std::cout << "assigning output" << std::endl;
         // Only select transformed characters when they are title eligible
-        pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), pb.createSel(regex, transformed[i], U21[i]));
+        pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), pb.createSel(regex, pb.createAdvance(transformed[i], 1), pb.createAdvance(U21[i], 1)));
     }
 
     std::cout << "doing index final" << std::endl;
