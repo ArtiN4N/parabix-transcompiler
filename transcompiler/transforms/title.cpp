@@ -207,7 +207,8 @@ int main(int argc, char *argv[]) {
     // "^" is the start of a line, "\\s" is any whitespace character, "." is any char except for a newline
 
     std::cout << "doing regex" << std::endl;
-    re::RE * CC_re = re::simplifyRE(re::RE_Parser::parse("(^|\\s)(.)"));
+    // "(^|\\s)(.)"
+    re::RE * CC_re = re::simplifyRE(re::RE_Parser::parse("[a-p]"));
     std::cout << "doing link" << std::endl;
     CC_re = UCD::linkAndResolve(CC_re);
     std::cout << "doing externalize" << std::endl;
