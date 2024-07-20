@@ -85,8 +85,8 @@ void Titleify::generatePabloMethod() {
     // "^" is the start of a line, "\\s" is any whitespace character, "." is any char except for a newline
 
     std::cout << "doing regex" << std::endl;
-    // "(^|\\s)(.)"
-    re::RE * CC_re = re::simplifyRE(re::RE_Parser::parse("\\u0020\\X"));
+    // "(^|\\s)(.)\\X"
+    re::RE * CC_re = re::simplifyRE(re::RE_Parser::parse("\\u0020"));
     std::cout << "\\u0020\\X" << std::endl;
     std::cout << "doing link" << std::endl;
     CC_re = UCD::linkAndResolve(CC_re);
