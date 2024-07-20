@@ -107,6 +107,10 @@ void Titleify::generatePabloMethod() {
 
     std::cout << "doing index 0" << std::endl;
 
+    PabloAST * F1start = pb.createAdvance(regex, 1);
+
+
+
     // Since beforeTitleElig marks the characters before title eligible characters, we need to shift everything
     // As well, the first character is title eligible
     if (0 < translationBasis.size())
@@ -132,10 +136,11 @@ void Titleify::generatePabloMethod() {
         // Only select transformed characters when they are title eligible
         //pb.createDebugPrint(pb.createSel(regex, transformed[i+1], U21[i+1]));
         
-        pb.createDebugPrint(pb.createEquals(pb.createAnd(regex, transformed[i]), regex));
+        //pb.createDebugPrint(pb.createEquals(pb.createAnd(regex, transformed[i]), regex));
+        //pb.createIf(regex, )
 
         
-        pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i+1)), pb.createSel(regex, transformed[i+1], U21[i+1]));
+        pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i+1)), pb.createSel(F1start, transformed[i+1], U21[i+1]));
     }
 
     
