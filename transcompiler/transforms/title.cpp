@@ -74,8 +74,8 @@ void Titleify::generatePabloMethod() {
     std::vector<PabloAST *> U21 = getInputStreamSet("U21");
     cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
 
-    std::vector<PabloAST *> titleBasis = getInputStreamSet("translationBasis");
-    std::vector<PabloAST *> lowerBasis = getInputStreamSet("translationBasis");
+    std::vector<PabloAST *> titleBasis = getInputStreamSet("titleBasis");
+    std::vector<PabloAST *> lowerBasis = getInputStreamSet("lowerBasis");
 
     std::vector<PabloAST *> transformedTitle(U21.size());
     std::vector<PabloAST *> transformedLower(U21.size());
