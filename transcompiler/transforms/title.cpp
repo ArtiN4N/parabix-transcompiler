@@ -129,8 +129,8 @@ void Titleify::generatePabloMethod() {
     //pb.createIf(,);
     //pb.create
     // For each bit of the input stream
-    pb.createDebugPrint(regex);
-    pb.createDebugPrint(F1start);
+    //pb.createDebugPrint(regex);
+    //pb.createDebugPrint(F1start);
 
     for (unsigned i = 0; i < U21.size() - 1; i++) {
         
