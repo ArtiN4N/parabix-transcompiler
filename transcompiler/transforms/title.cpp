@@ -87,7 +87,7 @@ void Titleify::generatePabloMethod() {
     // "^" is the start of a line, "\\s" is any whitespace character, "." is any char except for a newline
 
     UCD::PropertyObject * whiteSpaces = UCD::get_WSPACE_PropertyObject();
-    CD::UnicodeSet wspaceSet = whiteSpaces->GetCodepointSet("");
+    UCD::UnicodeSet wspaceSet = whiteSpaces->GetCodepointSet("");
     /*
     std::cout << "doing regex" << std::endl;
     // "(^|\\s)(.)\\X"
