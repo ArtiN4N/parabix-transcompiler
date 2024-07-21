@@ -160,7 +160,7 @@ int main(int argc, char *argv[]) {
     CPUDriver driver("tolower");
 
     //  Build and compile the Parabix pipeline by calling the Pipeline function above.
-    ToLowerFunctionType fn = generatePipeline(driver, lowerTranslationSet);
+    ToLowerFunctionType fn = generatePipeline(driver);
     
     //  The compile function "fn"  can now be used.   It takes a file
     //  descriptor as an input, which is specified by the filename given by
