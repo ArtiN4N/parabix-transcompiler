@@ -72,103 +72,41 @@ void Titleify::generatePabloMethod() {
 
     // Get the input stream sets.
     std::vector<PabloAST *> U21 = getInputStreamSet("U21");
-    
-
-    //cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
 
     std::vector<PabloAST *> translationBasis = getInputStreamSet("translationBasis");
     std::vector<PabloAST *> transformed(U21.size());
 
-    //PabloAST * beforeTitleElig = getInputStreamSet("beforeTitleElig")[0];
     cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
-
-    // We use regex to find the first charatcer, and every character after a space
-    // These characters are valid for title case, and the rest will become lowercase
-    // "^" is the start of a line, "\\s" is any whitespace character, "." is any char except for a newline
 
     UCD::PropertyObject * whiteSpaces = UCD::get_WSPACE_PropertyObject();
     UCD::UnicodeSet wspaceSet = whiteSpaces->GetCodepointSet("");
-    /*
-    std::cout << "doing regex" << std::endl;
-    // "(^|\\s)(.)\\X"
-    re::RE * CC_re = re::simplifyRE(re::RE_Parser::parse("\\u0020"));
-    std::cout << "\\s" << std::endl;
-    std::cout << "doing link" << std::endl;
-    CC_re = UCD::linkAndResolve(CC_re);
-    std::cout << "doing externalize" << std::endl;
-    CC_re = UCD::externalizeProperties(CC_re);
 
-    std::cout << "doing recast" << std::endl;
-    re::CC * titlePositions_CC = dyn_cast<re::CC>(CC_re);
-    std::cout << "compiling regex" << std::endl;
-
-    PabloAST * regex = ccc.compileCC(titlePositions_CC);
-    */
     PabloAST * whitespaces = ccc.compileCC(re::makeCC(wspaceSet));
-    //PabloAST * regex = pb.createLookahead(re, 1);
-    
 
-    std::cout << "compiled regex" << std::endl;
 
     Var * outputBasisVar = getOutputStreamVar("u32Basis");
 
-    std::cout << "doing index 0" << std::endl;
-
     PabloAST * F1start = pb.createNot(pb.createAdvance(pb.createNot(whitespaces), 1));
-    //PabloAST * F2start = pb.createNot(pb.createAdvance(pb.createNot(regex2), 1));
 
 
-
-    // Since beforeTitleElig marks the characters before title eligible characters, we need to shift everything
-    // As well, the first character is title eligible
-    if (0 < translationBasis.size())
-        transformed[0] = pb.createXor(translationBasis[0], U21[0]);
-    else transformed[0] = U21[0];
-    pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(0)), transformed[0]);
-
-    //pb.createIf(,);
-    //pb.create
-    // For each bit of the input stream
-    //pb.createDebugPrint(regex);
-    //pb.createDebugPrint(F1start);
-
-    for (unsigned i = 0; i < U21.size() - 1; i++) {
+    for (unsigned i = 0; i < U21.size(); i++) {
         
         
 
         // If the translation set covers said bit
-        if (i+1 < translationBasis.size()) // XOR the input bit with the transformation bit  
-            transformed[i+1] = pb.createXor(translationBasis[i+1], U21[i+1]);
-        else transformed[i+1] = U21[i+1];
-
-        //std::cout << "assigning output" << std::endl;
-        // Only select transformed characters when they are title eligible
-        //pb.createDebugPrint(pb.createSel(regex, transformed[i+1], U21[i+1]));
-        
-        //pb.createDebugPrint(pb.createEquals(pb.createAnd(regex, transformed[i]), regex));
-        //pb.createIf(regex, )
+        if (i < translationBasis.size()) // XOR the input bit with the transformation bit  
+            transformed[i] = pb.createXor(translationBasis[i], U21[i]);
+        else transformed[i] = U21[i];
 
         
-        pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i+1)), pb.createSel(F1start, transformed[i+1], U21[i+1]));
+        pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), pb.createSel(F1start, transformed[i], U21[i]));
     }
-
-    
-    
-
-    std::cout << "doing index final" << std::endl;
-    
-    /*
-    if (U21.size() - 1 < translationBasis.size())
-        transformed[U21.size() - 1] = pb.createXor(translationBasis[U21.size() - 1], U21[U21.size() - 1]);
-    else transformed[U21.size() - 1] = U21[U21.size() - 1];
-    */
-    pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(U21.size() - 1)), transformed[U21.size() - 1]);
 }
 
 
 typedef void (*ToTitleFunctionType)(uint32_t fd);
 
-ToTitleFunctionType generatePipeline(CPUDriver & pxDriver, unicode::BitTranslationSets titleTranslationSet) {
+ToTitleFunctionType generatePipeline(CPUDriver & pxDriver) {
     // A Parabix program is build as a set of kernel calls called a pipeline.
     // A pipeline is construction using a Parabix driver object.
     auto & b = pxDriver.getBuilder();
@@ -200,6 +138,10 @@ ToTitleFunctionType generatePipeline(CPUDriver & pxDriver, unicode::BitTranslati
     FilterByMask(P, u8index, U21_u8indexed, U21);
     SHOW_BIXNUM(U21);
 
+    UCD::CodePointPropertyObject* titlePropertyObject = dyn_cast<UCD::CodePointPropertyObject>(UCD::get_SUC_PropertyObject());
+    unicode::BitTranslationSets titleTranslationSet;
+    titleTranslationSet = titlePropertyObject->GetBitTransformSets();
+
     // Turn the title translation set into a vector of character classes
     std::vector<re::CC *> titleTranslation_ccs;
     for (auto & b : titleTranslationSet) {
@@ -210,22 +152,9 @@ ToTitleFunctionType generatePipeline(CPUDriver & pxDriver, unicode::BitTranslati
     P->CreateKernelCall<CharClassesKernel>(titleTranslation_ccs, U21, translationBasis);
     SHOW_BIXNUM(translationBasis);
 
-    std::cout << "creating elig streamset" << std::endl;
-    //  We need to know which characters are title eligible
-    // Characters are title eligible if they come after a space
-    //StreamSet * beforeTitleElig = P->CreateStreamSet(1);
-    
-    //std::vector<re::CC *> beforeTitleElig_CC = {re::makeCC(0x0020, &cc::Unicode)};
-    std::cout << "creating titlepos ccs" << std::endl;
-    //std::vector<re::CC *> titlePositions_ccs = {titlePositions_CC};
-    std::cout << "building elig streamset" << std::endl;
-    //P->CreateKernelCall<CharacterClassKernelBuilder>(titlePositions_ccs, U21, beforeTitleElig);
-    std::cout << "segflt?" << std::endl;
-    //SHOW_STREAM(beforeTitleElig);
 
     // Perform the logic of the Titleify kernel on the codepoiont values.
     StreamSet * u32Basis = P->CreateStreamSet(21, 1);
-    std::cout << "passing elig streamset" << std::endl;
     P->CreateKernelCall<Titleify>(U21, translationBasis, u32Basis);
     SHOW_BIXNUM(u32Basis);
 
@@ -250,16 +179,7 @@ int main(int argc, char *argv[]) {
     //  A CPU driver is capable of compiling and running Parabix programs on the CPU.
     CPUDriver driver("toTitle");
 
-    // Get the titlecase mapping object, can create a translation set from that
-
-    UCD::CodePointPropertyObject* titlePropertyObject = dyn_cast<UCD::CodePointPropertyObject>(UCD::get_SUC_PropertyObject());
-
-    unicode::BitTranslationSets titleTranslationSet;
-
-    titleTranslationSet = titlePropertyObject->GetBitTransformSets();
-
-    
-    ToTitleFunctionType fn = generatePipeline(driver, titleTranslationSet);
+    ToTitleFunctionType fn = generatePipeline(driver);
     
     //  The compile function "fn"  can now be used.   It takes a file
     //  descriptor as an input, which is specified by the filename given by
