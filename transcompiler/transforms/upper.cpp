@@ -86,7 +86,7 @@ void Upperify::generatePabloMethod() {
 
 typedef void (*ToUpperFunctionType)(uint32_t fd);
 
-ToUpperFunctionType generatePipeline(CPUDriver & pxDriver, unicode::BitTranslationSets upperTranslationSet) {
+ToUpperFunctionType generatePipeline(CPUDriver & pxDriver) {
     // A Parabix program is build as a set of kernel calls called a pipeline.
     // A pipeline is construction using a Parabix driver object.
     auto & b = pxDriver.getBuilder();
@@ -117,6 +117,11 @@ ToUpperFunctionType generatePipeline(CPUDriver & pxDriver, unicode::BitTranslati
     StreamSet * U21 = P->CreateStreamSet(21, 1);
     FilterByMask(P, u8index, U21_u8indexed, U21);
     SHOW_BIXNUM(U21);
+
+    // Get the uppercase mapping object, can create a translation set from that
+    UCD::CodePointPropertyObject* upperPropertyObject = dyn_cast<UCD::CodePointPropertyObject>(UCD::get_SUC_PropertyObject());
+    unicode::BitTranslationSets upperTranslationSet;
+    upperTranslationSet = upperPropertyObject->GetBitTransformSets();
 
     // Turn the upper translation set into a vector of character classes
     std::vector<re::CC *> upperTranslation_ccs;
@@ -154,15 +159,8 @@ int main(int argc, char *argv[]) {
     //  A CPU driver is capable of compiling and running Parabix programs on the CPU.
     CPUDriver driver("toUpper");
 
-    // Get the uppercase mapping object, can create a translation set from that
-    UCD::CodePointPropertyObject* upperPropertyObject = dyn_cast<UCD::CodePointPropertyObject>(UCD::get_SUC_PropertyObject());
-
-    unicode::BitTranslationSets upperTranslationSet;
-
-    upperTranslationSet = upperPropertyObject->GetBitTransformSets();
-
     //  Build and compile the Parabix pipeline by calling the Pipeline function above.
-    ToUpperFunctionType fn = generatePipeline(driver, upperTranslationSet);
+    ToUpperFunctionType fn = generatePipeline(driver);
     
     //  The compile function "fn"  can now be used.   It takes a file
     //  descriptor as an input, which is specified by the filename given by

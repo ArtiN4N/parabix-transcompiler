@@ -86,7 +86,7 @@ void Lowerify::generatePabloMethod() {
 
 typedef void (*ToLowerFunctionType)(uint32_t fd);
 
-ToLowerFunctionType generatePipeline(CPUDriver & pxDriver, unicode::BitTranslationSets lowerTranslationSet) {
+ToLowerFunctionType generatePipeline(CPUDriver & pxDriver) {
     // A Parabix program is build as a set of kernel calls called a pipeline.
     // A pipeline is construction using a Parabix driver object.
     auto & b = pxDriver.getBuilder();
@@ -117,6 +117,11 @@ ToLowerFunctionType generatePipeline(CPUDriver & pxDriver, unicode::BitTranslati
     StreamSet * U21 = P->CreateStreamSet(21, 1);
     FilterByMask(P, u8index, U21_u8indexed, U21);
     SHOW_BIXNUM(U21);
+
+    // Get the lowercase mapping object, can create a translation set from that
+    UCD::CodePointPropertyObject* lowerPropertyObject = dyn_cast<UCD::CodePointPropertyObject>(UCD::get_SLC_PropertyObject());
+    unicode::BitTranslationSets lowerTranslationSet;
+    lowerTranslationSet = lowerPropertyObject->GetBitTransformSets();
 
     // Turn the lower translation set into a vector of character classes
     std::vector<re::CC *> lowerTranslation_ccs;
@@ -153,13 +158,6 @@ int main(int argc, char *argv[]) {
 
     //  A CPU driver is capable of compiling and running Parabix programs on the CPU.
     CPUDriver driver("tolower");
-
-    // Get the lowercase mapping object, can create a translation set from that
-    UCD::CodePointPropertyObject* lowerPropertyObject = dyn_cast<UCD::CodePointPropertyObject>(UCD::get_SLC_PropertyObject());
-
-    unicode::BitTranslationSets lowerTranslationSet;
-
-    lowerTranslationSet = lowerPropertyObject->GetBitTransformSets();
 
     //  Build and compile the Parabix pipeline by calling the Pipeline function above.
     ToLowerFunctionType fn = generatePipeline(driver, lowerTranslationSet);
