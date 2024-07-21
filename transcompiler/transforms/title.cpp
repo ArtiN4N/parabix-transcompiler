@@ -58,9 +58,9 @@ static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), 
 
 class Titleify : public pablo::PabloKernel {
 public:
-    Titleify(KernelBuilder & b, StreamSet * U21, StreamSet * translationBasis, StreamSet * u32Basis)
+    Titleify(KernelBuilder & b, StreamSet * U21, StreamSet * titleBasis, StreamSet * lowerBasis, StreamSet * u32Basis)
     : pablo::PabloKernel(b, "Titleify",
-                        {Binding{"U21", U21}, Binding{"translationBasis", translationBasis}},
+                        {Binding{"U21", U21}, Binding{"titleBasis", titleBasis}, Binding{"lowerBasis", lowerBasis}},
                             {Binding{"u32Basis", u32Basis}}) {}
 protected:
     void generatePabloMethod() override;
@@ -72,34 +72,37 @@ void Titleify::generatePabloMethod() {
 
     // Get the input stream sets.
     std::vector<PabloAST *> U21 = getInputStreamSet("U21");
-
-    std::vector<PabloAST *> translationBasis = getInputStreamSet("translationBasis");
-    std::vector<PabloAST *> transformed(U21.size());
-
     cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
 
-    UCD::PropertyObject * whiteSpaces = UCD::get_WSPACE_PropertyObject();
-    UCD::UnicodeSet wspaceSet = whiteSpaces->GetCodepointSet("");
+    std::vector<PabloAST *> titleBasis = getInputStreamSet("translationBasis");
+    std::vector<PabloAST *> lowerBasis = getInputStreamSet("translationBasis");
 
-    PabloAST * whitespaces = ccc.compileCC(re::makeCC(wspaceSet));
-
+    std::vector<PabloAST *> transformedTitle(U21.size());
+    std::vector<PabloAST *> transformedLower(U21.size());
 
     Var * outputBasisVar = getOutputStreamVar("u32Basis");
 
-    PabloAST * F1start = pb.createNot(pb.createAdvance(pb.createNot(whitespaces), 1));
+    // Create a character class from the whitespace property set
+    UCD::PropertyObject * whiteSpacesProperty = UCD::get_WSPACE_PropertyObject();
+    UCD::UnicodeSet wSpaceSet = whiteSpacesProperty->GetCodepointSet("");
+    PabloAST * whiteSpaces = ccc.compileCC(re::makeCC(wSpaceSet));
 
+    // Find all characters after a whitespace
+    PabloAST * afterWhiteSpaces = pb.createNot(pb.createAdvance(pb.createNot(whiteSpaces), 1));
 
     for (unsigned i = 0; i < U21.size(); i++) {
         
-        
+        // If the translation set covers said bit, XOR the input bit with the transformation bit
+        if (i < titleBasis.size())
+            transformedTitle[i] = pb.createXor(titleBasis[i], U21[i]);
+        else transformedTitle[i] = U21[i];
 
-        // If the translation set covers said bit
-        if (i < translationBasis.size()) // XOR the input bit with the transformation bit  
-            transformed[i] = pb.createXor(translationBasis[i], U21[i]);
-        else transformed[i] = U21[i];
+        if (i < lowerBasis.size())
+            transformedLower[i] = pb.createXor(lowerBasis[i], U21[i]);
+        else transformedLower[i] = U21[i];
 
-        
-        pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), pb.createSel(F1start, transformed[i], U21[i]));
+        // Convert to title case after whitespaces, otherwise, lowercase
+        pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), pb.createSel(afterWhiteSpaces, transformedTitle[i], transformedLower[i]));
     }
 }
 
@@ -138,7 +141,8 @@ ToTitleFunctionType generatePipeline(CPUDriver & pxDriver) {
     FilterByMask(P, u8index, U21_u8indexed, U21);
     SHOW_BIXNUM(U21);
 
-    UCD::CodePointPropertyObject* titlePropertyObject = dyn_cast<UCD::CodePointPropertyObject>(UCD::get_SUC_PropertyObject());
+    // Create a bit translation set to title case
+    UCD::CodePointPropertyObject* titlePropertyObject = dyn_cast<UCD::CodePointPropertyObject>(UCD::get_STC_PropertyObject());
     unicode::BitTranslationSets titleTranslationSet;
     titleTranslationSet = titlePropertyObject->GetBitTransformSets();
 
@@ -148,14 +152,29 @@ ToTitleFunctionType generatePipeline(CPUDriver & pxDriver) {
         titleTranslation_ccs.push_back(re::makeCC(b, &cc::Unicode));
     }
 
-    StreamSet * translationBasis = P->CreateStreamSet(titleTranslation_ccs.size());
-    P->CreateKernelCall<CharClassesKernel>(titleTranslation_ccs, U21, translationBasis);
-    SHOW_BIXNUM(translationBasis);
+    StreamSet * titleBasis = P->CreateStreamSet(titleTranslation_ccs.size());
+    P->CreateKernelCall<CharClassesKernel>(titleTranslation_ccs, U21, titleBasis);
+    SHOW_BIXNUM(titleBasis);
+
+    // Create a bit translation set to lower case
+    UCD::CodePointPropertyObject* lowerPropertyObject = dyn_cast<UCD::CodePointPropertyObject>(UCD::get_SLC_PropertyObject());
+    unicode::BitTranslationSets lowerTranslationSet;
+    lowerTranslationSet = lowerPropertyObject->GetBitTransformSets();
+
+    // Turn the title translation set into a vector of character classes
+    std::vector<re::CC *> lowerTranslation_ccs;
+    for (auto & b : lowerTranslationSet) {
+        lowerTranslation_ccs.push_back(re::makeCC(b, &cc::Unicode));
+    }
+
+    StreamSet * lowerBasis = P->CreateStreamSet(lowerTranslation_ccs.size());
+    P->CreateKernelCall<CharClassesKernel>(lowerTranslation_ccs, U21, lowerBasis);
+    SHOW_BIXNUM(lowerBasis);
 
 
     // Perform the logic of the Titleify kernel on the codepoiont values.
     StreamSet * u32Basis = P->CreateStreamSet(21, 1);
-    P->CreateKernelCall<Titleify>(U21, translationBasis, u32Basis);
+    P->CreateKernelCall<Titleify>(U21, titleBasis, lowerBasis, u32Basis);
     SHOW_BIXNUM(u32Basis);
 
     // Convert back to UTF8 from codepoints.
