@@ -4,10 +4,12 @@
 #include <iostream>
 
 #include <unicode/data/PropertyObjects.h>
+#include <unicode/data/PropertyAliases.h>
 #include <unicode/data/PropertyObjectTable.h>
 #include <unicode/core/unicode_set.h>
 #include <unicode/utf/utf_compiler.h>
 #include <unicode/utf/transchar.h>
+
 
 #include <kernel/streamutils/deletion.h>
 #include <kernel/pipeline/driver/cpudriver.h>
@@ -84,7 +86,7 @@ void Titleify::generatePabloMethod() {
     // These characters are valid for title case, and the rest will become lowercase
     // "^" is the start of a line, "\\s" is any whitespace character, "." is any char except for a newline
 
-    UCD::PropertyObject * whiteSpaces = UCD::get_WSPACE_propertyObject();
+    UCD::PropertyObject * whiteSpaces = UCD::get_WSPACE_PropertyObject();
     CD::UnicodeSet wspaceSet = whiteSpaces->GetCodepointSet("");
     /*
     std::cout << "doing regex" << std::endl;
