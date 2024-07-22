@@ -126,6 +126,10 @@ ToFullHalfFunctionType generatePipeline(CPUDriver & pxDriver) {
 
     unicode::TranslationMap mExplicitCodepointMap = (unicode::TranslationMap) explicit_cp_data;
 
+    for (const auto& pair : mExplicitCodepointMap) {
+        std::cout << "Key: " << pair.first << ", Value: " << pair.second << std::endl;
+    }
+
     unicode::BitTranslationSets fullHalfTranslationSet = unicode::ComputeBitTranslationSets(mExplicitCodepointMap);
 
     // Get the fullHalfcase mapping object, can create a translation set from that
@@ -136,7 +140,6 @@ ToFullHalfFunctionType generatePipeline(CPUDriver & pxDriver) {
     // Turn the fullHalf translation set into a vector of character classes
     std::vector<re::CC *> fullHalfTranslation_ccs;
     for (auto & b : fullHalfTranslationSet) {
-        SHOW_STREAM(re::makeCC(b, &cc::Unicode));
         fullHalfTranslation_ccs.push_back(re::makeCC(b, &cc::Unicode));
     }
 
