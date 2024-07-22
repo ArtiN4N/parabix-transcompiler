@@ -46,3 +46,20 @@ DEPS
     re.cc
     toolchain
 )
+
+parabix_add_executable(
+NAME
+    full-half
+SRC
+    fullwidth-halfwidth.cpp
+DEPS
+    grep
+    pablo
+    kernel.basis
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    kernel.util
+    re.cc
+    toolchain
+)
