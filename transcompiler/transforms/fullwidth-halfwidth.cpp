@@ -126,22 +126,7 @@ ToFullHalfFunctionType generatePipeline(CPUDriver & pxDriver) {
 {0x30CC, 0xFF87}, {0x30CD, 0xFF88}, {0x30CE, 0xFF89}, {0x30CF, 0xFF8A}, {0x30D2, 0xFF8B}, {0x30D5, 0xFF8C}, {0x30D8, 0xFF8D}, {0x30DB, 0xFF8E}, {0x30DE, 0xFF8F}, {0x30DF, 0xFF90}, {0x30E0, 0xFF91}, {0x30E1, 0xFF92}, {0x30E2, 0xFF93}, {0x30E3, 0xFF6C}, {0x30E4, 0xFF94}, {0x30E5, 0xFF6D}, {0x30E6, 0xFF95}, {0x30E7, 0xFF6E}, {0x30E8, 0xFF96}, {0x30E9, 0xFF97}, {0x30EA, 0xFF98}, {0x30EB, 0xFF99}, {0x30EC, 0xFF9A}, {0x30ED, 0xFF9B}, {0x30EF, 0xFF9C}, {0x30F3, 0xFF9D}, {0x309C, 0xFF9F}, {0x309B, 0xFF9E}, {0x30FC, 0xFF70}, {0x30FB, 0xFF65}};
 
     unicode::TranslationMap mExplicitCodepointMap = (unicode::TranslationMap) explicit_cp_data;
-
-    for (const auto& pair : mExplicitCodepointMap) {
-        std::cout << "Key: " << pair.first << ", Value: " << pair.second << std::endl;
-    }
-
     unicode::BitTranslationSets fullHalfTranslationSet = unicode::ComputeBitTranslationSets(mExplicitCodepointMap);
-
-    auto & out = llvm::errs();
-    for (const auto& element : fullHalfTranslationSet) {
-        element.print(out);
-    }
-
-    // Get the fullHalfcase mapping object, can create a translation set from that
-    //UCD::CodePointPropertyObject* fullHalfPropertyObject = dyn_cast<UCD::CodePointPropertyObject>(UCD::get_SLC_PropertyObject());
-    //unicode::BitTranslationSets fullHalfTranslationSet;
-    //fullHalfTranslationSet = fullHalfPropertyObject->GetBitTransformSets();
 
     // Turn the fullHalf translation set into a vector of character classes
     std::vector<re::CC *> fullHalfTranslation_ccs;
