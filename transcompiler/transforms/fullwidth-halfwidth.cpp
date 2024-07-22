@@ -133,6 +133,11 @@ ToFullHalfFunctionType generatePipeline(CPUDriver & pxDriver) {
 
     unicode::BitTranslationSets fullHalfTranslationSet = unicode::ComputeBitTranslationSets(mExplicitCodepointMap);
 
+    auto & out = llvm::errs();
+    for (const auto& element : fullHalfTranslationSet) {
+        element.print(out);
+    }
+
     // Get the fullHalfcase mapping object, can create a translation set from that
     //UCD::CodePointPropertyObject* fullHalfPropertyObject = dyn_cast<UCD::CodePointPropertyObject>(UCD::get_SLC_PropertyObject());
     //unicode::BitTranslationSets fullHalfTranslationSet;
