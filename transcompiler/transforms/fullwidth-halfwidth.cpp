@@ -136,6 +136,7 @@ ToFullHalfFunctionType generatePipeline(CPUDriver & pxDriver) {
     // Turn the fullHalf translation set into a vector of character classes
     std::vector<re::CC *> fullHalfTranslation_ccs;
     for (auto & b : fullHalfTranslationSet) {
+        SHOW_STREAM(re::makeCC(b, &cc::Unicode));
         fullHalfTranslation_ccs.push_back(re::makeCC(b, &cc::Unicode));
     }
 
