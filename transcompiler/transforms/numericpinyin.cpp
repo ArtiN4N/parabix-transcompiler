@@ -184,7 +184,7 @@ TonumericPinyinFunctionType generatePipeline(CPUDriver & pxDriver) {
     //  ReadSourceKernel is a Parabix Kernel that produces a stream of bytes
     //  from a file descriptor.
     P->CreateKernelCall<ReadSourceKernel>(fileDescriptor, ByteStream);
-    SHOW_BYTES(ByteStream);
+    //SHOW_BYTES(ByteStream);
 
     // Get the basis bits
     StreamSet * BasisBits = P->CreateStreamSet(8, 1);
