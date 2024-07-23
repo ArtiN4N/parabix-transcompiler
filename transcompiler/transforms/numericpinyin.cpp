@@ -168,7 +168,7 @@ TonumericPinyinFunctionType generatePipeline(CPUDriver & pxDriver) {
         "ān|án|ǎn|àn|uā|uá|uǎ|uà|iā|iá|iǎ|ià|ō|ó|ǒ|ò|ē|é|ě|è",
         "ā|á|ǎ|à|ī|í|ǐ|ì|ū|ú|ŭ|ù|ǖ|ǘ|ǚ|ǜ"
     };*/
-    std::string pinyinCharClassesText[4] = {"uāi\nuái\nuǎi\nuài\nuāng\nuáng\nuǎng\nuàng\niāo\niáo\niǎo\niào\niāng\niáng\niǎng\niàng\nōu\nóu\nǒu\nòu\nuō\nuó\nuǒ\nuò\niōng\nióng\niǒng\niòng\nēi\néi\něi\nèi\nēng\néng\něng\nèng\nēr\nér\něr\nèr\niē\nié\niě\niè\nuē\nué\nuě\nuè\nuī\nuí\nuǐ\nuì\nīng\níng\nǐng\nìng\nūn\nún\nŭn\nùn\nīu\níu\nǐu\nìu\nǖn\nǘn\nǚn\nǜn","āi\nái\nǎi\nài\nāo\náo\nǎo\nào\nāng\náng\nǎng\nàng\nuān\nuán\nuǎn\nuàn\niān\nián\niǎn\niàn\nōng\nóng\nǒng\nòng\nēn\nén\něn\nèn\nīn\nín\nǐn\nìn","ān\nán\nǎn\nàn\nuā\nuá\nuǎ\nuà\niā\niá\niǎ\nià\nō\nó\nǒ\nò\nē\né\ně\nè","ā\ná\nǎ\nà\nī\ní\nǐ\nì\nū\nú\nŭ\nù\nǖ\nǘ\nǚ\nǜ"};
+    //std::string pinyinCharClassesText[4] = {"uāi\nuái\nuǎi\nuài\nuāng\nuáng\nuǎng\nuàng\niāo\niáo\niǎo\niào\niāng\niáng\niǎng\niàng\nōu\nóu\nǒu\nòu\nuō\nuó\nuǒ\nuò\niōng\nióng\niǒng\niòng\nēi\néi\něi\nèi\nēng\néng\něng\nèng\nēr\nér\něr\nèr\niē\nié\niě\niè\nuē\nué\nuě\nuè\nuī\nuí\nuǐ\nuì\nīng\níng\nǐng\nìng\nūn\nún\nŭn\nùn\nīu\níu\nǐu\nìu\nǖn\nǘn\nǚn\nǜn","āi\nái\nǎi\nài\nāo\náo\nǎo\nào\nāng\náng\nǎng\nàng\nuān\nuán\nuǎn\nuàn\niān\nián\niǎn\niàn\nōng\nóng\nǒng\nòng\nēn\nén\něn\nèn\nīn\nín\nǐn\nìn","ān\nán\nǎn\nàn\nuā\nuá\nuǎ\nuà\niā\niá\niǎ\nià\nō\nó\nǒ\nò\nē\né\ně\nè","ā\ná\nǎ\nà\nī\ní\nǐ\nì\nū\nú\nŭ\nù\nǖ\nǘ\nǚ\nǜ"};
     
 
 
@@ -204,36 +204,39 @@ TonumericPinyinFunctionType generatePipeline(CPUDriver & pxDriver) {
     SHOW_BIXNUM(U21);
 
 
-    std::string pinyinCharClassesText1[68] = {"uāi","uái","uǎi","uài","uāng","uáng","uǎng","uàng","iāo","iáo","iǎo","iào","iāng","iáng","iǎng","iàng","ōu","óu","ǒu","òu","uō","uó","uǒ","uò","iōng","ióng","iǒng","iòng","ēi","éi","ěi","èi","ēng","éng","ěng","èng","ēr","ér","ěr","èr","iē","ié","iě","iè","uē","ué","uě","uè","uī","uí","uǐ","uì","īng","íng","ǐng","ìng","ūn","ún","ŭn","ùn","īu","íu","ǐu","ìu","ǖn","ǘn","ǚn","ǜn"};
-    std::string pinyinCharClassesText2[32] = {"āi","ái","ǎi","ài","āo","áo","ǎo","ào","āng","áng","ǎng","àng","uān","uán","uǎn","uàn","iān","ián","iǎn","iàn","ōng","óng","ǒng","òng","ēn","én","ěn","èn","īn","ín","ǐn","ìn"};
-    std::string pinyinCharClassesText3[20] = {"ān","án","ǎn","àn","uā","uá","uǎ","uà","iā","iá","iǎ","ià","ō","ó","ǒ","ò","ē","é","ě","è"};
-    std::string pinyinCharClassesText4[16] = {"ā","á","ǎ","à","ī","í","ǐ","ì","ū","ú","ŭ","ù","ǖ","ǘ","ǚ","ǜ"};
+    //std::string pinyinCharClassesText1[68] = {"uāi","uái","uǎi","uài","uāng","uáng","uǎng","uàng","iāo","iáo","iǎo","iào","iāng","iáng","iǎng","iàng","ōu","óu","ǒu","òu","uō","uó","uǒ","uò","iōng","ióng","iǒng","iòng","ēi","éi","ěi","èi","ēng","éng","ěng","èng","ēr","ér","ěr","èr","iē","ié","iě","iè","uē","ué","uě","uè","uī","uí","uǐ","uì","īng","íng","ǐng","ìng","ūn","ún","ŭn","ùn","īu","íu","ǐu","ìu","ǖn","ǘn","ǚn","ǜn"};
+    //std::string pinyinCharClassesText2[32] = {"āi","ái","ǎi","ài","āo","áo","ǎo","ào","āng","áng","ǎng","àng","uān","uán","uǎn","uàn","iān","ián","iǎn","iàn","ōng","óng","ǒng","òng","ēn","én","ěn","èn","īn","ín","ǐn","ìn"};
+    //std::string pinyinCharClassesText3[20] = {"ān","án","ǎn","àn","uā","uá","uǎ","uà","iā","iá","iǎ","ià","ō","ó","ǒ","ò","ē","é","ě","è"};
+    //std::string pinyinCharClassesText4[16] = {"ā","á","ǎ","à","ī","í","ǐ","ì","ū","ú","ŭ","ù","ǖ","ǘ","ǚ","ǜ"};
 
     //re::CC* pinyinChCls1;
     //re::makeCC(pinyinChCls1, )
 
-    std::cout << "problem 1" << std::endl;
-    re::CC* pinyinCharClasses[4] = {};
-    // mane what da hell
-    pinyinCharClasses[0] = dyn_cast<re::CC>(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[0], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG, re::RE_Syntax::FixedStrings)))));
-    std::cout << "problem 2" << std::endl;
-    //pinyinCharClasses[1] = dyn_cast<re::CC>(re::exclude_CC(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[1], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG, re::RE_Syntax::ERE)))), pinyinCharClasses[0]));
-    std::cout << "problem 3" << std::endl;
-    //pinyinCharClasses[2] = dyn_cast<re::CC>(re::exclude_CC(re::exclude_CC(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[2], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG, re::RE_Syntax::ERE)))), pinyinCharClasses[0]), pinyinCharClasses[1]));
-    std::cout << "problem 4" << std::endl;
-    //pinyinCharClasses[3] = dyn_cast<re::CC>(re::exclude_CC(re::exclude_CC(re::exclude_CC(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[3], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG, re::RE_Syntax::ERE)))), pinyinCharClasses[0]), pinyinCharClasses[1]), pinyinCharClasses[2]));
-    std::cout << "problem 5" << std::endl;
-    const re::RE * reTest = re::RE_Parser::parse(".$", re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG, re::RE_Syntax::ERE);
-    re::CC* ccTest = re::matchableCodepoints(reTest);
     
-    std::cout << "problem 6" << std::endl;
 
-    //re::RE
+    //std::cout << "problem 1" << std::endl;
+    //re::CC* pinyinCharClasses[4] = {};
+    // mane what da hell
+    //pinyinCharClasses[0] = dyn_cast<re::CC>(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[0], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG, re::RE_Syntax::FixedStrings)))));
+    //std::cout << "problem 2" << std::endl;
+    //pinyinCharClasses[1] = dyn_cast<re::CC>(re::exclude_CC(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[1], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG, re::RE_Syntax::ERE)))), pinyinCharClasses[0]));
+    //std::cout << "problem 3" << std::endl;
+    //pinyinCharClasses[2] = dyn_cast<re::CC>(re::exclude_CC(re::exclude_CC(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[2], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG, re::RE_Syntax::ERE)))), pinyinCharClasses[0]), pinyinCharClasses[1]));
+    //std::cout << "problem 4" << std::endl;
+    //pinyinCharClasses[3] = dyn_cast<re::CC>(re::exclude_CC(re::exclude_CC(re::exclude_CC(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[3], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG, re::RE_Syntax::ERE)))), pinyinCharClasses[0]), pinyinCharClasses[1]), pinyinCharClasses[2]));
+    //std::cout << "problem 5" << std::endl;
+    //const re::RE * reTest = re::RE_Parser::parse(".$", re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG, re::RE_Syntax::ERE);
+    //const re::CC* ccTest = re::matchableCodepoints(reTest);
+    
+    //std::cout << "problem 6" << std::endl;
+
+    re::RE * CC_re = re::simplifyRE(re::RE_Parser::parse("[òǚōīǘrāèóìūēogíiǐǎǒǖǜnéúàuŭěáù]"));
+    CC_re = UCD::linkAndResolve(CC_re);
+    CC_re = UCD::externalizeProperties(CC_re);
+    re::CC * CC_ast = dyn_cast<re::CC>(CC_re)
 
     StreamSet * inPinyinLabel1 = P->CreateStreamSet(1);
-    std::cout << "problem 7" << std::endl;
-    std::vector<re::CC *> inPinyinLabel1_CC = {ccTest};
-    std::cout << "problem 8" << std::endl;
+    std::vector<re::CC *> inPinyinLabel1_CC = {CC_ast};
     P->CreateKernelCall<CharacterClassKernelBuilder>(inPinyinLabel1_CC, U21, inPinyinLabel1);
     SHOW_BIXNUM(inPinyinLabel1);
 
