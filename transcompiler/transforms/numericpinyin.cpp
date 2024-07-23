@@ -215,7 +215,7 @@ TonumericPinyinFunctionType generatePipeline(CPUDriver & pxDriver) {
     re::CC* ccTest = dyn_cast<re::CC>(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse("(he|ho)", re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG, re::RE_Syntax::ERE)))));
 
 
-    re::RE
+    //re::RE
 
     StreamSet * inPinyinLabel1 = P->CreateStreamSet(1);
     std::vector<re::CC *> inPinyinLabel1_CC = {ccTest};
