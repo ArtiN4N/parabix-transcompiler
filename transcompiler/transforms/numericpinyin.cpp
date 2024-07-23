@@ -210,7 +210,7 @@ TonumericPinyinFunctionType generatePipeline(CPUDriver & pxDriver) {
     StreamSet * inPinyinLabel1 = P->CreateStreamSet(1);
     std::vector<re::CC *> inPinyinLabel1_CC = {pinyinCharClasses[0]};
     P->CreateKernelCall<CharacterClassKernelBuilder>(inPinyinLabel1_CC, U21, inPinyinLabel1);
-    SHOW_BIXNUM(pinyinCharClasses[0]);
+    SHOW_BIXNUM(inPinyinLabel1);
 
 
     // Perform the logic of the numericPinyinify kernel on the codepoiont values.
