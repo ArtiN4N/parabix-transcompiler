@@ -54,9 +54,9 @@ static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), 
 
 class numericPinyinify : public pablo::PabloKernel {
 public:
-    numericPinyinify(KernelBuilder & b, StreamSet * U21, StreamSet * translationBasis, StreamSet * u32Basis)
+    numericPinyinify(KernelBuilder & b, StreamSet * U21, StreamSet * u32Basis)
     : pablo::PabloKernel(b, "numericPinyinify",
-                        {Binding{"U21", U21}, Binding{"translationBasis", translationBasis}},
+                        {Binding{"U21", U21}},
                             {Binding{"u32Basis", u32Basis}}) {}
 protected:
     void generatePabloMethod() override;
@@ -130,14 +130,6 @@ TonumericPinyinFunctionType generatePipeline(CPUDriver & pxDriver) {
         "[a,ā,á,ǎ,à,i,ī,í,ǐ,ì,u,ū,ú,ŭ,ù,ü,ǖ,ǘ,ǚ,ǜ]"
     };
 
-    
-    re::CC* pinyinCharClasses[4] = {};
-    // mane what da hell
-    pinyinCharClasses[0] = dyn_cast<re::CC>(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[0], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG)))));
-    pinyinCharClasses[1] = dyn_cast<re::CC>(re::exclude_CC(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[1], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG))))), pinyinCharClasses[0]);
-    pinyinCharClasses[2] = dyn_cast<re::CC>(re::exclude_CC(re::exclude_CC(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[2], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG))))), pinyinCharClasses[0]), pinyinCharClasses[1]);
-    pinyinCharClasses[3] = dyn_cast<re::CC>(re::exclude_CC(re::exclude_CC(re::exclude_CC(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[3], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG))))), pinyinCharClasses[0]), pinyinCharClasses[1]), pinyinCharClasses[2]);
-
     // A Parabix program is build as a set of kernel calls called a pipeline.
     // A pipeline is construction using a Parabix driver object.
     auto & b = pxDriver.getBuilder();
@@ -169,24 +161,22 @@ TonumericPinyinFunctionType generatePipeline(CPUDriver & pxDriver) {
     FilterByMask(P, u8index, U21_u8indexed, U21);
     SHOW_BIXNUM(U21);
 
-    // Get the numericPinyincase mapping object, can create a translation set from that
-    UCD::CodePointPropertyObject* numericPinyinPropertyObject = dyn_cast<UCD::CodePointPropertyObject>(UCD::get_SUC_PropertyObject());
-    unicode::BitTranslationSets numericPinyinTranslationSet;
-    numericPinyinTranslationSet = numericPinyinPropertyObject->GetBitTransformSets();
+    re::CC* pinyinCharClasses[4] = {};
+    // mane what da hell
+    pinyinCharClasses[0] = dyn_cast<re::CC>(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[0], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG)))));
+    pinyinCharClasses[1] = dyn_cast<re::CC>(re::exclude_CC(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[1], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG))))), pinyinCharClasses[0]);
+    pinyinCharClasses[2] = dyn_cast<re::CC>(re::exclude_CC(re::exclude_CC(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[2], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG))))), pinyinCharClasses[0]), pinyinCharClasses[1]);
+    pinyinCharClasses[3] = dyn_cast<re::CC>(re::exclude_CC(re::exclude_CC(re::exclude_CC(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[3], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG))))), pinyinCharClasses[0]), pinyinCharClasses[1]), pinyinCharClasses[2]);
 
-    // Turn the numericPinyin translation set into a vector of character classes
-    std::vector<re::CC *> numericPinyinTranslation_ccs;
-    for (auto & b : numericPinyinTranslationSet) {
-        numericPinyinTranslation_ccs.push_back(re::makeCC(b, &cc::Unicode));
-    }
+    StreamSet * inPinyinLabel1 = P->CreateStreamSet(1);
+    std::vector<re::CC *> inPinyinLabel1_CC = {pinyinCharClasses[0]};
+    P->CreateKernelCall<CharacterClassKernelBuilder>(inPinyinLabel1_CC, BasisBits, inPinyinLabel1);
+    SHOW_STREAM(inPinyinLabel1);
 
-    StreamSet * translationBasis = P->CreateStreamSet(numericPinyinTranslation_ccs.size());
-    P->CreateKernelCall<CharClassesKernel>(numericPinyinTranslation_ccs, U21, translationBasis);
-    SHOW_BIXNUM(translationBasis);
 
     // Perform the logic of the numericPinyinify kernel on the codepoiont values.
     StreamSet * u32Basis = P->CreateStreamSet(21, 1);
-    P->CreateKernelCall<numericPinyinify>(U21, translationBasis, u32Basis);
+    P->CreateKernelCall<numericPinyinify>(U21, u32Basis);
     SHOW_BIXNUM(u32Basis);
 
     // Convert back to UTF8 from codepoints.
