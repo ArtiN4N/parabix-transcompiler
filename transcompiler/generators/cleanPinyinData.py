@@ -23,7 +23,7 @@ specials = ["ā","á","ǎ","à",
 finals = []
 
 for dat in datas:
-    toRemove = []
+    '''toRemove = []
     for line in dat:
         remove = True
         for sp in specials:
@@ -31,8 +31,8 @@ for dat in datas:
                 remove = False
         if remove:
             toRemove.append(line)
-    dat = [line for line in dat if line not in toRemove]
-    dat = '"[' + ",".join(dat) + ']"'
+    dat = [line for line in dat if line not in toRemove]'''
+    dat = '"' + "|".join(dat) + '"'
     finals.append(dat)
 
 
