@@ -205,7 +205,7 @@ TonumericPinyinFunctionType generatePipeline(CPUDriver & pxDriver) {
     // mane what da hell
     pinyinCharClasses[0] = dyn_cast<re::CC>(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[0], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG, re::RE_Syntax::ERE)))));
     std::cout << "problem 2" << std::endl;
-    pinyinCharClasses[1] = dyn_cast<re::CC>(re::exclude_CC(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[1], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG, re::RE_Syntax::ERE)))), pinyinCharClasses[0]));
+    pinyinCharClasses[1] = dyn_cast<re::CC>(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[1], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG, re::RE_Syntax::ERE)))));
     std::cout << "problem 3" << std::endl;
     pinyinCharClasses[2] = dyn_cast<re::CC>(re::exclude_CC(re::exclude_CC(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[2], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG, re::RE_Syntax::ERE)))), pinyinCharClasses[0]), pinyinCharClasses[1]));
     std::cout << "problem 4" << std::endl;
