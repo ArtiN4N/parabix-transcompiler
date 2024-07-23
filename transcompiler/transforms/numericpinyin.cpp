@@ -81,9 +81,17 @@ void numericPinyinify::generatePabloMethod() {
     for (int i = 0; i < 47; i++) pinyinTonesSet.insert(pinyinCodes[i]);
     PabloAST * pinyinTones = ccc.compileCC(re::makeCC(pinyinTonesSet));
 
-    PabloAST * pinyinCount = pb.createCount(pb.createMatchStar(U21[0], pinyinTones));
+    // Create a character class from the whitespace property set
+    UCD::PropertyObject * whiteSpacesProperty = UCD::get_WSPACE_PropertyObject();
+    UCD::UnicodeSet wSpaceSet = whiteSpacesProperty->GetCodepointSet("");
+    PabloAST * whiteSpaces = ccc.compileCC(re::makeCC(wSpaceSet));
+
+    // Find all characters after a whitespace
+    PabloAST * afterWhiteSpaces = pb.createNot(pb.createAdvance(pb.createNot(whiteSpaces), 1));
+
+    PabloAST * pinyinCount = pb.createCount(pb.createMatchStar(U21[0], afterWhiteSpaces));
     for (unsigned i = 1; i < U21.size(); i++) {
-        pinyinCount = pb.createAdd(pinyinCount, pb.createCount(pb.createMatchStar(U21[i], pinyinTones)));
+        pinyinCount = pb.createAdd(pinyinCount, pb.createCount(pb.createMatchStar(U21[i], afterWhiteSpaces)));
     }   
     
     pb.createDebugPrint(pinyinCount);
