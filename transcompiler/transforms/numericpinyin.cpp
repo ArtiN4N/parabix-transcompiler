@@ -38,6 +38,43 @@
 #include <re/cc/cc_compiler.h>
 #include <re/cc/cc_kernel.h>
 
+#include <kernel/core/idisa_target.h>
+#include <boost/filesystem.hpp>
+#include <re/cc/cc_compiler.h>
+#include <re/cc/cc_compiler_target.h>
+#include <re/transforms/re_simplifier.h>
+#include <re/adt/adt.h>
+#include <re/parse/parser.h>
+#include <re/unicode/resolve_properties.h>
+#include <re/cc/cc_kernel.h>
+#include <kernel/core/kernel_builder.h>
+#include <kernel/pipeline/pipeline_builder.h>
+#include <kernel/basis/s2p_kernel.h>
+#include <kernel/io/source_kernel.h>
+#include <kernel/core/streamset.h>
+#include <kernel/unicode/utf8_decoder.h>
+#include <kernel/unicode/UCD_property_kernel.h>
+#include <kernel/streamutils/stream_select.h>
+#include <llvm/IR/Function.h>
+#include <llvm/IR/Module.h>
+#include <llvm/Support/CommandLine.h>
+#include <llvm/Support/raw_ostream.h>
+#include <pablo/pablo_kernel.h>
+#include <pablo/builder.hpp>
+#include <pablo/pe_zeroes.h>
+#include <pablo/pablo_toolchain.h>
+#include <kernel/pipeline/driver/cpudriver.h>
+#include <grep/grep_kernel.h>
+#include <toolchain/toolchain.h>
+#include <fileselect/file_select.h>
+#include <fcntl.h>
+#include <iomanip>
+#include <iostream>
+#include <string>
+#include <sys/stat.h>
+#include <vector>
+#include <map>
+
 
 #define SHOW_STREAM(name) if (codegen::EnableIllustrator) P->captureBitstream(#name, name)
 #define SHOW_BIXNUM(name) if (codegen::EnableIllustrator) P->captureBixNum(#name, name)
