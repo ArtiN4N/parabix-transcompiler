@@ -201,7 +201,8 @@ TonumericPinyinFunctionType generatePipeline(CPUDriver & pxDriver) {
 
     StreamSet * U21 = P->CreateStreamSet(21, 1);
     FilterByMask(P, u8index, U21_u8indexed, U21);
-    //SHOW_BIXNUM(U21);
+    SHOW_BIXNUM(U21);
+    SHOW_BYTES(U21);
 
 
     //std::string pinyinCharClassesText1[68] = {"uāi","uái","uǎi","uài","uāng","uáng","uǎng","uàng","iāo","iáo","iǎo","iào","iāng","iáng","iǎng","iàng","ōu","óu","ǒu","òu","uō","uó","uǒ","uò","iōng","ióng","iǒng","iòng","ēi","éi","ěi","èi","ēng","éng","ěng","èng","ēr","ér","ěr","èr","iē","ié","iě","iè","uē","ué","uě","uè","uī","uí","uǐ","uì","īng","íng","ǐng","ìng","ūn","ún","ŭn","ùn","īu","íu","ǐu","ìu","ǖn","ǘn","ǚn","ǜn"};
@@ -230,15 +231,33 @@ TonumericPinyinFunctionType generatePipeline(CPUDriver & pxDriver) {
     
     //std::cout << "problem 6" << std::endl;
 
-    re::RE * CC_re = re::simplifyRE(re::RE_Parser::parse("[òǚōīǘrāèóìūēogíiǐǎǒǖǜnéúàuŭěáù]"));
-    CC_re = UCD::linkAndResolve(CC_re);
-    CC_re = UCD::externalizeProperties(CC_re);
-    re::CC * CC_ast = dyn_cast<re::CC>(CC_re);
+    std::string aPinRegexStr     = "[āáǎà]";
+    std::string oPinRegexStr     = "[ōóǒò]";
+    std::string ePinRegexStr     = "[ēéěè]";
+    std::string iPinRegexStr     = "[īíǐì]";
+    std::string uPinRegexStr     = "[ūúŭù]";
+    std::string umPinRegexStr    = "[ǖǘǚǜ]";
+    std::string extraPinRegexStr = "[roginu]";
 
-    StreamSet * inPinyinLabel1 = P->CreateStreamSet(1);
-    std::vector<re::CC *> inPinyinLabel1_CC = {CC_ast};
-    P->CreateKernelCall<CharacterClassKernelBuilder>(inPinyinLabel1_CC, U21, inPinyinLabel1);
-    SHOW_STREAM(inPinyinLabel1);
+    re::RE * aPinRegex = re::simplifyRE(re::RE_Parser::parse(aPinRegexStr));
+    aPinRegex = UCD::linkAndResolve(aPinRegex);
+    aPinRegex = UCD::externalizeProperties(aPinRegex);
+    re::CC * aPinClass = dyn_cast<re::CC>(aPinRegex);
+
+    StreamSet * aPinStream = P->CreateStreamSet(1);
+    std::vector<re::CC *> aPinStream_CC = {aPinClass};
+    P->CreateKernelCall<CharacterClassKernelBuilder>(aPinStream_CC, U21, aPinStream);
+    SHOW_STREAM(aPinStream);
+
+    re::RE * extraPinRegex = re::simplifyRE(re::RE_Parser::parse(extraPinRegexStr));
+    extraPinRegex = UCD::linkAndResolve(extraPinRegex);
+    extraPinRegex = UCD::externalizeProperties(extraPinRegex);
+    re::CC * extraPinClass = dyn_cast<re::CC>(extraPinRegex);
+
+    StreamSet * extraPinStream = P->CreateStreamSet(1);
+    std::vector<re::CC *> extraPinStream_CC = {extraPinClass};
+    P->CreateKernelCall<CharacterClassKernelBuilder>(extraPinStream_CC, U21, extraPinStream);
+    SHOW_STREAM(extraPinStream);
 
 
     // Perform the logic of the numericPinyinify kernel on the codepoiont values.
