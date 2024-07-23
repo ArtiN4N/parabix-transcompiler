@@ -204,6 +204,7 @@ TonumericPinyinFunctionType generatePipeline(CPUDriver & pxDriver) {
     //SHOW_BIXNUM(U21);
     //SHOW_BYTES(U21);
 
+    
 
     //std::string pinyinCharClassesText1[68] = {"uāi","uái","uǎi","uài","uāng","uáng","uǎng","uàng","iāo","iáo","iǎo","iào","iāng","iáng","iǎng","iàng","ōu","óu","ǒu","òu","uō","uó","uǒ","uò","iōng","ióng","iǒng","iòng","ēi","éi","ěi","èi","ēng","éng","ěng","èng","ēr","ér","ěr","èr","iē","ié","iě","iè","uē","ué","uě","uè","uī","uí","uǐ","uì","īng","íng","ǐng","ìng","ūn","ún","ŭn","ùn","īu","íu","ǐu","ìu","ǖn","ǘn","ǚn","ǜn"};
     //std::string pinyinCharClassesText2[32] = {"āi","ái","ǎi","ài","āo","áo","ǎo","ào","āng","áng","ǎng","àng","uān","uán","uǎn","uàn","iān","ián","iǎn","iàn","ōng","óng","ǒng","òng","ēn","én","ěn","èn","īn","ín","ǐn","ìn"};
