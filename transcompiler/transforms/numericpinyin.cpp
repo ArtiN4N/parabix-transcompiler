@@ -130,13 +130,13 @@ TonumericPinyinFunctionType generatePipeline(CPUDriver & pxDriver) {
         "[a,ā,á,ǎ,à,i,ī,í,ǐ,ì,u,ū,ú,ŭ,ù,ü,ǖ,ǘ,ǚ,ǜ]"
     };
 
+    
+    re::CC* pinyinCharClasses[4] = {};
     // mane what da hell
-    re::CC* pinyinCharClasses[4] = {
-        dyn_cast<re::CC>(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[0], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG))))),
-        dyn_cast<re::CC>(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[1], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG))))),
-        dyn_cast<re::CC>(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[2], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG))))),
-        dyn_cast<re::CC>(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[3], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG)))))
-    };
+    pinyinCharClasses[0] = dyn_cast<re::CC>(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[0], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG)))));
+    pinyinCharClasses[1] = dyn_cast<re::CC>(re::exclude_CC(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[1], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG))))), pinyinCharClasses[0]);
+    pinyinCharClasses[2] = dyn_cast<re::CC>(re::exclude_CC(re::exclude_CC(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[2], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG))))), pinyinCharClasses[0]), pinyinCharClasses[1]);
+    pinyinCharClasses[3] = dyn_cast<re::CC>(re::exclude_CC(re::exclude_CC(re::exclude_CC(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[3], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG))))), pinyinCharClasses[0]), pinyinCharClasses[1]), pinyinCharClasses[2]);
 
     // A Parabix program is build as a set of kernel calls called a pipeline.
     // A pipeline is construction using a Parabix driver object.
