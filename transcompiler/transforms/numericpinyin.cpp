@@ -74,6 +74,8 @@ void numericPinyinify::generatePabloMethod() {
     //std::vector<PabloAST *> translationBasis = getInputStreamSet("translationBasis");
     std::vector<PabloAST *> transformed(U21.size());
 
+    std::cout << U21.size() << std::endl;
+
     // Step 0 - create set of pinyin tones
     // thank you http://ktmatu.com/info/hanyu-pinyin-characters/unicode-character-set.utf8.html
     UCD::UnicodeSet pinyinTonesSet;
