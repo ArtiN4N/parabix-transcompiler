@@ -90,6 +90,8 @@ void numericPinyinify::generatePabloMethod() {
     PabloAST * afterWhiteSpaces = pb.createNot(pb.createAdvance(pb.createNot(whiteSpaces), 1));
 
     PabloAST * pinyinCount = pb.createCount(pb.createMatchStar(U21[0], afterWhiteSpaces));
+    pb.createDebugPrint(pinyinCount);
+    
     for (unsigned i = 1; i < U21.size(); i++) {
         pinyinCount = pb.createAdd(pinyinCount, pb.createCount(pb.createMatchStar(U21[i], afterWhiteSpaces)));
     }   
