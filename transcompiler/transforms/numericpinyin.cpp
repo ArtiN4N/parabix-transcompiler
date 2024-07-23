@@ -69,13 +69,14 @@ void numericPinyinify::generatePabloMethod() {
 
     // Get the input stream sets.
     std::vector<PabloAST *> U21 = getInputStreamSet("U21");
+    cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
 
     //std::vector<PabloAST *> translationBasis = getInputStreamSet("translationBasis");
     std::vector<PabloAST *> transformed(U21.size());
 
     // Step 0 - create set of pinyin tones
     // thank you http://ktmatu.com/info/hanyu-pinyin-characters/unicode-character-set.utf8.html
-    UCD::UnicodeSet pinyinTonesSet();
+    UCD::UnicodeSet pinyinTonesSet;
     int pinyinCodes[47] = {0xC0,0xC1,0xC8,0xC9,0xCC,0xCD,0xD2,0xD3,0xD9,0xDA,0xE0,0xE1,0xE8,0xE9,0xEC,0xED,0xF2,0xF3,0xF9,0xFA,0x100,0x112,0x113,0x11A,0x11B,0x12A,0x12B,0x14C,0x14D,0x16A,0x16B,0x16D,0x1CD,0x1CE,0x1CF,0x1D0,0x1D1,0x1D2,0x1D3,0x1D5,0x1D6,0x1D7,0x1D8,0x1D9,0x1DA,0x1DB,0x1DC};
     for (int i = 0; i < 47; i++) pinyinTonesSet.insert(pinyinCodes[i]);
     PabloAST * pinyinTones = ccc.compileCC(re::makeCC(pinyinTonesSet));
