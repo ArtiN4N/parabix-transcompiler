@@ -212,9 +212,11 @@ TonumericPinyinFunctionType generatePipeline(CPUDriver & pxDriver) {
     std::cout << "problem 4" << std::endl;
     //pinyinCharClasses[3] = dyn_cast<re::CC>(re::exclude_CC(re::exclude_CC(re::exclude_CC(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[3], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG, re::RE_Syntax::ERE)))), pinyinCharClasses[0]), pinyinCharClasses[1]), pinyinCharClasses[2]));
     std::cout << "problem 5" << std::endl;
+    re::CC* ccTest = dyn_cast<re::CC>(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse("ello\nThere", re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG, re::RE_Syntax::FixedStrings)))));
+
 
     StreamSet * inPinyinLabel1 = P->CreateStreamSet(1);
-    std::vector<re::CC *> inPinyinLabel1_CC = {pinyinCharClasses[0]};
+    std::vector<re::CC *> inPinyinLabel1_CC = {ccTest};
     P->CreateKernelCall<CharacterClassKernelBuilder>(inPinyinLabel1_CC, U21, inPinyinLabel1);
     SHOW_BIXNUM(inPinyinLabel1);
 
