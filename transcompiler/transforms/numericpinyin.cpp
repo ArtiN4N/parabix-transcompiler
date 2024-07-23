@@ -75,31 +75,31 @@ void numericPinyinify::generatePabloMethod() {
     //std::vector<PabloAST *> translationBasis = getInputStreamSet("translationBasis");
     std::vector<PabloAST *> transformed(U21.size());
 
-    std::cout << U21.size() << std::endl;
+    //std::cout << U21.size() << std::endl;
 
     // Step 0 - create set of pinyin tones
     // thank you http://ktmatu.com/info/hanyu-pinyin-characters/unicode-character-set.utf8.html
-    UCD::UnicodeSet pinyinTonesSet;
-    int pinyinCodes[47] = {0xC0,0xC1,0xC8,0xC9,0xCC,0xCD,0xD2,0xD3,0xD9,0xDA,0xE0,0xE1,0xE8,0xE9,0xEC,0xED,0xF2,0xF3,0xF9,0xFA,0x100,0x112,0x113,0x11A,0x11B,0x12A,0x12B,0x14C,0x14D,0x16A,0x16B,0x16D,0x1CD,0x1CE,0x1CF,0x1D0,0x1D1,0x1D2,0x1D3,0x1D5,0x1D6,0x1D7,0x1D8,0x1D9,0x1DA,0x1DB,0x1DC};
-    for (int i = 0; i < 47; i++) pinyinTonesSet.insert(pinyinCodes[i]);
-    PabloAST * pinyinTones = ccc.compileCC(re::makeCC(pinyinTonesSet));
+    //UCD::UnicodeSet pinyinTonesSet;
+    //int pinyinCodes[47] = {0xC0,0xC1,0xC8,0xC9,0xCC,0xCD,0xD2,0xD3,0xD9,0xDA,0xE0,0xE1,0xE8,0xE9,0xEC,0xED,0xF2,0xF3,0xF9,0xFA,0x100,0x112,0x113,0x11A,0x11B,0x12A,0x12B,0x14C,0x14D,0x16A,0x16B,0x16D,0x1CD,0x1CE,0x1CF,0x1D0,0x1D1,0x1D2,0x1D3,0x1D5,0x1D6,0x1D7,0x1D8,0x1D9,0x1DA,0x1DB,0x1DC};
+    //for (int i = 0; i < 47; i++) pinyinTonesSet.insert(pinyinCodes[i]);
+    //PabloAST * pinyinTones = ccc.compileCC(re::makeCC(pinyinTonesSet));
 
     // Create a character class from the whitespace property set
-    UCD::PropertyObject * whiteSpacesProperty = UCD::get_WSPACE_PropertyObject();
-    UCD::UnicodeSet wSpaceSet = whiteSpacesProperty->GetCodepointSet("");
-    PabloAST * whiteSpaces = ccc.compileCC(re::makeCC(wSpaceSet));
+    //UCD::PropertyObject * whiteSpacesProperty = UCD::get_WSPACE_PropertyObject();
+    //UCD::UnicodeSet wSpaceSet = whiteSpacesProperty->GetCodepointSet("");
+    //PabloAST * whiteSpaces = ccc.compileCC(re::makeCC(wSpaceSet));
 
     // Find all characters after a whitespace
-    PabloAST * afterWhiteSpaces = pb.createNot(pb.createAdvance(pb.createNot(whiteSpaces), 1));
+    //PabloAST * afterWhiteSpaces = pb.createNot(pb.createAdvance(pb.createNot(whiteSpaces), 1));
 
-    PabloAST * pinyinCount = pb.createCount(pb.createMatchStar(U21[0], afterWhiteSpaces));
-    pb.createDebugPrint(pinyinCount);
+    //PabloAST * pinyinCount = pb.createCount(pb.createMatchStar(U21[0], afterWhiteSpaces));
+    //pb.createDebugPrint(pinyinCount);
     
-    for (unsigned i = 1; i < U21.size(); i++) {
-        pinyinCount = pb.createAdd(pinyinCount, pb.createCount(pb.createMatchStar(U21[i], afterWhiteSpaces)));
-    }   
+    //for (unsigned i = 1; i < U21.size(); i++) {
+        //pinyinCount = pb.createAdd(pinyinCount, pb.createCount(pb.createMatchStar(U21[i], afterWhiteSpaces)));
+    //}   
     
-    pb.createDebugPrint(pinyinCount);
+    //pb.createDebugPrint(pinyinCount);
     
 
     // Step 1 - count the number of tones, and add space for that many characters
@@ -123,6 +123,21 @@ void numericPinyinify::generatePabloMethod() {
 typedef void (*TonumericPinyinFunctionType)(uint32_t fd);
 
 TonumericPinyinFunctionType generatePipeline(CPUDriver & pxDriver) {
+    std::string pinyinCharClassesText[4] = {
+        "[uai,uāi,uái,uǎi,uài,uang,uāng,uáng,uǎng,uàng,iao,iāo,iáo,iǎo,iào,iang,iāng,iáng,iǎng,iàng,ou,ōu,óu,ǒu,òu,uo,uō,uó,uǒ,uò,iong,iōng,ióng,iǒng,iòng,ei,ēi,éi,ěi,èi,eng,ēng,éng,ěng,èng,er,ēr,ér,ěr,èr,ie,iē,ié,iě,iè,ue,uē,ué,uě,uè,ui,uī,uí,uǐ,uì,ing,īng,íng,ǐng,ìng,un,ūn,ún,ŭn,ùn,iu,īu,íu,ǐu,ìu,ün,ǖn,ǘn,ǚn,ǜn]",
+        "[ai,āi,ái,ǎi,ài,ao,āo,áo,ǎo,ào,ang,āng,áng,ǎng,àng,uan,uān,uán,uǎn,uàn,ian,iān,ián,iǎn,iàn,ong,ōng,óng,ǒng,òng,en,ēn,én,ěn,èn,in,īn,ín,ǐn,ìn]",
+        "[an,ān,án,ǎn,àn,ua,uā,uá,uǎ,uà,ia,iā,iá,iǎ,ià,o,ō,ó,ǒ,ò,e,ē,é,ě,è]",
+        "[a,ā,á,ǎ,à,i,ī,í,ǐ,ì,u,ū,ú,ŭ,ù,ü,ǖ,ǘ,ǚ,ǜ]"
+    };
+
+    // mane what da hell
+    re::CC* pinyinCharClasses[4] = {
+        dyn_cast<re::CC>(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[0], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG))))),
+        dyn_cast<re::CC>(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[1], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG))))),
+        dyn_cast<re::CC>(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[2], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG))))),
+        dyn_cast<re::CC>(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[3], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG)))))
+    };
+
     // A Parabix program is build as a set of kernel calls called a pipeline.
     // A pipeline is construction using a Parabix driver object.
     auto & b = pxDriver.getBuilder();
