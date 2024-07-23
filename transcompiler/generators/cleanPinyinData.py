@@ -1,4 +1,4 @@
-prefix = "["
+'''prefix = "["
 postfix = "]"
 seperator = ","
 
@@ -23,7 +23,7 @@ specials = ["ā","á","ǎ","à",
 finals = []
 
 for dat in datas:
-    '''toRemove = []
+    toRemove = []
     for line in dat:
         remove = True
         for sp in specials:
@@ -31,13 +31,16 @@ for dat in datas:
                 remove = False
         if remove:
             toRemove.append(line)
-    dat = [line for line in dat if line not in toRemove]'''
+    dat = [line for line in dat if line not in toRemove]
     dat = '"' + "|".join(dat) + '"'
     finals.append(dat)
 
 
 with open("charClasses/numericPinyinCharClasses.txt", 'w', encoding='utf-8') as f:
 
-    f.write("\n".join(finals))
+    f.write("\n".join(finals))'''
 
-    
+
+t = 'std::string pinyinCharClassesText[4] = {"uāi|uái|uǎi|uài|uāng|uáng|uǎng|uàng|iāo|iáo|iǎo|iào|iāng|iáng|iǎng|iàng|ōu|óu|ǒu|òu|uō|uó|uǒ|uò|iōng|ióng|iǒng|iòng|ēi|éi|ěi|èi|ēng|éng|ěng|èng|ēr|ér|ěr|èr|iē|ié|iě|iè|uē|ué|uě|uè|uī|uí|uǐ|uì|īng|íng|ǐng|ìng|ūn|ún|ŭn|ùn|īu|íu|ǐu|ìu|ǖn|ǘn|ǚn|ǜn","āi|ái|ǎi|ài|āo|áo|ǎo|ào|āng|áng|ǎng|àng|uān|uán|uǎn|uàn|iān|ián|iǎn|iàn|ōng|óng|ǒng|òng|ēn|én|ěn|èn|īn|ín|ǐn|ìn","ān|án|ǎn|àn|uā|uá|uǎ|uà|iā|iá|iǎ|ià|ō|ó|ǒ|ò|ē|é|ě|è","ā|á|ǎ|à|ī|í|ǐ|ì|ū|ú|ŭ|ù|ǖ|ǘ|ǚ|ǜ"};'
+a = t.replace("|", "\n")
+print(a)
