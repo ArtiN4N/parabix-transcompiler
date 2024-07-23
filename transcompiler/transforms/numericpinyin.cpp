@@ -170,6 +170,7 @@ void numericPinyinify::generatePabloMethod() {
     //BixNum b = bnc.Create();
     //pb.createMatchStar(pinyinAs, pinyinExtras)
     //U21.
+    
 
     Var * spacedPinyin = pb.createVar("spacedPinyin", pb.createZeroes());
     // For each bit of the input stream
@@ -179,7 +180,8 @@ void numericPinyinify::generatePabloMethod() {
            //transformed[i] = pb.createXor(translationBasis[i], U21[i]);
         //else transformed[i] = U21[i];
         
-        pb.createAssign(pb.createExtract(spacedPinyin, pb.getInteger(i)), U21[i]);
+        //pb.createAssign(pb.createExtract(spacedPinyin, pb.getInteger(i)), U21[i]);
+        U21[i]->replaceUsesOfWith(pinyinAs, pinyinExtras)
 
         pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), U21[i]);
     }
