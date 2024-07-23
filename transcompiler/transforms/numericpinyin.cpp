@@ -24,6 +24,7 @@
 
 #include <pablo/codegenstate.h>
 #include <pablo/bixnum/bixnum.h>
+#include <pablo/arithmetic.h>
 
 #include <grep/grep_kernel.h>
 
@@ -114,6 +115,25 @@ void numericPinyinify::generatePabloMethod() {
     //std::vector<PabloAST *> translationBasis = getInputStreamSet("translationBasis");
     std::vector<PabloAST *> transformed(U21.size());
 
+    std::string aPinRegexStr     = "[āáǎà]";
+    std::string oPinRegexStr     = "[ōóǒò]";
+    std::string ePinRegexStr     = "[ēéěè]";
+    std::string iPinRegexStr     = "[īíǐì]";
+    std::string uPinRegexStr     = "[ūúŭù]";
+    std::string umPinRegexStr    = "[ǖǘǚǜ]";
+    std::string extraPinRegexStr = "[roginu]";
+
+    re::RE * aPinRegex = re::simplifyRE(re::RE_Parser::parse(aPinRegexStr));
+    aPinRegex = UCD::linkAndResolve(aPinRegex);
+    aPinRegex = UCD::externalizeProperties(aPinRegex);
+    re::CC * aPinClass = dyn_cast<re::CC>(aPinRegex);
+    PabloAST * pinyinAs = ccc.compileCC(aPinClass);
+
+    re::RE * extraPinRegex = re::simplifyRE(re::RE_Parser::parse(extraPinRegexStr));
+    extraPinRegex = UCD::linkAndResolve(extraPinRegex);
+    extraPinRegex = UCD::externalizeProperties(extraPinRegex);
+    re::CC * extraPinClass = dyn_cast<re::CC>(extraPinRegex);
+    PabloAST * pinyinExtras = ccc.compileCC(extraPinClass);
     //std::cout << U21.size() << std::endl;
 
     // Step 0 - create set of pinyin tones
@@ -147,12 +167,19 @@ void numericPinyinify::generatePabloMethod() {
 
     Var * outputBasisVar = getOutputStreamVar("u32Basis");
 
+    //BixNum b = bnc.Create();
+    //pb.createMatchStar(pinyinAs, pinyinExtras)
+    //U21.
+
+    Var * spacedPinyin = pb.createVar("spacedPinyin", pb.createZeroes());
     // For each bit of the input stream
     for (unsigned i = 0; i < U21.size(); i++) {
         //// If the translation set covers said bit
         //if (i < translationBasis.size()) // XOR the input bit with the transformation bit  
            //transformed[i] = pb.createXor(translationBasis[i], U21[i]);
         //else transformed[i] = U21[i];
+        
+        pb.createAssign(pb.createExtract(spacedPinyin, pb.getInteger(i)), U21[i]);
 
         pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), U21[i]);
     }
@@ -232,14 +259,9 @@ TonumericPinyinFunctionType generatePipeline(CPUDriver & pxDriver) {
     
     //std::cout << "problem 6" << std::endl;
 
-    std::string aPinRegexStr     = "[āáǎà]";
-    std::string oPinRegexStr     = "[ōóǒò]";
-    std::string ePinRegexStr     = "[ēéěè]";
-    std::string iPinRegexStr     = "[īíǐì]";
-    std::string uPinRegexStr     = "[ūúŭù]";
-    std::string umPinRegexStr    = "[ǖǘǚǜ]";
-    std::string extraPinRegexStr = "[roginu]";
+    
 
+    /*
     re::RE * aPinRegex = re::simplifyRE(re::RE_Parser::parse(aPinRegexStr));
     aPinRegex = UCD::linkAndResolve(aPinRegex);
     aPinRegex = UCD::externalizeProperties(aPinRegex);
@@ -258,7 +280,7 @@ TonumericPinyinFunctionType generatePipeline(CPUDriver & pxDriver) {
     StreamSet * extraPinStream = P->CreateStreamSet(1);
     std::vector<re::CC *> extraPinStream_CC = {extraPinClass};
     P->CreateKernelCall<CharacterClassKernelBuilder>(extraPinStream_CC, U21, extraPinStream);
-    SHOW_STREAM(extraPinStream);
+    SHOW_STREAM(extraPinStream);*/
 
 
     // Perform the logic of the numericPinyinify kernel on the codepoiont values.
