@@ -202,7 +202,7 @@ TonumericPinyinFunctionType generatePipeline(CPUDriver & pxDriver) {
     StreamSet * U21 = P->CreateStreamSet(21, 1);
     FilterByMask(P, u8index, U21_u8indexed, U21);
     //SHOW_BIXNUM(U21);
-    SHOW_BYTES(U21);
+    //SHOW_BYTES(U21);
 
 
     //std::string pinyinCharClassesText1[68] = {"uāi","uái","uǎi","uài","uāng","uáng","uǎng","uàng","iāo","iáo","iǎo","iào","iāng","iáng","iǎng","iàng","ōu","óu","ǒu","òu","uō","uó","uǒ","uò","iōng","ióng","iǒng","iòng","ēi","éi","ěi","èi","ēng","éng","ěng","èng","ēr","ér","ěr","èr","iē","ié","iě","iè","uē","ué","uě","uè","uī","uí","uǐ","uì","īng","íng","ǐng","ìng","ūn","ún","ŭn","ùn","īu","íu","ǐu","ìu","ǖn","ǘn","ǚn","ǜn"};
