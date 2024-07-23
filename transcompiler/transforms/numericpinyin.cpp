@@ -38,6 +38,7 @@
 #include <re/cc/cc_compiler_target.h>
 #include <re/cc/cc_compiler.h>
 #include <re/cc/cc_kernel.h>
+#include <re/adt/re_cc.h>
 
 #include <kernel/core/idisa_target.h>
 #include <boost/filesystem.hpp>
