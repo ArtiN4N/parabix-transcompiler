@@ -32,7 +32,7 @@ for dat in datas:
         if remove:
             toRemove.append(line)
     dat = [line for line in dat if line not in toRemove]
-    dat = '"' + "|".join(dat) + '"'
+    dat = '"' + "","".join(dat) + '"'
     finals.append(dat)
 
 
@@ -41,6 +41,9 @@ with open("charClasses/numericPinyinCharClasses.txt", 'w', encoding='utf-8') as 
     f.write("\n".join(finals))'''
 
 
-t = 'std::string pinyinCharClassesText[4] = {"uāi|uái|uǎi|uài|uāng|uáng|uǎng|uàng|iāo|iáo|iǎo|iào|iāng|iáng|iǎng|iàng|ōu|óu|ǒu|òu|uō|uó|uǒ|uò|iōng|ióng|iǒng|iòng|ēi|éi|ěi|èi|ēng|éng|ěng|èng|ēr|ér|ěr|èr|iē|ié|iě|iè|uē|ué|uě|uè|uī|uí|uǐ|uì|īng|íng|ǐng|ìng|ūn|ún|ŭn|ùn|īu|íu|ǐu|ìu|ǖn|ǘn|ǚn|ǜn","āi|ái|ǎi|ài|āo|áo|ǎo|ào|āng|áng|ǎng|àng|uān|uán|uǎn|uàn|iān|ián|iǎn|iàn|ōng|óng|ǒng|òng|ēn|én|ěn|èn|īn|ín|ǐn|ìn","ān|án|ǎn|àn|uā|uá|uǎ|uà|iā|iá|iǎ|ià|ō|ó|ǒ|ò|ē|é|ě|è","ā|á|ǎ|à|ī|í|ǐ|ì|ū|ú|ŭ|ù|ǖ|ǘ|ǚ|ǜ"};'
-a = t.replace("|", "\\n")
+t = 'std::string pinyinCharClassesText1[68] = {"uāi","uái","uǎi","uài","uāng","uáng","uǎng","uàng","iāo","iáo","iǎo","iào","iāng","iáng","iǎng","iàng","ōu","óu","ǒu","òu","uō","uó","uǒ","uò","iōng","ióng","iǒng","iòng","ēi","éi","ěi","èi","ēng","éng","ěng","èng","ēr","ér","ěr","èr","iē","ié","iě","iè","uē","ué","uě","uè","uī","uí","uǐ","uì","īng","íng","ǐng","ìng","ūn","ún","ŭn","ùn","īu","íu","ǐu","ìu","ǖn","ǘn","ǚn","ǜn"};'
+t = 'std::string pinyinCharClassesText2[32] = {"āi","ái","ǎi","ài","āo","áo","ǎo","ào","āng","áng","ǎng","àng","uān","uán","uǎn","uàn","iān","ián","iǎn","iàn","ōng","óng","ǒng","òng","ēn","én","ěn","èn","īn","ín","ǐn","ìn"};'
+t = 'std::string pinyinCharClassesText3[20] = {"ān","án","ǎn","àn","uā","uá","uǎ","uà","iā","iá","iǎ","ià","ō","ó","ǒ","ò","ē","é","ě","è"};'
+t = 'std::string pinyinCharClassesText4[16] = {"ā","á","ǎ","à","ī","í","ǐ","ì","ū","ú","ŭ","ù","ǖ","ǘ","ǚ","ǜ"};'
+
 print(a)

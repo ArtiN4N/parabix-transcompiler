@@ -168,6 +168,8 @@ TonumericPinyinFunctionType generatePipeline(CPUDriver & pxDriver) {
         "ā|á|ǎ|à|ī|í|ǐ|ì|ū|ú|ŭ|ù|ǖ|ǘ|ǚ|ǜ"
     };*/
     std::string pinyinCharClassesText[4] = {"uāi\nuái\nuǎi\nuài\nuāng\nuáng\nuǎng\nuàng\niāo\niáo\niǎo\niào\niāng\niáng\niǎng\niàng\nōu\nóu\nǒu\nòu\nuō\nuó\nuǒ\nuò\niōng\nióng\niǒng\niòng\nēi\néi\něi\nèi\nēng\néng\něng\nèng\nēr\nér\něr\nèr\niē\nié\niě\niè\nuē\nué\nuě\nuè\nuī\nuí\nuǐ\nuì\nīng\níng\nǐng\nìng\nūn\nún\nŭn\nùn\nīu\níu\nǐu\nìu\nǖn\nǘn\nǚn\nǜn","āi\nái\nǎi\nài\nāo\náo\nǎo\nào\nāng\náng\nǎng\nàng\nuān\nuán\nuǎn\nuàn\niān\nián\niǎn\niàn\nōng\nóng\nǒng\nòng\nēn\nén\něn\nèn\nīn\nín\nǐn\nìn","ān\nán\nǎn\nàn\nuā\nuá\nuǎ\nuà\niā\niá\niǎ\nià\nō\nó\nǒ\nò\nē\né\ně\nè","ā\ná\nǎ\nà\nī\ní\nǐ\nì\nū\nú\nŭ\nù\nǖ\nǘ\nǚ\nǜ"};
+    
+
 
     // A Parabix program is build as a set of kernel calls called a pipeline.
     // A pipeline is construction using a Parabix driver object.
@@ -201,6 +203,14 @@ TonumericPinyinFunctionType generatePipeline(CPUDriver & pxDriver) {
     SHOW_BIXNUM(U21);
 
 
+    std::string pinyinCharClassesText1[68] = {"uāi","uái","uǎi","uài","uāng","uáng","uǎng","uàng","iāo","iáo","iǎo","iào","iāng","iáng","iǎng","iàng","ōu","óu","ǒu","òu","uō","uó","uǒ","uò","iōng","ióng","iǒng","iòng","ēi","éi","ěi","èi","ēng","éng","ěng","èng","ēr","ér","ěr","èr","iē","ié","iě","iè","uē","ué","uě","uè","uī","uí","uǐ","uì","īng","íng","ǐng","ìng","ūn","ún","ŭn","ùn","īu","íu","ǐu","ìu","ǖn","ǘn","ǚn","ǜn"};
+    std::string pinyinCharClassesText2[32] = {"āi","ái","ǎi","ài","āo","áo","ǎo","ào","āng","áng","ǎng","àng","uān","uán","uǎn","uàn","iān","ián","iǎn","iàn","ōng","óng","ǒng","òng","ēn","én","ěn","èn","īn","ín","ǐn","ìn"};
+    std::string pinyinCharClassesText3[20] = {"ān","án","ǎn","àn","uā","uá","uǎ","uà","iā","iá","iǎ","ià","ō","ó","ǒ","ò","ē","é","ě","è"};
+    std::string pinyinCharClassesText4[16] = {"ā","á","ǎ","à","ī","í","ǐ","ì","ū","ú","ŭ","ù","ǖ","ǘ","ǚ","ǜ"};
+
+    //re::CC* pinyinChCls1;
+    //re::makeCC(pinyinChCls1, )
+
     std::cout << "problem 1" << std::endl;
     re::CC* pinyinCharClasses[4] = {};
     // mane what da hell
@@ -212,7 +222,7 @@ TonumericPinyinFunctionType generatePipeline(CPUDriver & pxDriver) {
     std::cout << "problem 4" << std::endl;
     //pinyinCharClasses[3] = dyn_cast<re::CC>(re::exclude_CC(re::exclude_CC(re::exclude_CC(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[3], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG, re::RE_Syntax::ERE)))), pinyinCharClasses[0]), pinyinCharClasses[1]), pinyinCharClasses[2]));
     std::cout << "problem 5" << std::endl;
-    re::CC* ccTest = dyn_cast<re::CC>(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse("(he|ho)", re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG, re::RE_Syntax::ERE)))));
+    re::CC* ccTest = dyn_cast<re::CC>(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse("he", re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG, re::RE_Syntax::FixedStrings)))));
 
     std::cout << "problem 6" << std::endl;
 
