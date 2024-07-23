@@ -32,6 +32,7 @@
 #include <llvm/Support/raw_ostream.h>
 
 #include <re/toolchain/toolchain.h>
+#include <re/transforms/exclude_CC.h>
 #include <re/adt/re_name.h>
 #include <re/adt/re_re.h>
 #include <re/cc/cc_compiler_target.h>
