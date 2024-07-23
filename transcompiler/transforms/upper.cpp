@@ -119,11 +119,6 @@ ToUpperFunctionType generatePipeline(CPUDriver & pxDriver) {
     FilterByMask(P, u8index, U21_u8indexed, U21);
     SHOW_BIXNUM(U21);
 
-    // name test
-    UCD::StringPropertyObject* namePropertyObject = dyn_cast<UCD::StringPropertyObject>(UCD::get_NA_PropertyObject());
-    std::string nameofA = namePropertyObject->GetStringValue(0x41);
-    std::cout << "name = " << nameofA << std::endl;
-
     // Get the uppercase mapping object, can create a translation set from that
     UCD::CodePointPropertyObject* upperPropertyObject = dyn_cast<UCD::CodePointPropertyObject>(UCD::get_SUC_PropertyObject());
     unicode::BitTranslationSets upperTranslationSet;
