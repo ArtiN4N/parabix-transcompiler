@@ -1,6 +1,7 @@
 #include <vector>
 #include <fcntl.h>
 #include <string>
+#include <iostream>
 
 #include <unicode/data/PropertyObjects.h>
 #include <unicode/data/PropertyObjectTable.h>
