@@ -162,10 +162,10 @@ typedef void (*TonumericPinyinFunctionType)(uint32_t fd);
 
 TonumericPinyinFunctionType generatePipeline(CPUDriver & pxDriver) {
     std::string pinyinCharClassesText[4] = {
-        "uai|uāi|uái|uǎi|uài|uang|uāng|uáng|uǎng|uàng|iao|iāo|iáo|iǎo|iào|iang|iāng|iáng|iǎng|iàng|ou|ōu|óu|ǒu|òu|uo|uō|uó|uǒ|uò|iong|iōng|ióng|iǒng|iòng|ei|ēi|éi|ěi|èi|eng|ēng|éng|ěng|èng|er|ēr|ér|ěr|èr|ie|iē|ié|iě|iè|ue|uē|ué|uě|uè|ui|uī|uí|uǐ|uì|ing|īng|íng|ǐng|ìng|un|ūn|ún|ŭn|ùn|iu|īu|íu|ǐu|ìu|ün|ǖn|ǘn|ǚn|ǜn",
-        "ai|āi|ái|ǎi|ài|ao|āo|áo|ǎo|ào|ang|āng|áng|ǎng|àng|uan|uān|uán|uǎn|uàn|ian|iān|ián|iǎn|iàn|ong|ōng|óng|ǒng|òng|en|ēn|én|ěn|èn|in|īn|ín|ǐn|ìn",
-        "an|ān|án|ǎn|àn|ua|uā|uá|uǎ|uà|ia|iā|iá|iǎ|ià|o|ō|ó|ǒ|ò|e|ē|é|ě|è",
-        "a|ā|á|ǎ|à|i|ī|í|ǐ|ì|u|ū|ú|ŭ|ù|ü|ǖ|ǘ|ǚ|ǜ"
+        "uāi|uái|uǎi|uài|uāng|uáng|uǎng|uàng|iāo|iáo|iǎo|iào|iāng|iáng|iǎng|iàng|ōu|óu|ǒu|òu|uō|uó|uǒ|uò|iōng|ióng|iǒng|iòng|ēi|éi|ěi|èi|ēng|éng|ěng|èng|ēr|ér|ěr|èr|iē|ié|iě|iè|uē|ué|uě|uè|uī|uí|uǐ|uì|īng|íng|ǐng|ìng|ūn|ún|ŭn|ùn|īu|íu|ǐu|ìu|ǖn|ǘn|ǚn|ǜn",
+        "āi|ái|ǎi|ài|āo|áo|ǎo|ào|āng|áng|ǎng|àng|uān|uán|uǎn|uàn|iān|ián|iǎn|iàn|ōng|óng|ǒng|òng|ēn|én|ěn|èn|īn|ín|ǐn|ìn",
+        "ān|án|ǎn|àn|uā|uá|uǎ|uà|iā|iá|iǎ|ià|ō|ó|ǒ|ò|ē|é|ě|è",
+        "ā|á|ǎ|à|ī|í|ǐ|ì|ū|ú|ŭ|ù|ǖ|ǘ|ǚ|ǜ"
     };
 
     // A Parabix program is build as a set of kernel calls called a pipeline.
@@ -203,7 +203,7 @@ TonumericPinyinFunctionType generatePipeline(CPUDriver & pxDriver) {
     std::cout << "problem 1" << std::endl;
     re::CC* pinyinCharClasses[4] = {};
     // mane what da hell
-    pinyinCharClasses[0] = dyn_cast<re::CC>(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[0], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG, re::RE_Syntax::ERE)))));
+    pinyinCharClasses[0] = dyn_cast<re::CC>(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[0], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG, re::RE_Syntax::PCRE)))));
     std::cout << "problem 2" << std::endl;
     //pinyinCharClasses[1] = dyn_cast<re::CC>(re::exclude_CC(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[1], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG, re::RE_Syntax::ERE)))), pinyinCharClasses[0]));
     std::cout << "problem 3" << std::endl;
