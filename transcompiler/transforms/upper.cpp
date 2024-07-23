@@ -122,7 +122,7 @@ ToUpperFunctionType generatePipeline(CPUDriver & pxDriver) {
     // Get the uppercase mapping object, can create a translation set from that
     UCD::CodePointPropertyObject* upperPropertyObject = dyn_cast<UCD::CodePointPropertyObject>(UCD::get_SUC_PropertyObject());
     std::string nameofA = upperPropertyObject->GetStringValue(0x41);
-    std::cout << nameofA << std::endl;
+    std::cout << "name = " << nameofA << std::endl;
 
     unicode::BitTranslationSets upperTranslationSet;
     upperTranslationSet = upperPropertyObject->GetBitTransformSets();
