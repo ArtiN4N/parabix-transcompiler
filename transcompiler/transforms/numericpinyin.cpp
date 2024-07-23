@@ -81,8 +81,8 @@ void numericPinyinify::generatePabloMethod() {
     for (int i = 0; i < 47; i++) pinyinTonesSet.insert(pinyinCodes[i]);
     PabloAST * pinyinTones = ccc.compileCC(re::makeCC(pinyinTonesSet));
 
-    PabloAST * pinyinCount = pb.createZeroes();
-    for (unsigned i = 0; i < U21.size(); i++) {
+    PabloAST * pinyinCount = pb.createCount(pb.createMatchStar(U21[0], pinyinTones));
+    for (unsigned i = 1; i < U21.size(); i++) {
         pinyinCount = pb.createAdd(pinyinCount, pb.createCount(pb.createMatchStar(U21[i], pinyinTones)));
     }   
     
