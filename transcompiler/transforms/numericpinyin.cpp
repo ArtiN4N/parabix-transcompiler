@@ -214,11 +214,14 @@ TonumericPinyinFunctionType generatePipeline(CPUDriver & pxDriver) {
     std::cout << "problem 5" << std::endl;
     re::CC* ccTest = dyn_cast<re::CC>(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse("(he|ho)", re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG, re::RE_Syntax::ERE)))));
 
+    std::cout << "problem 6" << std::endl;
 
     //re::RE
 
     StreamSet * inPinyinLabel1 = P->CreateStreamSet(1);
+    std::cout << "problem 7" << std::endl;
     std::vector<re::CC *> inPinyinLabel1_CC = {ccTest};
+    std::cout << "problem 8" << std::endl;
     P->CreateKernelCall<CharacterClassKernelBuilder>(inPinyinLabel1_CC, U21, inPinyinLabel1);
     SHOW_BIXNUM(inPinyinLabel1);
 
