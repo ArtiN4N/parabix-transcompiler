@@ -143,7 +143,7 @@ int main(int argc, char *argv[]) {
     const auto fileCount = allFiles.size();
 
     UCountFunctionType uCountFunctionPtr = nullptr;
-    re::RE * CC_re = re::RE_Parser::parse(CC_expr);
+    re::RE * CC_re = re::simplify(re::RE_Parser::parse(CC_expr));
     CC_re = UCD::linkAndResolve(CC_re);
     CC_re = UCD::externalizeProperties(CC_re);
     if (re::Name * UCD_property_name = dyn_cast<re::Name>(CC_re)) {
