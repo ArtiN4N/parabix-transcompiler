@@ -189,19 +189,19 @@ TonumericPinyinFunctionType generatePipeline(CPUDriver & pxDriver) {
     // Get the basis bits
     StreamSet * BasisBits = P->CreateStreamSet(8, 1);
     P->CreateKernelCall<S2PKernel>(ByteStream, BasisBits);
-    SHOW_BIXNUM(BasisBits);
+    //SHOW_BIXNUM(BasisBits);
 
     // Convert into codepoints
     StreamSet * u8index = P->CreateStreamSet(1, 1);
     P->CreateKernelCall<UTF8_index>(BasisBits, u8index);
-    SHOW_STREAM(u8index);
+    //SHOW_STREAM(u8index);
 
     StreamSet * U21_u8indexed = P->CreateStreamSet(21, 1);
     P->CreateKernelCall<UTF8_Decoder>(BasisBits, U21_u8indexed);
 
     StreamSet * U21 = P->CreateStreamSet(21, 1);
     FilterByMask(P, u8index, U21_u8indexed, U21);
-    SHOW_BIXNUM(U21);
+    //SHOW_BIXNUM(U21);
 
 
     //std::string pinyinCharClassesText1[68] = {"uāi","uái","uǎi","uài","uāng","uáng","uǎng","uàng","iāo","iáo","iǎo","iào","iāng","iáng","iǎng","iàng","ōu","óu","ǒu","òu","uō","uó","uǒ","uò","iōng","ióng","iǒng","iòng","ēi","éi","ěi","èi","ēng","éng","ěng","èng","ēr","ér","ěr","èr","iē","ié","iě","iè","uē","ué","uě","uè","uī","uí","uǐ","uì","īng","íng","ǐng","ìng","ūn","ún","ŭn","ùn","īu","íu","ǐu","ìu","ǖn","ǘn","ǚn","ǜn"};
@@ -238,7 +238,7 @@ TonumericPinyinFunctionType generatePipeline(CPUDriver & pxDriver) {
     StreamSet * inPinyinLabel1 = P->CreateStreamSet(1);
     std::vector<re::CC *> inPinyinLabel1_CC = {CC_ast};
     P->CreateKernelCall<CharacterClassKernelBuilder>(inPinyinLabel1_CC, U21, inPinyinLabel1);
-    SHOW_BIXNUM(inPinyinLabel1);
+    SHOW_STREAM(inPinyinLabel1);
 
 
     // Perform the logic of the numericPinyinify kernel on the codepoiont values.
