@@ -181,7 +181,7 @@ void numericPinyinify::generatePabloMethod() {
         //else transformed[i] = U21[i];
         
         //pb.createAssign(pb.createExtract(spacedPinyin, pb.getInteger(i)), U21[i]);
-        U21[i]->replaceUsesOfWith(pinyinAs, pinyinExtras)
+        U21[i]->replaceUsesOfWith(pinyinAs, pinyinExtras);
 
         pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), U21[i]);
     }
