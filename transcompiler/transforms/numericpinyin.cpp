@@ -206,10 +206,11 @@ TonumericPinyinFunctionType generatePipeline(CPUDriver & pxDriver) {
     pinyinCharClasses[2] = dyn_cast<re::CC>(re::exclude_CC(re::exclude_CC(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[2], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG)))), pinyinCharClasses[0]), pinyinCharClasses[1]));
     pinyinCharClasses[3] = dyn_cast<re::CC>(re::exclude_CC(re::exclude_CC(re::exclude_CC(UCD::externalizeProperties(UCD::linkAndResolve(re::simplifyRE(re::RE_Parser::parse(pinyinCharClassesText[3], re::ModeFlagType::CASE_INSENSITIVE_MODE_FLAG)))), pinyinCharClasses[0]), pinyinCharClasses[1]), pinyinCharClasses[2]));
 
+
     StreamSet * inPinyinLabel1 = P->CreateStreamSet(1);
     std::vector<re::CC *> inPinyinLabel1_CC = {pinyinCharClasses[0]};
     P->CreateKernelCall<CharacterClassKernelBuilder>(inPinyinLabel1_CC, U21, inPinyinLabel1);
-    SHOW_BIXNUM(inPinyinLabel1);
+    SHOW_BIXNUM(pinyinCharClasses[0]);
 
 
     // Perform the logic of the numericPinyinify kernel on the codepoiont values.
