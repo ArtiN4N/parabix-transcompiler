@@ -144,7 +144,7 @@ AnyNameFunctionType generatePipeline(CPUDriver & pxDriver) {
     SHOW_BIXNUM(B);
 
     StreamSet * CCstream = P->CreateStreamSet(1, 1);
-    UCD::EnumeratedPropertyObject* enumPropObj = dyn_cast<UCD::EnumeratedPropertyObject>(UCD::get_NA_PropertyObject())
+    UCD::EnumeratedPropertyObject* enumPropObj = dyn_cast<UCD::EnumeratedPropertyObject>(UCD::get_NA_PropertyObject());
     P->CreateKernelCall<UnicodePropertyBasis>(enumPropObj, U21, CCstream);
     SHOW_BIXNUM(CCstream);
 
