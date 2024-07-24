@@ -139,7 +139,7 @@ ToRemoveFunctionType generatePipeline(CPUDriver & pxDriver) {
     FilterByMask(P, u8index, U21_u8indexed, U21);
     SHOW_BIXNUM(U21);
 
-    std::string toRemoveStr = "[abcdef!]"
+    std::string toRemoveStr = "[abcdef!]";
     re::RE * toRemoveRegex = re::simplifyRE(re::RE_Parser::parse(toRemoveStr));
     toRemoveRegex = UCD::linkAndResolve(toRemoveRegex);
     toRemoveRegex = UCD::externalizeProperties(toRemoveRegex);
