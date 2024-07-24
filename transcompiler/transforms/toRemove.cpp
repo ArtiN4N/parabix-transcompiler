@@ -56,52 +56,24 @@ using namespace pablo;
 static cl::OptionCategory RemoveOptions(" e Options", "remove control options.");
 static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), cl::Required, cl::cat(RemoveOptions));
 
-class Removeify : public pablo::PabloKernel {
+
+// from csv2json.cpp
+class Invert : public PabloKernel {
 public:
-    Removeify(KernelBuilder & b, StreamSet * U21, StreamSet * removeBasis, StreamSet * lowerBasis, StreamSet * u32Basis)
-    : pablo::PabloKernel(b, "Removeify",
-                        {Binding{"U21", U21}, Binding{"removeBasis", removeBasis}, Binding{"lowerBasis", lowerBasis}},
-                            {Binding{"u32Basis", u32Basis}}) {}
+    Invert(KernelBuilder & b, StreamSet * mask, StreamSet * inverted)
+        : PabloKernel(b, "Invert",
+                      {Binding{"mask", mask}},
+                      {Binding{"inverted", inverted}}) {}
 protected:
     void generatePabloMethod() override;
 };
 
-void Removeify::generatePabloMethod() {
-    //  pb is an object used for build Pablo language statements
-    //pablo::PabloBuilder pb(getEntryScope());
-
-    // Get the input stream sets.
-    //std::vector<PabloAST *> U21 = getInputStreamSet("U21");
-    //cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
-
-    //std::vector<PabloAST *> removeBasis = getInputStreamSet("removeBasis");
-    //std::vector<PabloAST *> lowerBasis = getInputStreamSet("lowerBasis");
-
-    //std::vector<PabloAST *> transformedRemove(U21.size());
-    //std::vector<PabloAST *> transformedLower(U21.size());
-
-    //Var * outputBasisVar = getOutputStreamVar("u32Basis");
-
-
-    
-    
-    // Find all characters after a whitespace
-    //PabloAST * afterWhiteSpaces = pb.createNot(pb.createAdvance(pb.createNot(whiteSpaces), 1));
-
-    //for (unsigned i = 0; i < U21.size(); i++) {
-        
-        // If the translation set covers said bit, XOR the input bit with the transformation bit
-        //if (i < removeBasis.size())
-            //transformedRemove[i] = pb.createXor(removeBasis[i], U21[i]);
-        //else transformedRemove[i] = U21[i];
-
-        //if (i < lowerBasis.size())
-            //transformedLower[i] = pb.createXor(lowerBasis[i], U21[i]);
-        //else transformedLower[i] = U21[i];
-
-        // Convert to remove case after whitespaces, otherwise, lowercase
-        //pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), pb.createSel(afterWhiteSpaces, transformedRemove[i], transformedLower[i]));
-    //}
+void Invert::generatePabloMethod() {
+    pablo::PabloBuilder pb(getEntryScope());
+    PabloAST * mask = getInputStreamSet("mask")[0];
+    PabloAST * inverted = pb.createInFile(pb.createNot(mask));
+    Var * outVar = getOutputStreamVar("inverted");
+    pb.createAssign(pb.createExtract(outVar, pb.getInteger(0)), inverted);
 }
 
 
@@ -151,7 +123,7 @@ ToRemoveFunctionType generatePipeline(CPUDriver & pxDriver) {
     SHOW_STREAM(toRemoveMarker);
 
     StreamSet * toKeepMarker = P->CreateStreamSet(1);
-    P->CreateKernelCall<CharacterClassKernelBuilder>(toRemoveMarker, toKeepMarker);
+    P->CreateKernelCall<Invert>(toRemoveMarker, toKeepMarker);
     SHOW_STREAM(toKeepMarker);
 
     StreamSet * removeBasis = P->CreateStreamSet(21, 1);
