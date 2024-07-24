@@ -53,7 +53,7 @@ using namespace pablo;
 
 //  These declarations are for command line processing.
 //  See the LLVM CommandLine 2.0 Library Manual https://llvm.org/docs/CommandLine.html
-static cl::OptionCategory RemoveOptions(" e Options", "remove control options.");
+static cl::OptionCategory RemoveOptions("remove Options", "remove control options.");
 static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), cl::Required, cl::cat(RemoveOptions));
 
 
@@ -128,7 +128,6 @@ ToRemoveFunctionType generatePipeline(CPUDriver & pxDriver) {
 
     StreamSet * removeBasis = P->CreateStreamSet(21, 1);
     FilterByMask(P, toKeepMarker, U21, removeBasis);
-    //P->CreateKernelCall<DeletionKernel>(U21, toRemoveMarker, removeBasis, )
 
     // Convert back to UTF8 from codepoints.
     StreamSet * const OutputBasis = P->CreateStreamSet(8);
