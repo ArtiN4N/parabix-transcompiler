@@ -10,6 +10,7 @@
 #include <unicode/utf/transchar.h>
 
 #include <kernel/streamutils/deletion.h>
+#include <kernel/streamutils/string_insert.h>
 #include <kernel/pipeline/driver/cpudriver.h>
 #include <kernel/pipeline/pipeline_builder.h>
 #include <kernel/unicode/UCD_property_kernel.h>
@@ -84,7 +85,7 @@ void UnicodeNameConverter::generatePabloMethod() {
         
         UCD::codepoint_t codepoint = static_cast<UCD::codepoint_t>(i); // Simplified for illustration
 
-        UCD::StringPropertyObject* mNamePropertyObject = dyn_cast<UCD::StringPropertyObject>(UCD::get_NA_PropertyObject())
+        UCD::StringPropertyObject* mNamePropertyObject = dyn_cast<UCD::StringPropertyObject>(UCD::get_NA_PropertyObject());
         std::string name = mNamePropertyObject->GetStringValue(codepoint);
         std::string formattedName = "\\N{" + name + "}";
 
@@ -138,14 +139,14 @@ AnyNameFunctionType generatePipeline(CPUDriver & pxDriver) {
 
     std::vector<unsigned> insertAmts = {3}; // TODO - turn this into an actual vector of insert amts (how?)
 
-    StreamSet * B = E->CreateStreamSet(8, 1); // Bixnum
+    StreamSet * B = P->CreateStreamSet(8, 1); // Bixnum
     P->CreateKernelCall<ZeroInsertBixNum>(insertAmts, everymask, B);
     SHOW_BIXNUM(B);
 
     StreamSet * CCstream = P->CreateStreamSet(1, 1);
     UCD::EnumeratedPropertyObject* enumPropObj = dyn_cast<UCD::EnumeratedPropertyObject>(UCD::get_NA_PropertyObject())
     P->CreateKernelCall<UnicodePropertyBasis>(enumPropObj, U21, CCstream);
-    SHOW_BIXNUM(CCstreams);
+    SHOW_BIXNUM(CCstream);
 
 
     auto * U21out = P->CreateStreamSet(21, 1);
