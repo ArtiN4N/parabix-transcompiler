@@ -68,40 +68,40 @@ protected:
 
 void Removeify::generatePabloMethod() {
     //  pb is an object used for build Pablo language statements
-    pablo::PabloBuilder pb(getEntryScope());
+    //pablo::PabloBuilder pb(getEntryScope());
 
     // Get the input stream sets.
-    std::vector<PabloAST *> U21 = getInputStreamSet("U21");
-    cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
+    //std::vector<PabloAST *> U21 = getInputStreamSet("U21");
+    //cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), U21);
 
-    std::vector<PabloAST *> removeBasis = getInputStreamSet("removeBasis");
-    std::vector<PabloAST *> lowerBasis = getInputStreamSet("lowerBasis");
+    //std::vector<PabloAST *> removeBasis = getInputStreamSet("removeBasis");
+    //std::vector<PabloAST *> lowerBasis = getInputStreamSet("lowerBasis");
 
-    std::vector<PabloAST *> transformedRemove(U21.size());
-    std::vector<PabloAST *> transformedLower(U21.size());
+    //std::vector<PabloAST *> transformedRemove(U21.size());
+    //std::vector<PabloAST *> transformedLower(U21.size());
 
-    Var * outputBasisVar = getOutputStreamVar("u32Basis");
+    //Var * outputBasisVar = getOutputStreamVar("u32Basis");
 
 
     
     
     // Find all characters after a whitespace
-    PabloAST * afterWhiteSpaces = pb.createNot(pb.createAdvance(pb.createNot(whiteSpaces), 1));
+    //PabloAST * afterWhiteSpaces = pb.createNot(pb.createAdvance(pb.createNot(whiteSpaces), 1));
 
-    for (unsigned i = 0; i < U21.size(); i++) {
+    //for (unsigned i = 0; i < U21.size(); i++) {
         
         // If the translation set covers said bit, XOR the input bit with the transformation bit
-        if (i < removeBasis.size())
-            transformedRemove[i] = pb.createXor(removeBasis[i], U21[i]);
-        else transformedRemove[i] = U21[i];
+        //if (i < removeBasis.size())
+            //transformedRemove[i] = pb.createXor(removeBasis[i], U21[i]);
+        //else transformedRemove[i] = U21[i];
 
-        if (i < lowerBasis.size())
-            transformedLower[i] = pb.createXor(lowerBasis[i], U21[i]);
-        else transformedLower[i] = U21[i];
+        //if (i < lowerBasis.size())
+            //transformedLower[i] = pb.createXor(lowerBasis[i], U21[i]);
+        //else transformedLower[i] = U21[i];
 
         // Convert to remove case after whitespaces, otherwise, lowercase
-        pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), pb.createSel(afterWhiteSpaces, transformedRemove[i], transformedLower[i]));
-    }
+        //pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), pb.createSel(afterWhiteSpaces, transformedRemove[i], transformedLower[i]));
+    //}
 }
 
 
