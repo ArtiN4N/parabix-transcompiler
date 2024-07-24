@@ -149,7 +149,8 @@ AnyNameFunctionType generatePipeline(CPUDriver & pxDriver) {
     //adding adequate space
     // everymask marks every character
     auto * everymask = P->CreateStreamSet(1);
-    P->CreateKernelCall<CreateOnes>(everymask);
+    std::vector<re::CC *> everymask_CC = {re::makeCC(0x0000, 0x10FFFF)};
+    P->CreateKernelCall<CharacterClassKernelBuilder>(everymask_CC, U21, everymask);
 
     std::vector<unsigned> insertAmts = {3}; // TODO - turn this into an actual vector of insert amts (how?)
 
