@@ -1,6 +1,7 @@
 #include <vector>
 #include <fcntl.h>
 #include <string>
+#include <cout>
 
 #include <unicode/data/PropertyObjects.h>
 #include <unicode/data/PropertyObjectTable.h>
@@ -74,19 +75,26 @@ void UnicodeNameConverter::generatePabloMethod() {
     pablo::PabloBuilder pb(getEntryScope());
     std::vector<pablo::PabloAST *> U21 = getInputStreamSet("U21");
     pablo::Var * U21out = getOutputStreamVar("U21out");
-    convertCodepointsToNames(pb, U21, U21out);
-}
+    //convertCodepointsToNames(pb, U21, U21out);
 
-void UnicodeNameConverter::convertCodepointsToNames(PabloBuilder &pb, const std::vector<PabloAST *> &U21, Var * U21out) {
     for (unsigned i = 0; i < U21.size(); i++) {
+        
         UCD::codepoint_t codepoint = static_cast<UCD::codepoint_t>(i); // Simplified for illustration
         std::string name = mNamePropertyObject->GetStringValue(codepoint);
         std::string formattedName = "\\N{" + name + "}";
+
+        std::cout << formattedName << std::endl;
+
         for (size_t j = 0; j < formattedName.size(); ++j) {
             auto output = pb.getInteger(static_cast<uint8_t>(formattedName[j]));
-            pb.createAssign(pb.createExtract(U21out, pb.getInteger(i * 8 + j)), output);
+            //pb.getInteger(i * 8 + j)
+            pb.createAssign(pb.createExtract(U21out, pb.getInteger(i)), U21[i]);
         }
     }
+}
+
+void UnicodeNameConverter::convertCodepointsToNames(PabloBuilder &pb, const std::vector<PabloAST *> &U21, Var * U21out) {
+    
 }
 
 typedef void (*AnyNameFunctionType)(uint32_t fd);
