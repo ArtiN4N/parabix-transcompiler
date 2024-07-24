@@ -51,6 +51,23 @@ namespace cl = llvm::cl;
 static cl::OptionCategory AnyNameOptions("any-name Options", "any-name control options.");
 static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), cl::Required, cl::cat(AnyNameOptions));
 
+class Ones : public PabloKernel {
+public:
+    Ones(KernelBuilder & b, StreamSet * ones)
+        : PabloKernel(b, "Ones",
+                      {},
+                      {Binding{"ones", ones}}) {}
+protected:
+    void generatePabloMethod() override;
+};
+
+void Ones::generatePabloMethod() {
+    pablo::PabloBuilder pb(getEntryScope());
+    PabloAST * oneSet = pb.createInFile(pb.createOnes());
+    Var * ones = getOutputStreamVar("ones");
+    pb.createAssign(pb.createExtract(ones, pb.getInteger(0)), oneSet);
+}
+
 class UnicodeNameConverter : public pablo::PabloKernel {
 public:
     UnicodeNameConverter(KernelBuilder & b, StreamSet * U21, StreamSet * U21out)
@@ -77,9 +94,13 @@ void UnicodeNameConverter::generatePabloMethod() {
     pablo::Var * U21out = getOutputStreamVar("U21out");
     //convertCodepointsToNames(pb, U21, U21out);
 
+    //pb.
+
     for (unsigned i = 0; i < U21.size(); i++) {
         
         UCD::codepoint_t codepoint = static_cast<UCD::codepoint_t>(i); // Simplified for illustration
+
+        UCD::StringPropertyObject* mNamePropertyObject = dyn_cast<UCD::StringPropertyObject>(UCD::get_NA_PropertyObject())
         std::string name = mNamePropertyObject->GetStringValue(codepoint);
         std::string formattedName = "\\N{" + name + "}";
 
@@ -122,6 +143,25 @@ AnyNameFunctionType generatePipeline(CPUDriver & pxDriver) {
     auto * U21 = P->CreateStreamSet(21, 1);
     FilterByMask(P, u8index, U21_u8indexed, U21);
     SHOW_BIXNUM(U21);
+
+
+
+    //adding adequate space
+    // everymask marks every character
+    auto * everymask = P->CreateStreamSet(1);
+    P->CreateKernelCall<Ones>(everymask);
+
+    std::vector<unsigned> insertAmts = {3}; // TODO - turn this into an actual vector of insert amts (how?)
+
+    StreamSet * B = E->CreateStreamSet(8, 1); // Bixnum
+    P->CreateKernelCall<ZeroInsertBixNum>(insertAmts, everymask, B);
+    SHOW_BIXNUM(B);
+
+    StreamSet * CCstream = P->CreateStreamSet(1, 1);
+    UCD::EnumeratedPropertyObject* enumPropObj = dyn_cast<UCD::EnumeratedPropertyObject>(UCD::get_NA_PropertyObject())
+    P->CreateKernelCall<UnicodePropertyBasis>(enumPropObj, U21, CCstream);
+    SHOW_BIXNUM(CCstreams);
+
 
     auto * U21out = P->CreateStreamSet(21, 1);
     P->CreateKernelCall<UnicodeNameConverter>(U21, U21out);
