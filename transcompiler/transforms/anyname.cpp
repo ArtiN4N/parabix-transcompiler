@@ -51,9 +51,9 @@ namespace cl = llvm::cl;
 static cl::OptionCategory AnyNameOptions("any-name Options", "any-name control options.");
 static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), cl::Required, cl::cat(AnyNameOptions));
 
-class Ones : public PabloKernel {
+class CreateOnes : public PabloKernel {
 public:
-    Ones(KernelBuilder & b, StreamSet * ones)
+    CreateOnes(KernelBuilder & b, StreamSet * ones)
         : PabloKernel(b, "Ones",
                       {},
                       {Binding{"ones", ones}}) {}
@@ -61,7 +61,7 @@ protected:
     void generatePabloMethod() override;
 };
 
-void Ones::generatePabloMethod() {
+void CreateOnes::generatePabloMethod() {
     pablo::PabloBuilder pb(getEntryScope());
     PabloAST * oneSet = pb.createInFile(pb.createOnes());
     Var * ones = getOutputStreamVar("ones");
