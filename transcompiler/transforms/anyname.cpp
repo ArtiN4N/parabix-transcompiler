@@ -51,22 +51,6 @@ namespace cl = llvm::cl;
 static cl::OptionCategory AnyNameOptions("any-name Options", "any-name control options.");
 static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), cl::Required, cl::cat(AnyNameOptions));
 
-class CreateOnes : public PabloKernel {
-public:
-    CreateOnes(KernelBuilder & b, StreamSet * ones)
-        : PabloKernel(b, "Ones",
-                      {},
-                      {Binding{"ones", ones}}) {}
-protected:
-    void generatePabloMethod() override;
-};
-
-void CreateOnes::generatePabloMethod() {
-    pablo::PabloBuilder pb(getEntryScope());
-    PabloAST * oneSet = pb.createInFile(pb.createOnes());
-    Var * ones = getOutputStreamVar("ones");
-    pb.createAssign(pb.createExtract(ones, pb.getInteger(0)), oneSet);
-}
 
 class UnicodeNameConverter : public pablo::PabloKernel {
 public:
