@@ -81,12 +81,16 @@ NAME
 SRC
     lower.cpp
 DEPS
+    grep
+    pablo
+    kernel.basis
     kernel.io
     kernel.pipeline
     kernel.streamutils
     kernel.util
     toolchain
 )
+
 
 parabix_add_executable(
 NAME
