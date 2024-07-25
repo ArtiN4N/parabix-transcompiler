@@ -11,6 +11,7 @@
 
 #include <kernel/streamutils/deletion.h>
 #include <kernel/streamutils/string_insert.h>
+#include <kernel/streamutils/run_index.h>
 #include <kernel/pipeline/driver/cpudriver.h>
 #include <kernel/pipeline/pipeline_builder.h>
 #include <kernel/unicode/UCD_property_kernel.h>
@@ -129,29 +130,103 @@ AnyNameFunctionType generatePipeline(CPUDriver & pxDriver) {
     FilterByMask(P, u8index, U21_u8indexed, U21);
     SHOW_BIXNUM(U21);
 
+    /////
+
+    StreamSet * Matches = initialMatches(P, ByteStream);
+    StreamSet * MatchedLineEnds = matchedLines(P, Matches);
+
+    StreamSet * MatchedLineSpans = P->CreateStreamSet(1, 1);
+    P->CreateKernelCall<LineSpansKernel>(MatchedLineStarts, MatchedLineEnds, MatchedLineSpans);
+
+
+    StreamSet * FilteredMatchSpans;
+    FilteredMatchSpans = getMatchSpan(P, mRE, Matches);
+    SHOW_STREAM(Matches);
+    SHOW_STREAM(FilteredMatchSpans);
+
+    StreamSet * MatchSpans = P->CreateStreamSet(1, 1);
+    FilterByMask(P, MatchedLineSpans, FilteredMatchSpans, MatchSpans);
+    SHOW_STREAM(MatchSpans);
+
+    std::vector<std::string> colorEscapes = {"AE", "(C)", "a"};
+    unsigned insertLengthBits = 4;
+    std::vector<unsigned> insertAmts;
+    for (auto & s : colorEscapes) {insertAmts.push_back(s.size());}
+
+
+    // TODO get match spans
+    StreamSet * const SpanMarks = P->CreateStreamSet(3, 1);
+    P->CreateKernelCall<SpansToMarksKernel>(MatchSpans, SpanMarks);
+    SHOW_BIXNUM(SpanMarks);
+
+    StreamSet * const InsertBixNum = P->CreateStreamSet(insertLengthBits, 1);
+    P->CreateKernelCall<ZeroInsertBixNum>(insertAmts, SpanMarks, InsertBixNum);
+    StreamSet * const SpreadMask = InsertionSpreadMask(P, InsertBixNum, InsertPosition::Before);
+    SHOW_STREAM(SpreadMask);
+
+    // For each run of 0s marking insert positions, create a parallel
+    // bixnum sequentially numbering the string insert positions.
+    StreamSet * const InsertIndex = P->CreateStreamSet(insertLengthBits);
+    P->CreateKernelCall<RunIndex>(SpreadMask, InsertIndex, nullptr, RunIndex::Kind::RunOf0);
+    // Basis bit streams expanded with 0 bits for each string to be inserted.
+    SHOW_BIXNUM(InsertIndex);
+
+    StreamSet * ExpandedBasis = P->CreateStreamSet(21, 1);
+    SpreadByMask(P, SpreadMask, U21, ExpandedBasis);
+
+    // Map the match start/end marks to their positions in the expanded basis.
+    StreamSet * ExpandedMarks = P->CreateStreamSet(2);
+    SpreadByMask(P, SpreadMask, SpanMarks, ExpandedMarks);
+    SHOW_BIXNUM(ExpandedMarks);
+
+    StreamSet * U21Out = P->CreateStreamSet(21, 1);
+    E->CreateKernelCall<StringReplaceKernel>(colorEscapes, ExpandedBasis, SpreadMask, ExpandedMarks, InsertIndex, U21Out, -1);
+    SHOW_BIXNUM(U21Out);
+
+
 
 
     //adding adequate space
     // everymask marks every character
-    auto * everymask = P->CreateStreamSet(1);
-    std::vector<re::CC *> everymask_CC = {re::makeCC(0x0000, 0x10FFFF)};
-    P->CreateKernelCall<CharacterClassKernelBuilder>(everymask_CC, U21, everymask);
+    //auto * everymask = P->CreateStreamSet(1);
+    //std::vector<re::CC *> everymask_CC = {re::makeCC(0x0000, 0x10FFFF)};
+    //P->CreateKernelCall<CharacterClassKernelBuilder>(everymask_CC, U21, everymask);
 
-    std::vector<unsigned> insertAmts = {3}; // TODO - turn this into an actual vector of insert amts (how?)
+    //std::vector<unsigned> insertAmts = {3}; // TODO - turn this into an actual vector of insert amts (how?)
 
-    StreamSet * B = P->CreateStreamSet(8, 1); // Bixnum
-    P->CreateKernelCall<ZeroInsertBixNum>(insertAmts, everymask, B);
-    SHOW_BIXNUM(B);
+    //StreamSet * B = P->CreateStreamSet(8, 1); // Bixnum
+    //P->CreateKernelCall<ZeroInsertBixNum>(insertAmts, everymask, B);
+    //SHOW_BIXNUM(B);
 
-    StreamSet * CCstream = P->CreateStreamSet(1, 1);
-    UCD::EnumeratedPropertyObject* enumPropObj = dyn_cast<UCD::EnumeratedPropertyObject>(UCD::get_NA_PropertyObject());
-    P->CreateKernelCall<UnicodePropertyBasis>(enumPropObj, U21, CCstream);
-    SHOW_BIXNUM(CCstream);
+    //StreamSet * CCstream = P->CreateStreamSet(1, 1);
+    //UCD::EnumeratedPropertyObject* enumPropObj = dyn_cast<UCD::EnumeratedPropertyObject>(UCD::get_NA_PropertyObject());
+    //P->CreateKernelCall<UnicodePropertyBasis>(enumPropObj, U21, CCstream);
+    //SHOW_BIXNUM(CCstream);
+    /*
+    auto * asciiSpreadMask = P->CreateStreamSet(1);
+    std::vector<re::CC *> asciiSpreadMask_CC = {re::makeCC(0x6F), re::makeCC(0x72), re::makeCC(0x61)};
+    P->CreateKernelCall<CharacterClassKernelBuilder>(asciiSpreadMask_CC, U21, asciiSpreadMask);
+    SHOW_STREAM(asciiSpreadMask);
+
+    StreamSet * ExpandedBasis = P->CreateStreamSet(21);
+    SpreadByMask(P, asciiSpreadMask, U21, ExpandedBasis);
+
+
+    //std::vector<unsigned> insertAmts = {3,2,1};
+    //StreamSet * insertBix = P->CreateStreamSet(8, 1); // Bixnum
+    //P->CreateKernelCall<ZeroInsertBixNum>(insertAmts, asciiSpreadMask, insertBix);
+    //SHOW_BIXNUM(insertBix);
+    auto * insertMarks = P->CreateStreamSet(3);
+    // create insertMarks
+
+    StreamSet * ExpandedMarks = P->CreateStreamSet(2); // i is the number of possible strings
+    SpreadByMask(P, asciiSpreadMask, SpanMarks, ExpandedMarks);
 
 
     auto * U21out = P->CreateStreamSet(21, 1);
-    P->CreateKernelCall<UnicodeNameConverter>(U21, U21out);
+    P->CreateKernelCall<StringReplaceKernel>(insertStrs, ExpandedBasis, asciiSpreadMask, insertMarks, runIndex, U21out, 0);
     SHOW_BIXNUM(U21out);
+    */
 
     auto * OutputBasis = P->CreateStreamSet(8);
     U21_to_UTF8(P, U21out, OutputBasis);

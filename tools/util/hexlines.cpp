@@ -166,6 +166,7 @@ void Spacify::generatePabloMethod() {
 void Hexify::generatePabloMethod() {
     //  pb is an object used for build Pablo language statements
     pablo::PabloBuilder pb(getEntryScope());
+    PabloBlock
     //  bnc is an object that can perform arithmetic on sets of parallel bit streams
     BixNumCompiler bnc(pb);
     // Get the input stream sets.
