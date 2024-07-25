@@ -103,7 +103,7 @@ def replaceubackwithox(input_file, output_file):
 
 
 # Usage example
-input_file = 'shortenedlatinasciicodes.txt'
+input_file = 'fulllasciichart.txt'
 output_file = 'latinasciicodes.txt'
 #replaceubackwithox(output_file, input_file)
 
@@ -123,7 +123,7 @@ for line in lines:
     # Find the first '{' and '}' to extract the key
     start = line.find('{') + 1
     end = line.find(',')
-    key = line[start:end].strip()
+    key = "{" + line[start:end].strip() + "," + line[start:end].strip() + "}"
     keys.append(key)
 
 # Format the keys as requested
