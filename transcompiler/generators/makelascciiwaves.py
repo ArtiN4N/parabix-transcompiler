@@ -21,4 +21,18 @@ with open(inputFile, 'r', encoding='utf-8') as infile, open(outputFile, 'w', enc
 
         lineWaves = len(nested_items)
 
+        first_characters = []
+
+        comma_position = line.find(',')
+        if comma_position != -1:
+            first_character = line[1:comma_position]  # Exclude the '{' at the start
+            first_characters.append(first_character.strip())
+
+        print(first_characters)
+        print(nested_items)
+        if (lineWaves - wave >= 0):
+            curWaveItem = nested_items[-1 * wave]
+            content = content + "{" + first_characters[0] + "," + curWaveItem + "},"
+
+
     outfile.write(startText + content + endText)
