@@ -93,7 +93,41 @@ def process_file(input_file, output_file):
                 # If no "→" in the line, just write it as is
                 outfile.write(line + '\n')
 
+def replaceubackwithox(input_file, output_file):
+    with open(input_file, 'r', encoding='utf-8') as infile, open(output_file, 'w', encoding='utf-8') as outfile:
+        for line in infile:
+            cleaned_line = "{" + line
+            cleaned_line = cleaned_line.replace("\n", "}\n")
+            outfile.write(cleaned_line)
+
+
+
 # Usage example
 input_file = 'shortenedlatinasciicodes.txt'
 output_file = 'latinasciicodes.txt'
-process_file(input_file, output_file)
+#replaceubackwithox(output_file, input_file)
+
+
+with open(input_file, 'r', encoding='utf-8') as infile:
+
+    # Split the input text into lines
+    lines = infile.read()
+
+lines = lines.strip().split('\n')
+
+# Initialize an empty list to store the keys
+keys = []
+
+# Loop through each line and extract the keys
+for line in lines:
+    # Find the first '{' and '}' to extract the key
+    start = line.find('{') + 1
+    end = line.find(',')
+    key = line[start:end].strip()
+    keys.append(key)
+
+# Format the keys as requested
+output = "{" + ",".join(keys) + "}"
+
+with open(output_file, 'w', encoding='utf-8') as outfile:
+    outfile.write(output)
