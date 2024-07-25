@@ -48,20 +48,20 @@ using namespace pablo;
 
 //  These declarations are for command line processing.
 //  See the LLVM CommandLine 2.0 Library Manual https://llvm.org/docs/CommandLine.html
-static cl::OptionCategory FullHalfOptions("fullHalf Options", "fullHalf control options.");
-static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), cl::Required, cl::cat(FullHalfOptions));
+static cl::OptionCategory LasciiOptions("lascii Options", "lascii control options.");
+static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), cl::Required, cl::cat(LasciiOptions));
 
-class FullHalfify : public pablo::PabloKernel {
+class Lasciiify : public pablo::PabloKernel {
 public:
-    FullHalfify(KernelBuilder & b, StreamSet * U21, StreamSet * translationBasis, StreamSet * u32Basis)
-    : pablo::PabloKernel(b, "FullHalfify",
+    Lasciiify(KernelBuilder & b, StreamSet * U21, StreamSet * translationBasis, StreamSet * u32Basis)
+    : pablo::PabloKernel(b, "Lasciiify",
                         {Binding{"U21", U21}, Binding{"translationBasis", translationBasis}},
                             {Binding{"u32Basis", u32Basis}}) {}
 protected:
     void generatePabloMethod() override;
 };
 
-void FullHalfify::generatePabloMethod() {
+void Lasciiify::generatePabloMethod() {
     //  pb is an object used for build Pablo language statements
     pablo::PabloBuilder pb(getEntryScope());
 
@@ -85,9 +85,9 @@ void FullHalfify::generatePabloMethod() {
 }
 
 
-typedef void (*ToFullHalfFunctionType)(uint32_t fd);
+typedef void (*ToLasciiFunctionType)(uint32_t fd);
 
-ToFullHalfFunctionType generatePipeline(CPUDriver & pxDriver) {
+ToLasciiFunctionType generatePipeline(CPUDriver & pxDriver) {
     // A Parabix program is build as a set of kernel calls called a pipeline.
     // A pipeline is construction using a Parabix driver object.
     auto & b = pxDriver.getBuilder();
@@ -129,21 +129,21 @@ ToFullHalfFunctionType generatePipeline(CPUDriver & pxDriver) {
 {0x30CC, 0xFF87}, {0x30CD, 0xFF88}, {0x30CE, 0xFF89}, {0x30CF, 0xFF8A}, {0x30D2, 0xFF8B}, {0x30D5, 0xFF8C}, {0x30D8, 0xFF8D}, {0x30DB, 0xFF8E}, {0x30DE, 0xFF8F}, {0x30DF, 0xFF90}, {0x30E0, 0xFF91}, {0x30E1, 0xFF92}, {0x30E2, 0xFF93}, {0x30E3, 0xFF6C}, {0x30E4, 0xFF94}, {0x30E5, 0xFF6D}, {0x30E6, 0xFF95}, {0x30E7, 0xFF6E}, {0x30E8, 0xFF96}, {0x30E9, 0xFF97}, {0x30EA, 0xFF98}, {0x30EB, 0xFF99}, {0x30EC, 0xFF9A}, {0x30ED, 0xFF9B}, {0x30EF, 0xFF9C}, {0x30F3, 0xFF9D}, {0x309C, 0xFF9F}, {0x3099, 0xFF9E}, {0x309B, 0xFF9E}, {0x30FC, 0xFF70}, {0x30FB, 0xFF65}, {0xFF5F, 0x2985}, {0xFF60, 0x2986 }, {0x3002, 0xFF61}, {0x300C, 0xFF62}, {0x300D, 0xFF63}, {0x3001, 0xFF64}, {0xFFE0, 0x00A2}, {0xFFE1, 0x00A3}, {0xFFE2, 0x00AC}, {0xFFE3, 0x00AF}, {0xFFE4, 0x00A6}, {0xFFE5, 0x00A5}, {0xFFE6, 0x20A9}, {0x2502, 0xFFE8}, {0x2190, 0xFFE9}, {0x2191, 0xFFEA}, {0x2192, 0xFFEB}, {0x2193, 0xFFEC}, {0x25A0, 0xFFED}, {0x25CB, 0xFFEE}};
 
     unicode::TranslationMap mExplicitCodepointMap = (unicode::TranslationMap) explicit_cp_data;
-    unicode::BitTranslationSets fullHalfTranslationSet = unicode::ComputeBitTranslationSets(mExplicitCodepointMap);
+    unicode::BitTranslationSets lasciiTranslationSet = unicode::ComputeBitTranslationSets(mExplicitCodepointMap);
 
-    // Turn the fullHalf translation set into a vector of character classes
-    std::vector<re::CC *> fullHalfTranslation_ccs;
-    for (auto & b : fullHalfTranslationSet) {
-        fullHalfTranslation_ccs.push_back(re::makeCC(b, &cc::Unicode));
+    // Turn the lascii translation set into a vector of character classes
+    std::vector<re::CC *> lasciiTranslation_ccs;
+    for (auto & b : lasciiTranslationSet) {
+        lasciiTranslation_ccs.push_back(re::makeCC(b, &cc::Unicode));
     }
 
-    StreamSet * translationBasis = P->CreateStreamSet(fullHalfTranslation_ccs.size());
-    P->CreateKernelCall<CharClassesKernel>(fullHalfTranslation_ccs, U21, translationBasis);
+    StreamSet * translationBasis = P->CreateStreamSet(lasciiTranslation_ccs.size());
+    P->CreateKernelCall<CharClassesKernel>(lasciiTranslation_ccs, U21, translationBasis);
     SHOW_BIXNUM(translationBasis);
 
-    // Perform the logic of the FullHalfify kernel on the codepoiont values.
+    // Perform the logic of the Lasciiify kernel on the codepoiont values.
     StreamSet * u32Basis = P->CreateStreamSet(21, 1);
-    P->CreateKernelCall<FullHalfify>(U21, translationBasis, u32Basis);
+    P->CreateKernelCall<Lasciiify>(U21, translationBasis, u32Basis);
     SHOW_BIXNUM(u32Basis);
 
     // Convert back to UTF8 from codepoints.
@@ -156,19 +156,19 @@ ToFullHalfFunctionType generatePipeline(CPUDriver & pxDriver) {
     P->CreateKernelCall<P2SKernel>(OutputBasis, OutputBytes);
     P->CreateKernelCall<StdOutKernel>(OutputBytes);
 
-    return reinterpret_cast<ToFullHalfFunctionType>(P->compile());
+    return reinterpret_cast<ToLasciiFunctionType>(P->compile());
 }
 
 int main(int argc, char *argv[]) {
     //  ParseCommandLineOptions uses the LLVM CommandLine processor, but we also add
     //  standard Parabix command line options such as -help, -ShowPablo and many others.
-    codegen::ParseCommandLineOptions(argc, argv, {&FullHalfOptions, pablo::pablo_toolchain_flags(), codegen::codegen_flags()});
+    codegen::ParseCommandLineOptions(argc, argv, {&LasciiOptions, pablo::pablo_toolchain_flags(), codegen::codegen_flags()});
 
     //  A CPU driver is capable of compiling and running Parabix programs on the CPU.
-    CPUDriver driver("tofullHalf");
+    CPUDriver driver("tolascii");
 
     //  Build and compile the Parabix pipeline by calling the Pipeline function above.
-    ToFullHalfFunctionType fn = generatePipeline(driver);
+    ToLasciiFunctionType fn = generatePipeline(driver);
     
     //  The compile function "fn"  can now be used.   It takes a file
     //  descriptor as an input, which is specified by the filename given by
