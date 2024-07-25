@@ -3,7 +3,7 @@
 #include <string>
 #include <iostream>
 
-#include <lascii.h>
+#include "lascii.h"
 
 #include <unicode/data/PropertyObjects.h>
 #include <unicode/data/PropertyObjectTable.h>
