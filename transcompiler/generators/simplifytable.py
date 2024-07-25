@@ -103,11 +103,20 @@ def replaceubackwithox(input_file, output_file):
 
 
 # Usage example
-input_file = 'fulllasciichart.txt'
+input_file = 'latinasciicodes.txt'
 output_file = 'latinasciicodes.txt'
+with open(input_file, 'r', encoding='utf-8') as file:
+    content = file.read()
+
+# Replace all occurrences of \u with 0x
+modified_content = content.replace('\\u', '0x')
+
+# Write the modified content to the output file
+with open(output_file, 'w', encoding='utf-8') as file:
+    file.write(modified_content)
 #replaceubackwithox(output_file, input_file)
 
-
+'''
 with open(input_file, 'r', encoding='utf-8') as infile:
 
     # Split the input text into lines
@@ -130,4 +139,4 @@ for line in lines:
 output = "{" + ",".join(keys) + "}"
 
 with open(output_file, 'w', encoding='utf-8') as outfile:
-    outfile.write(output)
+    outfile.write(output)'''
