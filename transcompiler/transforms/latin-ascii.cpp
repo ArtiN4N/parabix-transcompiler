@@ -200,7 +200,7 @@ void Lasciify::generatePabloMethod() {
 
         std::cout << "before jset use" << std::endl;
         for (unsigned j = 1; j < mBixData.bitsNeeded; j++) {
-            auto set = nAsciiVars[j]
+            auto set = nAsciiVars[j];
             if (i < set.size()) {
                 output_basis[i] = pb.createOr(pb.createAdvance(set[i], j), output_basis[i]);
             }
