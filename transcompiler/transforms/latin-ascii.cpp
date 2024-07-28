@@ -70,6 +70,7 @@ NONASCII_bixData::NONASCII_bixData() {
     // TODO: set mnonAscii_length, emplace to mnonAscii_CharMap
     for (auto& pair : latinnonasciicodes) {
         mnonAscii_length.emplace(pair.first, pair.second.size());
+        std::cout << pair.second.size() << ",";
 
         unsigned int i = 0;
         for (auto& target : pair.second) {
@@ -77,6 +78,7 @@ NONASCII_bixData::NONASCII_bixData() {
             i++;
         }
     }
+    std::cout << std::endl;
 }
 
 std::vector<re::CC *> NONASCII_bixData::nonAscii_Insertion_BixNumCCs() {
