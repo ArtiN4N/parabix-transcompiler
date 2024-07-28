@@ -184,7 +184,7 @@ void Lasciify::generatePabloMethod() {
 
     for (unsigned i = 0; i < basis.size(); i++) {
 
-        auto initSet = nAsciiSets[0];
+        auto initSet = nAsciiVars[0];
         if (i < initSet.size()) {
             output_basis[i] = pb.createXor(basis[i], initSet[i]);
         } else {
@@ -192,7 +192,7 @@ void Lasciify::generatePabloMethod() {
         }
 
         unsigned j = 0;
-        for (auto& set : nAsciiSets) {
+        for (auto& set : nAsciiVars) {
             if (i < set.size()) {
                 output_basis[i] = pb.createOr(pb.createAdvance(set[i], j), output_basis[i]);
             }
