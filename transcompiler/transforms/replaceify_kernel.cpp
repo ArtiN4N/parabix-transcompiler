@@ -130,7 +130,7 @@ void ReplaceByBixData(PipelineBuilder & P, replace_bixData & BixData, StreamSet 
     StreamSet * SpreadMask = InsertionSpreadMask(P, Insertion_BixNum, InsertPosition::After);
 
     StreamSet * ExpandedBasis = P.CreateStreamSet(21, 1);
-    SpreadByMask(P, SpreadMask, Basis, ExpandedBasis);
+    SpreadByMask(static_cast<PipelineBuilder&>P, static_cast<StreamSet*>SpreadMask, static_cast<StreamSet*>Basis, static_cast<StreamSet*>ExpandedBasis);
 
     P.CreateKernelCall<Replaceify>(BixData, ExpandedBasis, Output);
 }
