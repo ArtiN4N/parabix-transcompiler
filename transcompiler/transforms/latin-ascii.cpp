@@ -25,6 +25,8 @@
 #include <kernel/io/stdout_kernel.h>
 
 #include <pablo/codegenstate.h>
+#include <pablo/pe_zeroes.h>        // for Zeroes
+#include <pablo/bixnum/bixnum.h>
 
 #include <grep/grep_kernel.h>
 
