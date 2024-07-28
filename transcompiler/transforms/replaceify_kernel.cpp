@@ -126,7 +126,6 @@ void ReplaceByBixData(PipelineBuilder & P, replace_bixData & BixData, StreamSet 
 
     StreamSet * Insertion_BixNum = P.CreateStreamSet(insert_ccs.size());
     P.CreateKernelCall<CharClassesKernel>(insert_ccs, Basis, Insertion_BixNum);
-    SHOW_STREAM(Insertion_BixNum);
 
     StreamSet * SpreadMask = InsertionSpreadMask(P, Insertion_BixNum, InsertPosition::After);
 
