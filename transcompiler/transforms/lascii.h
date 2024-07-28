@@ -8,7 +8,7 @@
 #include <unicode/utf/utf_compiler.h>
 #include <unicode/utf/transchar.h>
 
-std::vector<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>> latinnonasciicodes = {
+const std::vector<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>> asciiCodeData = {
 {0x00C6,{0x0041,0x0045}},
 {0x00D0,{0x0044}},
 {0x00D8,{0x004F}},
