@@ -85,6 +85,7 @@ std::vector<re::CC *> NONASCII_bixData::nonAscii_Insertion_BixNumCCs() {
     for (auto& p : mnonAscii_length) {
         BixNumCCs.push_back(UCD::UnicodeSet());
         BixNumCCs.push_back(UCD::UnicodeSet());
+        BixNumCCs.push_back(UCD::UnicodeSet());
 
         auto insert_amt = p.second - 1;
 
