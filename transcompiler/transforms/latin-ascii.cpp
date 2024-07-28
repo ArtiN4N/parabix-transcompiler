@@ -66,12 +66,13 @@ private:
 };
 
 NONASCII_bixData::NONASCII_bixData() {
+    std::cout << "generating bixdata" << std::endl;
     // TODO: set mnonAscii_length, emplace to mnonAscii_CharMap
-    for (auto pair : latinnonasciicodes) {
+    for (auto& pair : latinnonasciicodes) {
         mnonAscii_length.emplace(pair.first, pair.second.size());
 
         unsigned int i = 0;
-        for (auto target : pair.second) {
+        for (auto& target : pair.second) {
             mnonAscii_CharMap[i].emplace(pair.first, target);
             i++;
         }
