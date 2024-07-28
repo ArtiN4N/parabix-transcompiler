@@ -152,15 +152,18 @@ void Lasciify::generatePabloMethod() {
     PabloBuilder pb(getEntryScope());
     UTF::UTF_Compiler unicodeCompiler(getInput(0), pb);
 
+    std::cout << "before asciiset init" << std::endl;
     std::vector<unicode::BitTranslationSets> nAsciiSets;
     nAsciiSets.push_back(mBixData.matchBitXorCCs(0));
     for (unsigned i = 1; i < mBixData.bitsNeeded; i++) {
         nAsciiSets.push_back(mBixData.matchBitCCs(i));
     }
+    std::cout << "after asciiset init" << std::endl;
 
     std::vector<std::vector<Var *>> nAsciiVars;
     nAsciiVars.assign(mBixData.bitsNeeded, {});
 
+    std::cout << "before asciivar init" << std::endl;
     unsigned j = 0;
     for (auto& set : nAsciiSets) {
         for (unsigned i = 0; i < set.size(); i++) {
@@ -171,6 +174,7 @@ void Lasciify::generatePabloMethod() {
 
         j++;
     }
+    std::cout << "after asciivar init" << std::endl;
 
     if (LLVM_UNLIKELY(re::AlgorithmOptionIsSet(re::DisableIfHierarchy))) {
         unicodeCompiler.compile(UTF::UTF_Compiler::IfHierarchy::None);
@@ -178,12 +182,15 @@ void Lasciify::generatePabloMethod() {
         unicodeCompiler.compile();
     }
 
+    
     std::vector<PabloAST *> basis = getInputStreamSet("basis");
     Var * outputVar = getOutputStreamVar("Output");
     std::vector<PabloAST *> output_basis(basis.size());
 
+    std::cout << "before output assignment" << std::endl;
     for (unsigned i = 0; i < basis.size(); i++) {
 
+        std::cout << "before initset use" << std::endl;
         auto initSet = nAsciiVars[0];
         if (i < initSet.size()) {
             output_basis[i] = pb.createXor(basis[i], initSet[i]);
@@ -191,17 +198,18 @@ void Lasciify::generatePabloMethod() {
             output_basis[i] = basis[i];
         }
 
-        unsigned j = 0;
-        for (auto& set : nAsciiVars) {
+        std::cout << "before jset use" << std::endl;
+        for (unsigned j = 1; j < mBixData.bitsNeeded; j++) {
+            auto set = nAsciiVars[j]
             if (i < set.size()) {
                 output_basis[i] = pb.createOr(pb.createAdvance(set[i], j), output_basis[i]);
             }
-
-            j++;
         }
+        std::cout << "after jset use" << std::endl;
 
         pb.createAssign(pb.createExtract(outputVar, pb.getInteger(i)), output_basis[i]);
     }
+    std::cout << "after output assignment" << std::endl;
 }
 
 
@@ -240,7 +248,9 @@ ToLasciiFunctionType generatePipeline(CPUDriver & pxDriver) {
     SHOW_BIXNUM(U21);
 
     NONASCII_bixData nonAscii_data;
+    std::cout << "before insertion bixnums" << std::endl;
     auto insert_ccs = nonAscii_data.insertionBixNumCCs();
+    std::cout << "after insertion bixnums" << std::endl;
 
     StreamSet * Insertion_BixNum = P->CreateStreamSet(insert_ccs.size());
     P->CreateKernelCall<CharClassesKernel>(insert_ccs, U21, Insertion_BixNum);
