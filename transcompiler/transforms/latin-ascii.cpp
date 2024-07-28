@@ -12,6 +12,8 @@
 #include <unicode/utf/transchar.h>
 
 #include <kernel/streamutils/deletion.h>
+#include <kernel/streamutils/string_insert.h>
+#include <kernel/streamutils/pdep_kernel.h>
 #include <kernel/pipeline/driver/cpudriver.h>
 #include <kernel/pipeline/pipeline_builder.h>
 #include <kernel/unicode/UCD_property_kernel.h>
@@ -260,7 +262,7 @@ ToLasciiFunctionType generatePipeline(CPUDriver & pxDriver) {
     SHOW_BIXNUM(ExpandedBasis);
 
     StreamSet * ascii_Basis = P->CreateStreamSet(21, 1);
-    P->CreateKernelCall<Lasciiify>(nonAscii_data, ExpandedBasis, ascii_Basis);
+    P->CreateKernelCall<Lasciify>(nonAscii_data, ExpandedBasis, ascii_Basis);
     SHOW_BIXNUM(ascii_Basis);
 
     // Convert back to UTF8 from codepoints.
