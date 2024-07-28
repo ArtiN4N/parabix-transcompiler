@@ -124,6 +124,8 @@ NAME
     hex
 SRC
     hex.cpp
+    replaceify_kernel.cpp
+    replace_bixData.cpp
 DEPS
     grep
     pablo
