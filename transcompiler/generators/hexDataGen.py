@@ -30,7 +30,7 @@ outputE = "};"
 outputM = []
 name = "hexData"
 #0x110000
-for i in range(0x110000):
+for i in range(0xFFFF):
     mTextS = "{"
     mTextE = "}"
     mTextInp = codepoint_to_hex_string(i)
