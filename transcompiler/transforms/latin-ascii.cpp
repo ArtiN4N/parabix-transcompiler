@@ -98,9 +98,9 @@ std::vector<re::CC *> NONASCII_bixData::nonAscii_Insertion_BixNumCCs() {
             BixNumCCs[2].insert(p.first);
         }
 
-        std::cout << (insert_amt & 1) << ", ";
-        std::cout << (insert_amt & 2) << ", ";
-        std::cout << (insert_amt & 4) << std::endl;
+        //std::cout << (insert_amt & 1) << ", ";
+        //std::cout << (insert_amt & 2) << ", ";
+        //std::cout << (insert_amt & 4) << std::endl;
     }
 
     
@@ -251,14 +251,14 @@ ToLasciiFunctionType generatePipeline(CPUDriver & pxDriver) {
     // Convert into codepoints
     StreamSet * u8index = P->CreateStreamSet(1, 1);
     P->CreateKernelCall<UTF8_index>(BasisBits, u8index);
-    SHOW_STREAM(u8index);
+    //SHOW_STREAM(u8index);
 
     StreamSet * U21_u8indexed = P->CreateStreamSet(21, 1);
     P->CreateKernelCall<UTF8_Decoder>(BasisBits, U21_u8indexed);
 
     StreamSet * U21 = P->CreateStreamSet(21, 1);
     FilterByMask(P, u8index, U21_u8indexed, U21);
-    //SHOW_BIXNUM(U21);
+    SHOW_BIXNUM(U21);
 
     NONASCII_bixData nonAscii_data;
     auto insert_ccs = nonAscii_data.nonAscii_Insertion_BixNumCCs();
