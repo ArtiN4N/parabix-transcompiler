@@ -55,11 +55,8 @@ using namespace pablo;
 struct NONASCII_bixData {
     NONASCII_bixData();
     std::vector<re::CC *> nonAscii_Insertion_BixNumCCs();
-    unicode::BitTranslationSets nonAscii_1st_BitXorCCs();
-    unicode::BitTranslationSets nonAscii_2nd_BitCCs();
-    unicode::BitTranslationSets nonAscii_3rd_BitCCs();
-    unicode::BitTranslationSets nonAscii_4th_BitCCs();
-    unicode::BitTranslationSets nonAscii_5th_BitCCs();
+    unicode::BitTranslationSets nonAsciiBitXorCCs(unsigned);
+    unicode::BitTranslationSets nonAsciiBitCCs(unsigned);
     std::unordered_map<codepoint_t, unsigned> mnonAscii_length;
     unicode::TranslationMap mnonAscii_CharMap[5];
 };
@@ -105,24 +102,12 @@ std::vector<re::CC *> NONASCII_bixData::nonAscii_Insertion_BixNumCCs() {
     };
 }
 
-unicode::BitTranslationSets NONASCII_bixData::nonAscii_1st_BitXorCCs() {
-    return unicode::ComputeBitTranslationSets(mnonAscii_CharMap[0]);
+unicode::BitTranslationSets NONASCII_bixData::nonAsciiBitXorCCs(unsigned i) {
+    return unicode::ComputeBitTranslationSets(mnonAscii_CharMap[i]);
 }
 
-unicode::BitTranslationSets NONASCII_bixData::nonAscii_2nd_BitCCs() {
-    return unicode::ComputeBitTranslationSets(mnonAscii_CharMap[1], unicode::XlateMode::LiteralBit);
-}
-
-unicode::BitTranslationSets NONASCII_bixData::nonAscii_3rd_BitCCs() {
-    return unicode::ComputeBitTranslationSets(mnonAscii_CharMap[2], unicode::XlateMode::LiteralBit);
-}
-
-unicode::BitTranslationSets NONASCII_bixData::nonAscii_4th_BitCCs() {
-    return unicode::ComputeBitTranslationSets(mnonAscii_CharMap[3], unicode::XlateMode::LiteralBit);
-}
-
-unicode::BitTranslationSets NONASCII_bixData::nonAscii_5th_BitCCs() {
-    return unicode::ComputeBitTranslationSets(mnonAscii_CharMap[4], unicode::XlateMode::LiteralBit);
+unicode::BitTranslationSets NONASCII_bixData::nonAsciiBitCCs(unsigned i) {
+    return unicode::ComputeBitTranslationSets(mnonAscii_CharMap[i], unicode::XlateMode::LiteralBit);
 }
 
 //  These declarations are for command line processing.
@@ -150,11 +135,11 @@ void Lasciify::generatePabloMethod() {
     PabloBuilder pb(getEntryScope());
     UTF::UTF_Compiler unicodeCompiler(getInput(0), pb);
 
-    unicode::BitTranslationSets nAscii1 = mBixData.nonAscii_1st_BitXorCCs();
-    unicode::BitTranslationSets nAscii2 = mBixData.nonAscii_2nd_BitCCs();
-    unicode::BitTranslationSets nAscii3 = mBixData.nonAscii_3rd_BitCCs();
-    unicode::BitTranslationSets nAscii4 = mBixData.nonAscii_4th_BitCCs();
-    unicode::BitTranslationSets nAscii5 = mBixData.nonAscii_5th_BitCCs();
+    unicode::BitTranslationSets nAscii1 = mBixData.nonAsciiBitXorCCs(0);
+    unicode::BitTranslationSets nAscii2 = mBixData.nonAsciiBitCCs(1);
+    unicode::BitTranslationSets nAscii3 = mBixData.nonAsciiBitCCs(2);
+    unicode::BitTranslationSets nAscii4 = mBixData.nonAsciiBitCCs(3);
+    unicode::BitTranslationSets nAscii5 = mBixData.nonAsciiBitCCs(4);
 
     std::vector<Var *> nAscii1_Vars;
     std::vector<Var *> nAscii2_Vars;
