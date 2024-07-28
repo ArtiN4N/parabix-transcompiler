@@ -84,20 +84,28 @@ NONASCII_bixData::NONASCII_bixData() {
 std::vector<re::CC *> NONASCII_bixData::nonAscii_Insertion_BixNumCCs() {
     unicode::BitTranslationSets BixNumCCs;
 
+    std::cout << mnonAscii_length[0x00FE] << std::endl;
+
     for (auto p : mnonAscii_length) {
         BixNumCCs.push_back(UCD::UnicodeSet());
         BixNumCCs.push_back(UCD::UnicodeSet());
+
         auto insert_amt = p.second - 1;
+
         if ((insert_amt & 1) == 1) {
             BixNumCCs[0].insert(p.first);
         }
         if ((insert_amt & 2) == 2) {
             BixNumCCs[1].insert(p.first);
         }
+        if ((insert_amt & 4) == 4) {
+            BixNumCCs[2].insert(p.first);
+        }
     }
 
     return {re::makeCC(BixNumCCs[0], &cc::Unicode),
-            re::makeCC(BixNumCCs[1], &cc::Unicode)};
+            re::makeCC(BixNumCCs[1], &cc::Unicode),
+            re::makeCC(BixNumCCs[2], &cc::Unicode)};
 }
 
 unicode::BitTranslationSets NONASCII_bixData::nonAscii_1st_BitXorCCs() {
