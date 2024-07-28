@@ -81,11 +81,12 @@ NONASCII_bixData::NONASCII_bixData() {
 
 std::vector<re::CC *> NONASCII_bixData::nonAscii_Insertion_BixNumCCs() {
     unicode::BitTranslationSets BixNumCCs;
+    BixNumCCs.push_back(UCD::UnicodeSet());
+    BixNumCCs.push_back(UCD::UnicodeSet());
+    BixNumCCs.push_back(UCD::UnicodeSet());
 
     for (auto& p : mnonAscii_length) {
-        BixNumCCs.push_back(UCD::UnicodeSet());
-        BixNumCCs.push_back(UCD::UnicodeSet());
-        //BixNumCCs.push_back(UCD::UnicodeSet());
+        
 
         auto insert_amt = p.second - 1;
 
@@ -95,9 +96,9 @@ std::vector<re::CC *> NONASCII_bixData::nonAscii_Insertion_BixNumCCs() {
         if ((insert_amt & 2) == 2) {
             BixNumCCs[1].insert(p.first);
         }
-        //if ((insert_amt & 4) == 4) {
-            //BixNumCCs[2].insert(p.first);
-        //}
+        if ((insert_amt & 4) == 4) {
+            BixNumCCs[2].insert(p.first);
+        }
 
     }
 
@@ -107,8 +108,8 @@ std::vector<re::CC *> NONASCII_bixData::nonAscii_Insertion_BixNumCCs() {
     //}
 
     return {re::makeCC(BixNumCCs[0], &cc::Unicode),
-            re::makeCC(BixNumCCs[1], &cc::Unicode)};
-            //re::makeCC(BixNumCCs[2], &cc::Unicode)};
+            re::makeCC(BixNumCCs[1], &cc::Unicode),
+            re::makeCC(BixNumCCs[2], &cc::Unicode)};
 }
 
 unicode::BitTranslationSets NONASCII_bixData::nonAscii_1st_BitXorCCs() {
