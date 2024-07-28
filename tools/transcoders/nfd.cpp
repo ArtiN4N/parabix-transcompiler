@@ -109,9 +109,11 @@ NFD_BixData::NFD_BixData() : UCD::NFD_Engine(UCD::DecompositionOptions::NFD) {
 
 std::vector<re::CC *> NFD_BixData::NFD_Insertion_BixNumCCs() {
     unicode::BitTranslationSets BixNumCCs;
-    for (auto p : mNFD_length) {
-        BixNumCCs.push_back(UCD::UnicodeSet());
-        BixNumCCs.push_back(UCD::UnicodeSet());
+
+    BixNumCCs.push_back(UCD::UnicodeSet());
+    BixNumCCs.push_back(UCD::UnicodeSet());
+
+    for (auto p : mNFD_length) {    
         auto insert_amt = p.second - 1;
         if ((insert_amt & 1) == 1) {
             BixNumCCs[0].insert(p.first);
