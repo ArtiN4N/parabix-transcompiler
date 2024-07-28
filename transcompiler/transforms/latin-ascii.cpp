@@ -166,12 +166,13 @@ void Lasciify::generatePabloMethod() {
     std::cout << "before asciivar init" << std::endl;
     unsigned j = 0;
     for (auto& set : nAsciiSets) {
+        std::cout << set.size() << std::endl; 
         for (unsigned i = 0; i < set.size(); i++) {
             std::cout << "before iteration " << i << " init" << std::endl;
             std::cout << "  before createvar" << std::endl;
             Var * v = pb.createVar("nAscii" + std::to_string(j) + "_bit" + std::to_string(i), pb.createZeroes());
             std::cout << "  after createvar" << std::endl;
-            nAsciiVars[i].push_back(v);
+            nAsciiVars[j].push_back(v);
             std::cout << "  before addtarget" << std::endl;
             unicodeCompiler.addTarget(v, re::makeCC(set[i], &cc::Unicode));
             std::cout << "  after addtarget" << std::endl;
