@@ -124,14 +124,14 @@ void Replaceify::generatePabloMethod() {
 void ReplaceByBixData(PipelineBuilder & P, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output) {
     auto insert_ccs = BixData.insertionBixNumCCs();
 
-    StreamSet * Insertion_BixNum = P->CreateStreamSet(insert_ccs.size());
-    P->CreateKernelCall<CharClassesKernel>(insert_ccs, Basis, Insertion_BixNum);
+    StreamSet * Insertion_BixNum = P.CreateStreamSet(insert_ccs.size());
+    P.CreateKernelCall<CharClassesKernel>(insert_ccs, Basis, Insertion_BixNum);
     SHOW_STREAM(Insertion_BixNum);
 
     StreamSet * SpreadMask = InsertionSpreadMask(P, Insertion_BixNum, InsertPosition::After);
 
-    StreamSet * ExpandedBasis = P->CreateStreamSet(21, 1);
+    StreamSet * ExpandedBasis = P.CreateStreamSet(21, 1);
     SpreadByMask(P, SpreadMask, Basis, ExpandedBasis);
 
-    P->CreateKernelCall<Replaceify>(BixData, ExpandedBasis, Output);
+    P.CreateKernelCall<Replaceify>(BixData, ExpandedBasis, Output);
 }
