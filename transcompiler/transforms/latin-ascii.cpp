@@ -60,7 +60,6 @@ struct NONASCII_bixData {
     unicode::BitTranslationSets nonAscii_3rd_BitCCs();
     unicode::BitTranslationSets nonAscii_4th_BitCCs();
     unicode::BitTranslationSets nonAscii_5th_BitCCs();
-private:
     std::unordered_map<codepoint_t, unsigned> mnonAscii_length;
     unicode::TranslationMap mnonAscii_CharMap[5];
 };
@@ -81,6 +80,7 @@ NONASCII_bixData::NONASCII_bixData() {
 
 std::vector<re::CC *> NONASCII_bixData::nonAscii_Insertion_BixNumCCs() {
     unicode::BitTranslationSets BixNumCCs;
+
     BixNumCCs.push_back(UCD::UnicodeSet());
     BixNumCCs.push_back(UCD::UnicodeSet());
     BixNumCCs.push_back(UCD::UnicodeSet());
@@ -109,7 +109,8 @@ std::vector<re::CC *> NONASCII_bixData::nonAscii_Insertion_BixNumCCs() {
 
     return {re::makeCC(BixNumCCs[0], &cc::Unicode),
             re::makeCC(BixNumCCs[1], &cc::Unicode),
-            re::makeCC(BixNumCCs[2], &cc::Unicode)};
+            re::makeCC(BixNumCCs[2], &cc::Unicode)
+    };
 }
 
 unicode::BitTranslationSets NONASCII_bixData::nonAscii_1st_BitXorCCs() {
@@ -263,7 +264,41 @@ ToLasciiFunctionType generatePipeline(CPUDriver & pxDriver) {
     SHOW_BIXNUM(U21);
 
     NONASCII_bixData nonAscii_data;
-    auto insert_ccs = nonAscii_data.nonAscii_Insertion_BixNumCCs();
+    //auto insert_ccs = nonAscii_data.nonAscii_Insertion_BixNumCCs();
+
+    unicode::BitTranslationSets BixNumCCs;
+
+    BixNumCCs.push_back(UCD::UnicodeSet());
+    BixNumCCs.push_back(UCD::UnicodeSet());
+    BixNumCCs.push_back(UCD::UnicodeSet());
+
+    for (auto& p : nonAscii_data.mnonAscii_length) {
+        
+
+        auto insert_amt = p.second - 1;
+
+        if ((insert_amt & 1) == 1) {
+            BixNumCCs[0].insert(p.first);
+        }
+        if ((insert_amt & 2) == 2) {
+            BixNumCCs[1].insert(p.first);
+        }
+        if ((insert_amt & 4) == 4) {
+            BixNumCCs[2].insert(p.first);
+        }
+
+    }
+
+    //auto & out = llvm::errs();
+    //for (auto& p : BixNumCCs) {
+        //p.print(out);
+    //}
+
+    std::vector<re::CC *> insert_ccs = {re::makeCC(BixNumCCs[0], &cc::Unicode),
+            re::makeCC(BixNumCCs[1], &cc::Unicode),
+            re::makeCC(BixNumCCs[2], &cc::Unicode)
+    };
+
 
     std::cout << insert_ccs.size() << std::endl;
 
