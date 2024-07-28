@@ -5,7 +5,7 @@
 
 #include "lascii.h"
 #include "replaceify_kernel.h"
-#include "replacebixData.h"
+#include "replace_bixData.h"
 
 #include <unicode/data/PropertyObjects.h>
 #include <unicode/data/PropertyObjectTable.h>
