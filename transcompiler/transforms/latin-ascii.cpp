@@ -161,7 +161,7 @@ void Lasciify::generatePabloMethod() {
     std::cout << "after asciiset init" << std::endl;
 
     std::vector<std::vector<Var *>> nAsciiVars;
-    nAsciiVars.assign(mBixData.bitsNeeded, {});
+    nAsciiVars.assign(mBixData.bitsNeeded + 1, {});
 
     std::cout << "before asciivar init" << std::endl;
     unsigned j = 0;
