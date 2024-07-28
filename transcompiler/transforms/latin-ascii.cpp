@@ -48,41 +48,163 @@ using namespace kernel;
 using namespace llvm;
 using namespace pablo;
 
+struct NONASCII_bixData {
+    NONASCII_bixData();
+    std::vector<re::CC *> nonAscii_Insertion_BixNumCCs();
+    unicode::BitTranslationSets nonAscii_1st_BitXorCCs();
+    unicode::BitTranslationSets nonAscii_2nd_BitCCs();
+    unicode::BitTranslationSets nonAscii_3rd_BitCCs();
+    unicode::BitTranslationSets nonAscii_4th_BitCCs();
+    unicode::BitTranslationSets nonAscii_5th_BitCCs();
+private:
+    std::unordered_map<codepoint_t, unsigned> mnonAscii_length;
+    unicode::TranslationMap mnonAscii_CharMap[5];
+};
+
+NONASCII_bixData::NONASCII_bixData() {
+    // TODO: set mnonAscii_length, emplace to mnonAscii_CharMap
+    for (auto pair : latinnonasciicodes) {
+        mnonAscii_length.emplace(pair.first, pair.second.size());
+
+        unsigned int i = 0;
+        for (auto target : pair.second) {
+            mnonAscii_CharMap[i].emplace(pair.first, target);
+            i++;
+        }
+    }
+}
+
+std::vector<re::CC *> NONASCII_bixData::nonAscii_Insertion_BixNumCCs() {
+    unicode::BitTranslationSets BixNumCCs;
+
+    for (auto p : mnonAscii_length) {
+        BixNumCCs.push_back(UCD::UnicodeSet());
+        BixNumCCs.push_back(UCD::UnicodeSet());
+        auto insert_amt = p.second - 1;
+        if ((insert_amt & 1) == 1) {
+            BixNumCCs[0].insert(p.first);
+        }
+        if ((insert_amt & 2) == 2) {
+            BixNumCCs[1].insert(p.first);
+        }
+    }
+
+    return {re::makeCC(BixNumCCs[0], &cc::Unicode),
+            re::makeCC(BixNumCCs[1], &cc::Unicode)};
+}
+
+unicode::BitTranslationSets NONASCII_bixData::nonAscii_1st_BitXorCCs() {
+    return unicode::ComputeBitTranslationSets(mNFD_CharMap[0]);
+}
+
+unicode::BitTranslationSets NONASCII_bixData::nonAscii_2nd_BitCCs() {
+    return unicode::ComputeBitTranslationSets(mNFD_CharMap[1], unicode::XlateMode::LiteralBit);
+}
+
+unicode::BitTranslationSets NONASCII_bixData::nonAscii_3rd_BitCCs() {
+    return unicode::ComputeBitTranslationSets(mNFD_CharMap[2], unicode::XlateMode::LiteralBit);
+}
+
+unicode::BitTranslationSets NONASCII_bixData::nonAscii_4th_BitCCs() {
+    return unicode::ComputeBitTranslationSets(mNFD_CharMap[3], unicode::XlateMode::LiteralBit);
+}
+
+unicode::BitTranslationSets NONASCII_bixData::nonAscii_5th_BitCCs() {
+    return unicode::ComputeBitTranslationSets(mNFD_CharMap[4], unicode::XlateMode::LiteralBit);
+}
+
 //  These declarations are for command line processing.
 //  See the LLVM CommandLine 2.0 Library Manual https://llvm.org/docs/CommandLine.html
 static cl::OptionCategory LasciiOptions("lascii Options", "lascii control options.");
 static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), cl::Required, cl::cat(LasciiOptions));
 
-class Lasciiify : public pablo::PabloKernel {
+class Lasciify : public pablo::PabloKernel {
 public:
-    Lasciiify(KernelBuilder & b, StreamSet * U21, StreamSet * translationBasis, StreamSet * u32Basis)
-    : pablo::PabloKernel(b, "Lasciiify",
-                        {Binding{"U21", U21}, Binding{"translationBasis", translationBasis}},
-                            {Binding{"u32Basis", u32Basis}}) {}
+    Lasciify(KernelBuilder & b, NONASCII_bixData & BixData, StreamSet * Basis, StreamSet * Output);
 protected:
     void generatePabloMethod() override;
+    NONASCII_bixData & mBixData;
 };
 
-void Lasciiify::generatePabloMethod() {
-    //  pb is an object used for build Pablo language statements
-    pablo::PabloBuilder pb(getEntryScope());
+Lasciify::Lasciify (KernelBuilder & b, NONASCII_bixData & BixData, StreamSet * Basis, StreamSet * Output)
+: PabloKernel(b, "Lasciify" + std::to_string(Basis->getNumElements()) + "x1",
+// inputs
+{Binding{"basis", Basis}},
+// output
+{Binding{"Output", Output}}), mBixData(BixData) {
+}
 
-    // Get the input stream sets.
-    std::vector<PabloAST *> U21 = getInputStreamSet("U21");
+void Lasciify::generatePabloMethod() {
+    PabloBuilder pb(getEntryScope());
+    UTF::UTF_Compiler unicodeCompiler(getInput(0), pb);
 
-    std::vector<PabloAST *> translationBasis = getInputStreamSet("translationBasis");
-    std::vector<PabloAST *> transformed(U21.size());
+    unicode::BitTranslationSets nAscii1 = mBixData.nonAscii_1st_BitXorCCs();
+    unicode::BitTranslationSets nAscii2 = mBixData.nonAscii_2nd_BitCCs();
+    unicode::BitTranslationSets nAscii3 = mBixData.nonAscii_3rd_BitCCs();
+    unicode::BitTranslationSets nAscii4 = mBixData.nonAscii_4th_BitCCs();
+    unicode::BitTranslationSets nAscii5 = mBixData.nonAscii_5th_BitCCs();
 
-    Var * outputBasisVar = getOutputStreamVar("u32Basis");
+    std::vector<Var *> nAscii1_Vars;
+    std::vector<Var *> nAscii2_Vars;
+    std::vector<Var *> nAscii3_Vars;
+    std::vector<Var *> nAscii4_Vars;
+    std::vector<Var *> nAscii5_Vars;
 
-    // For each bit of the input stream
-    for (unsigned i = 0; i < U21.size(); i++) {
-        // If the translation set covers said bit
-        if (i < translationBasis.size()) // XOR the input bit with the transformation bit  
-            transformed[i] = pb.createXor(translationBasis[i], U21[i]);
-        else transformed[i] = U21[i];
+    for (unsigned i = 0; i < nAscii1.size(); i++) {
+        Var * v = pb.createVar("nAscii1_bit" + std::to_string(i), pb.createZeroes());
+        nAscii1_Vars.push_back(v);
+        unicodeCompiler.addTarget(v, re::makeCC(nAscii1[i], &cc::Unicode));
+    }
+    for (unsigned i = 0; i < nAscii2.size(); i++) {
+        Var * v = pb.createVar("nAscii2_bit" + std::to_string(i), pb.createZeroes());
+        nAscii2_Vars.push_back(v);
+        unicodeCompiler.addTarget(v, re::makeCC(nAscii2[i], &cc::Unicode));
+    }
+    for (unsigned i = 0; i < nAscii3.size(); i++) {
+        Var * v = pb.createVar("nAscii3_bit" + std::to_string(i), pb.createZeroes());
+        nAscii3_Vars.push_back(v);
+        unicodeCompiler.addTarget(v, re::makeCC(nAscii3[i], &cc::Unicode));
+    }
+    for (unsigned i = 0; i < nAscii4.size(); i++) {
+        Var * v = pb.createVar("nAscii4_bit" + std::to_string(i), pb.createZeroes());
+        nAscii4_Vars.push_back(v);
+        unicodeCompiler.addTarget(v, re::makeCC(nAscii4[i], &cc::Unicode));
+    }
+    for (unsigned i = 0; i < nAscii5.size(); i++) {
+        Var * v = pb.createVar("nAscii5_bit" + std::to_string(i), pb.createZeroes());
+        nAscii5_Vars.push_back(v);
+        unicodeCompiler.addTarget(v, re::makeCC(nAscii5[i], &cc::Unicode));
+    }
 
-        pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), transformed[i]);
+    if (LLVM_UNLIKELY(re::AlgorithmOptionIsSet(re::DisableIfHierarchy))) {
+        unicodeCompiler.compile(UTF::UTF_Compiler::IfHierarchy::None);
+    } else {
+        unicodeCompiler.compile();
+    }
+
+    std::vector<PabloAST *> basis = getInputStreamSet("basis");
+    Var * outputVar = getOutputStreamVar("Output");
+    std::vector<PabloAST *> output_basis(basis.size());
+
+    for (unsigned i = 0; i < basis.size(); i++) {
+        if (i < nAscii1.size()) {
+            output_basis[i] = pb.createXor(basis[i], nAscii1_Vars[i]);
+        } else {
+            output_basis[i] = basis[i];
+        }
+        if (i < nAscii2.size()) {
+            output_basis[i] = pb.createOr(pb.createAdvance(nAscii2_Vars[i], 1), output_basis[i]);
+        }
+        if (i < nAscii3.size()) {
+            output_basis[i] = pb.createOr(pb.createAdvance(nAscii3_Vars[i], 2), output_basis[i]);
+        }
+        if (i < nAscii4.size()) {
+            output_basis[i] = pb.createOr(pb.createAdvance(nAscii4_Vars[i], 3), output_basis[i]);
+        }
+        if (i < nAscii5.size()) {
+            output_basis[i] = pb.createOr(pb.createAdvance(nAscii5_Vars[i], 3), output_basis[i]);
+        }
+        pb.createAssign(pb.createExtract(outputVar, pb.getInteger(i)), output_basis[i]);
     }
 }
 
@@ -121,32 +243,27 @@ ToLasciiFunctionType generatePipeline(CPUDriver & pxDriver) {
     FilterByMask(P, u8index, U21_u8indexed, U21);
     SHOW_BIXNUM(U21);
 
-    // The possible input codes for latin ascii
-    UCD::UnicodeSet lasciiSet(latinasciicodes.begin(), latinasciicodes.end());
+    NONASCII_bixData nonAscii_data;
+    auto insert_ccs = nonAscii_data.nonAscii_Insertion_BixNumCCs();
 
-    
-    
-    unicode::TranslationMap mExplicitCodepointMap = (unicode::TranslationMap) explicit_cp_data;
-    unicode::BitTranslationSets lasciiTranslationSet = unicode::ComputeBitTranslationSets(mExplicitCodepointMap);
+    StreamSet * Insertion_BixNum = P->CreateStreamSet(insert_ccs.size());
+    P->CreateKernelCall<CharClassesKernel>(insert_ccs, U21, Insertion_BixNum);
+    SHOW_BIXNUM(Insertion_BixNum);
 
-    // Turn the lascii translation set into a vector of character classes
-    std::vector<re::CC *> lasciiTranslation_ccs;
-    for (auto & b : lasciiTranslationSet) {
-        lasciiTranslation_ccs.push_back(re::makeCC(b, &cc::Unicode));
-    }
+    StreamSet * SpreadMask = InsertionSpreadMask(P, Insertion_BixNum, InsertPosition::After);
+    SHOW_STREAM(SpreadMask);
 
-    StreamSet * translationBasis = P->CreateStreamSet(lasciiTranslation_ccs.size());
-    P->CreateKernelCall<CharClassesKernel>(lasciiTranslation_ccs, U21, translationBasis);
-    SHOW_BIXNUM(translationBasis);
+    StreamSet * ExpandedBasis = P->CreateStreamSet(21, 1);
+    SpreadByMask(P, SpreadMask, U21, ExpandedBasis);
+    SHOW_BIXNUM(ExpandedBasis);
 
-    // Perform the logic of the Lasciiify kernel on the codepoiont values.
-    StreamSet * u32Basis = P->CreateStreamSet(21, 1);
-    P->CreateKernelCall<Lasciiify>(U21, translationBasis, u32Basis);
-    SHOW_BIXNUM(u32Basis);
+    StreamSet * ascii_Basis = P->CreateStreamSet(21, 1);
+    P->CreateKernelCall<Lasciiify>(nonAscii_data, ExpandedBasis, ascii_Basis);
+    SHOW_BIXNUM(ascii_Basis);
 
     // Convert back to UTF8 from codepoints.
     StreamSet * const OutputBasis = P->CreateStreamSet(8);
-    U21_to_UTF8(P, u32Basis, OutputBasis);
+    U21_to_UTF8(P, ascii_Basis, OutputBasis);
 
     SHOW_BIXNUM(OutputBasis);
 
