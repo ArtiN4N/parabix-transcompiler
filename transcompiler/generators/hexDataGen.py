@@ -16,16 +16,7 @@ def char_to_hex_string(character):
     return f"0x{codepoint:04X}"
 
 
-outputS = """#pragma once
 
-#include <vector>
-
-#include <unicode/data/PropertyObjects.h>
-#include <unicode/data/PropertyObjectTable.h>
-#include <unicode/core/unicode_set.h>
-#include <unicode/utf/utf_compiler.h>
-#include <unicode/utf/transchar.h>
-const std::vector<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>> asciiCodeData = {"""
 outputE = "};"
 outputM = []
 name = "hexData"
@@ -213,7 +204,26 @@ for line in lines:
     # Append all integers in the range to the list
     all_integers.extend(range(start, end + 1))
 
-for i in all_integers:
+toUseInts = list(set(all_integers))
+
+
+outputS = """#pragma once
+
+#include <vector>
+
+#include <unicode/data/PropertyObjects.h>
+#include <unicode/data/PropertyObjectTable.h>
+#include <unicode/core/unicode_set.h>
+#include <unicode/utf/utf_compiler.h>
+#include <unicode/utf/transchar.h>
+constexpr size_t outerSize = """ + str(len(toUseInts)) + """;
+constexpr size_t innerSize = 6;
+
+const std::array<std::pair<UCD::codepoint_t, std::array<UCD::codepoint_t>, innerSize>, outerSize> asciiCodeData ="""
+
+print(len(toUseInts))
+
+for i in toUseInts:
     mTextS = "{"
     mTextE = "}"
     mTextInp = codepoint_to_hex_string(i)
