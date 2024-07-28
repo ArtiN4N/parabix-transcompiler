@@ -221,7 +221,7 @@ void Lasciify::generatePabloMethod() {
             output_basis[i] = pb.createOr(pb.createAdvance(nAscii4_Vars[i], 3), output_basis[i]);
         }
         if (i < nAscii5.size()) {
-            output_basis[i] = pb.createOr(pb.createAdvance(nAscii5_Vars[i], 3), output_basis[i]);
+            output_basis[i] = pb.createOr(pb.createAdvance(nAscii5_Vars[i], 4), output_basis[i]);
         }
         pb.createAssign(pb.createExtract(outputVar, pb.getInteger(i)), output_basis[i]);
     }
