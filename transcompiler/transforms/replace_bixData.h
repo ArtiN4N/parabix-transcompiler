@@ -15,3 +15,77 @@
 #include <re/cc/cc_compiler.h>
 #include <re/cc/cc_kernel.h>
 
+struct replace_bixData {
+    replace_bixData(std::vector<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>>);
+    std::vector<re::CC *> insertionBixNumCCs();
+    unicode::BitTranslationSets matchBitXorCCs(unsigned);
+    unicode::BitTranslationSets matchBitCCs(unsigned);
+    unsigned bitsNeeded;
+    unsigned maxAdd;
+private:
+    std::vector<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>> mUnicodeMap;
+    std::unordered_map<codepoint_t, unsigned> mInsertLength;
+    unicode::TranslationMap mCharMap[5];
+};
+
+replace_bixData::replace_bixData(std::vector<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>> data) {
+    mUnicodeMap = data;
+
+    maxAdd = 0;
+    for (auto& pair : mUnicodeMap) {
+        mInsertLength.emplace(pair.first, pair.second.size());
+        if (pair.second.size() > maxAdd) {
+            maxAdd++;
+        }
+
+        unsigned int i = 0;
+        for (auto& target : pair.second) {
+            mCharMap[i].emplace(pair.first, target);
+            i++;
+        }
+    }
+
+    unsigned n = maxAdd;
+
+    bitsNeeded = 0;
+    while (n) {
+        bitsNeeded++;
+        n >>= 1;
+    }
+}
+
+std::vector<re::CC *> replace_bixData::insertionBixNumCCs() {
+    unicode::BitTranslationSets BixNumCCs;
+
+    for (unsigned i = 0; i < bitsNeeded; i++) {
+        BixNumCCs.push_back(UCD::UnicodeSet());
+    }
+
+    for (auto& p : mInsertLength) {
+        auto insert_amt = p.second - 1;
+
+        unsigned bitAmt = 1;
+        for (unsigned i = 0; i < bitsNeeded; i++) {
+            if ((insert_amt & bitAmt) == bitAmt) {
+                BixNumCCs[i].insert(p.first);
+            }
+            bitAmt <<= 1;
+        }
+    }
+
+    std::vector<re::CC *> ret;
+    for (unsigned i = 0; i < bitsNeeded; i++) {
+        ret.push_back(re::makeCC(BixNumCCs[i], &cc::Unicode));
+    }
+    
+
+    return ret;
+}
+
+unicode::BitTranslationSets replace_bixData::matchBitXorCCs(unsigned i) {
+    return unicode::ComputeBitTranslationSets(mCharMap[i]);
+}
+
+unicode::BitTranslationSets replace_bixData::matchBitCCs(unsigned i) {
+    return unicode::ComputeBitTranslationSets(mCharMap[i], unicode::XlateMode::LiteralBit);
+}
