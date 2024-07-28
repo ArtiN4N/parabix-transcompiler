@@ -250,6 +250,8 @@ ToLasciiFunctionType generatePipeline(CPUDriver & pxDriver) {
     NONASCII_bixData nonAscii_data;
     auto insert_ccs = nonAscii_data.nonAscii_Insertion_BixNumCCs();
 
+    std::cout << insert_ccs.size() << std::endl;
+
     StreamSet * Insertion_BixNum = P->CreateStreamSet(insert_ccs.size());
     P->CreateKernelCall<CharClassesKernel>(insert_ccs, U21, Insertion_BixNum);
     SHOW_BIXNUM(Insertion_BixNum);
