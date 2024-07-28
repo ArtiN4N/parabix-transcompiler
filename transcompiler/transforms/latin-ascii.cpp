@@ -54,60 +54,77 @@ using namespace pablo;
 
 struct NONASCII_bixData {
     NONASCII_bixData();
-    std::vector<re::CC *> nonAscii_Insertion_BixNumCCs();
-    unicode::BitTranslationSets nonAsciiBitXorCCs(unsigned);
-    unicode::BitTranslationSets nonAsciiBitCCs(unsigned);
-    std::unordered_map<codepoint_t, unsigned> mnonAscii_length;
-    unicode::TranslationMap mnonAscii_CharMap[5];
+    std::vector<re::CC *> insertionBixNumCCs();
+    unicode::BitTranslationSets matchBitXorCCs(unsigned);
+    unicode::BitTranslationSets matchBitCCs(unsigned);
+private:
+    std::vector<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>> mUnicodeMap;
+    std::unordered_map<codepoint_t, unsigned> mInsertLength;
+    unicode::TranslationMap mCharMap[5];
+    unsigned mMaxAdd;
+    unsigned mBitsNeeded;
 };
 
 NONASCII_bixData::NONASCII_bixData() {
-    for (auto& pair : latinnonasciicodes) {
-        mnonAscii_length.emplace(pair.first, pair.second.size());
+    mUnicodeMap = asciiCodeData;
+
+    mMaxAdd = 0;
+    for (auto& pair : mUnicodeMap) {
+        mInsertLength.emplace(pair.first, pair.second.size());
+        if (pair.second.size() > mMaxAdd) {
+            mMaxAdd++;
+        }
 
         unsigned int i = 0;
         for (auto& target : pair.second) {
-            mnonAscii_CharMap[i].emplace(pair.first, target);
+            mCharMap[i].emplace(pair.first, target);
             i++;
         }
     }
+
+    unsigned n = mMaxAdd;
+
+    mBitsNeeded = 0;
+    while (n) {
+        mBitsNeeded++;
+        n >>= 1;
+    }
 }
 
-std::vector<re::CC *> NONASCII_bixData::nonAscii_Insertion_BixNumCCs() {
+std::vector<re::CC *> NONASCII_bixData::insertionBixNumCCs() {
     unicode::BitTranslationSets BixNumCCs;
 
-    BixNumCCs.push_back(UCD::UnicodeSet());
-    BixNumCCs.push_back(UCD::UnicodeSet());
-    BixNumCCs.push_back(UCD::UnicodeSet());
+    for (unsigned i = 0; i < mBitsNeeded; i++) {
+        BixNumCCs.push_back(UCD::UnicodeSet());
+    }
 
-    for (auto& p : mnonAscii_length) {
-        
-
+    for (auto& p : mInsertLength) {
         auto insert_amt = p.second - 1;
 
-        if ((insert_amt & 1) == 1) {
-            BixNumCCs[0].insert(p.first);
-        }
-        if ((insert_amt & 2) == 2) {
-            BixNumCCs[1].insert(p.first);
-        }
-        if ((insert_amt & 4) == 4) {
-            BixNumCCs[2].insert(p.first);
+        unsigned bitAmt = 1;
+        for (unsigned i = 0; i < mBitsNeeded; i++) {
+            if ((insert_amt & bitAmt) == bitAmt) {
+                BixNumCCs[i].insert(p.first);
+            }
+            bitAmt <<= 1;
         }
     }
 
-    return {re::makeCC(BixNumCCs[0], &cc::Unicode),
-            re::makeCC(BixNumCCs[1], &cc::Unicode),
-            re::makeCC(BixNumCCs[2], &cc::Unicode)
-    };
+    std::vector<re::CC *> ret;
+    for (unsigned i = 0; i < mBitsNeeded; i++) {
+        ret.push_back(re::makeCC(BixNumCCs[i], &cc::Unicode));
+    }
+    
+
+    return ret;
 }
 
-unicode::BitTranslationSets NONASCII_bixData::nonAsciiBitXorCCs(unsigned i) {
-    return unicode::ComputeBitTranslationSets(mnonAscii_CharMap[i]);
+unicode::BitTranslationSets NONASCII_bixData::matchBitXorCCs(unsigned i) {
+    return unicode::ComputeBitTranslationSets(mCharMap[i]);
 }
 
-unicode::BitTranslationSets NONASCII_bixData::nonAsciiBitCCs(unsigned i) {
-    return unicode::ComputeBitTranslationSets(mnonAscii_CharMap[i], unicode::XlateMode::LiteralBit);
+unicode::BitTranslationSets NONASCII_bixData::matchBitCCs(unsigned i) {
+    return unicode::ComputeBitTranslationSets(mCharMap[i], unicode::XlateMode::LiteralBit);
 }
 
 //  These declarations are for command line processing.
@@ -135,11 +152,11 @@ void Lasciify::generatePabloMethod() {
     PabloBuilder pb(getEntryScope());
     UTF::UTF_Compiler unicodeCompiler(getInput(0), pb);
 
-    unicode::BitTranslationSets nAscii1 = mBixData.nonAsciiBitXorCCs(0);
-    unicode::BitTranslationSets nAscii2 = mBixData.nonAsciiBitCCs(1);
-    unicode::BitTranslationSets nAscii3 = mBixData.nonAsciiBitCCs(2);
-    unicode::BitTranslationSets nAscii4 = mBixData.nonAsciiBitCCs(3);
-    unicode::BitTranslationSets nAscii5 = mBixData.nonAsciiBitCCs(4);
+    unicode::BitTranslationSets nAscii1 = mBixData.matchBitXorCCs(0);
+    unicode::BitTranslationSets nAscii2 = mBixData.matchBitCCs(1);
+    unicode::BitTranslationSets nAscii3 = mBixData.matchBitCCs(2);
+    unicode::BitTranslationSets nAscii4 = mBixData.matchBitCCs(3);
+    unicode::BitTranslationSets nAscii5 = mBixData.matchBitCCs(4);
 
     std::vector<Var *> nAscii1_Vars;
     std::vector<Var *> nAscii2_Vars;
@@ -241,7 +258,7 @@ ToLasciiFunctionType generatePipeline(CPUDriver & pxDriver) {
     SHOW_BIXNUM(U21);
 
     NONASCII_bixData nonAscii_data;
-    auto insert_ccs = nonAscii_data.nonAscii_Insertion_BixNumCCs();
+    auto insert_ccs = nonAscii_data.insertionBixNumCCs();
 
     StreamSet * Insertion_BixNum = P->CreateStreamSet(insert_ccs.size());
     P->CreateKernelCall<CharClassesKernel>(insert_ccs, U21, Insertion_BixNum);
