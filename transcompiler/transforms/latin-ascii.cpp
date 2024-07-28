@@ -155,7 +155,7 @@ void Lasciify::generatePabloMethod() {
     std::cout << "before asciiset init" << std::endl;
     std::vector<unicode::BitTranslationSets> nAsciiSets;
     nAsciiSets.push_back(mBixData.matchBitXorCCs(0));
-    for (unsigned i = 1; i < mBixData.bitsNeeded; i++) {
+    for (unsigned i = 1; i < mBixData.maxAdd; i++) {
         nAsciiSets.push_back(mBixData.matchBitCCs(i));
     }
     std::cout << "after asciiset init" << std::endl;
@@ -206,7 +206,7 @@ void Lasciify::generatePabloMethod() {
         }
 
         std::cout << "before jset use" << std::endl;
-        for (unsigned j = 1; j < mBixData.bitsNeeded; j++) {
+        for (unsigned j = 1; j < mBixData.maxAdd; j++) {
             auto set = nAsciiVars[j];
             if (i < set.size()) {
                 output_basis[i] = pb.createOr(pb.createAdvance(set[i], j), output_basis[i]);
