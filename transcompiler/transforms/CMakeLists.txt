@@ -81,22 +81,6 @@ DEPS
     toolchain
 )
 
-parabix_add_executable(
-NAME
-    numericpinyin
-SRC
-    numericpinyin.cpp
-DEPS
-    grep
-    pablo
-    kernel.basis
-    kernel.io
-    kernel.pipeline
-    kernel.streamutils
-    kernel.util
-    re.cc
-    toolchain
-)
 
 parabix_add_executable(
 NAME
@@ -115,22 +99,6 @@ DEPS
     toolchain
 )
 
-parabix_add_executable(
-NAME
-    anyname
-SRC
-    anyname.cpp
-DEPS
-    grep
-    pablo
-    kernel.basis
-    kernel.io
-    kernel.pipeline
-    kernel.streamutils
-    kernel.util
-    re.cc
-    toolchain
-)
 
 parabix_add_executable(
 NAME
