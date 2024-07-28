@@ -105,6 +105,7 @@ NAME
     lascii
 SRC
     latin-ascii.cpp
+    replaceify_kernel.cpp
 DEPS
     grep
     pablo
