@@ -152,42 +152,24 @@ void Lasciify::generatePabloMethod() {
     PabloBuilder pb(getEntryScope());
     UTF::UTF_Compiler unicodeCompiler(getInput(0), pb);
 
-    unicode::BitTranslationSets nAscii1 = mBixData.matchBitXorCCs(0);
-    unicode::BitTranslationSets nAscii2 = mBixData.matchBitCCs(1);
-    unicode::BitTranslationSets nAscii3 = mBixData.matchBitCCs(2);
-    unicode::BitTranslationSets nAscii4 = mBixData.matchBitCCs(3);
-    unicode::BitTranslationSets nAscii5 = mBixData.matchBitCCs(4);
+    std::vector<unicode::BitTranslationSets> nAsciiSets;
+    nAsciiSets.push_back(mBixData.matchBitXorCCs(0));
+    for (unsigned i = 1; i < mBitsNeeded; i++) {
+        nAsciiSets.push_back(mBixData.matchBitCCs(i));
+    }
 
-    std::vector<Var *> nAscii1_Vars;
-    std::vector<Var *> nAscii2_Vars;
-    std::vector<Var *> nAscii3_Vars;
-    std::vector<Var *> nAscii4_Vars;
-    std::vector<Var *> nAscii5_Vars;
+    std::vector<Var *> nAsciiVars;
+    nAsciiVars.resize(mBitsNeeded, mBitsNeeded);
 
-    for (unsigned i = 0; i < nAscii1.size(); i++) {
-        Var * v = pb.createVar("nAscii1_bit" + std::to_string(i), pb.createZeroes());
-        nAscii1_Vars.push_back(v);
-        unicodeCompiler.addTarget(v, re::makeCC(nAscii1[i], &cc::Unicode));
-    }
-    for (unsigned i = 0; i < nAscii2.size(); i++) {
-        Var * v = pb.createVar("nAscii2_bit" + std::to_string(i), pb.createZeroes());
-        nAscii2_Vars.push_back(v);
-        unicodeCompiler.addTarget(v, re::makeCC(nAscii2[i], &cc::Unicode));
-    }
-    for (unsigned i = 0; i < nAscii3.size(); i++) {
-        Var * v = pb.createVar("nAscii3_bit" + std::to_string(i), pb.createZeroes());
-        nAscii3_Vars.push_back(v);
-        unicodeCompiler.addTarget(v, re::makeCC(nAscii3[i], &cc::Unicode));
-    }
-    for (unsigned i = 0; i < nAscii4.size(); i++) {
-        Var * v = pb.createVar("nAscii4_bit" + std::to_string(i), pb.createZeroes());
-        nAscii4_Vars.push_back(v);
-        unicodeCompiler.addTarget(v, re::makeCC(nAscii4[i], &cc::Unicode));
-    }
-    for (unsigned i = 0; i < nAscii5.size(); i++) {
-        Var * v = pb.createVar("nAscii5_bit" + std::to_string(i), pb.createZeroes());
-        nAscii5_Vars.push_back(v);
-        unicodeCompiler.addTarget(v, re::makeCC(nAscii5[i], &cc::Unicode));
+    unsigned j = 0;
+    for (auto& set : nAsciiSets) {
+        for (unsigned i = 0; i < set.size(); i++) {
+            Var * v = pb.createVar("nAscii" + std::to_string(j) + "_bit" + std::to_string(i), pb.createZeroes());
+            nAsciiVars[j].push_back(v);
+            unicodeCompiler.addTarget(v, re::makeCC(set[i], &cc::Unicode));
+        }
+
+        j++;
     }
 
     if (LLVM_UNLIKELY(re::AlgorithmOptionIsSet(re::DisableIfHierarchy))) {
@@ -201,23 +183,21 @@ void Lasciify::generatePabloMethod() {
     std::vector<PabloAST *> output_basis(basis.size());
 
     for (unsigned i = 0; i < basis.size(); i++) {
-        if (i < nAscii1.size()) {
-            output_basis[i] = pb.createXor(basis[i], nAscii1_Vars[i]);
+        if (i < nAsciiSets[0].size()) {
+            output_basis[i] = pb.createXor(basis[i], nAsciiSets[0][i]);
         } else {
             output_basis[i] = basis[i];
         }
-        if (i < nAscii2.size()) {
-            output_basis[i] = pb.createOr(pb.createAdvance(nAscii2_Vars[i], 1), output_basis[i]);
+
+        unsigned j = 0;
+        for (auto& set : nAsciiSets) {
+            if (i < set.size()) {
+                output_basis[i] = pb.createOr(pb.createAdvance(set[i], j), output_basis[i]);
+            }
+
+            j++;
         }
-        if (i < nAscii3.size()) {
-            output_basis[i] = pb.createOr(pb.createAdvance(nAscii3_Vars[i], 2), output_basis[i]);
-        }
-        if (i < nAscii4.size()) {
-            output_basis[i] = pb.createOr(pb.createAdvance(nAscii4_Vars[i], 3), output_basis[i]);
-        }
-        if (i < nAscii5.size()) {
-            output_basis[i] = pb.createOr(pb.createAdvance(nAscii5_Vars[i], 4), output_basis[i]);
-        }
+        
         pb.createAssign(pb.createExtract(outputVar, pb.getInteger(i)), output_basis[i]);
     }
 }
