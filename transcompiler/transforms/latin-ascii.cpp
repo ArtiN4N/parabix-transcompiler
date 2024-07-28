@@ -94,23 +94,23 @@ std::vector<re::CC *> NONASCII_bixData::nonAscii_Insertion_BixNumCCs() {
 }
 
 unicode::BitTranslationSets NONASCII_bixData::nonAscii_1st_BitXorCCs() {
-    return unicode::ComputeBitTranslationSets(mNFD_CharMap[0]);
+    return unicode::ComputeBitTranslationSets(mnonAscii_CharMap[0]);
 }
 
 unicode::BitTranslationSets NONASCII_bixData::nonAscii_2nd_BitCCs() {
-    return unicode::ComputeBitTranslationSets(mNFD_CharMap[1], unicode::XlateMode::LiteralBit);
+    return unicode::ComputeBitTranslationSets(mnonAscii_CharMap[1], unicode::XlateMode::LiteralBit);
 }
 
 unicode::BitTranslationSets NONASCII_bixData::nonAscii_3rd_BitCCs() {
-    return unicode::ComputeBitTranslationSets(mNFD_CharMap[2], unicode::XlateMode::LiteralBit);
+    return unicode::ComputeBitTranslationSets(mnonAscii_CharMap[2], unicode::XlateMode::LiteralBit);
 }
 
 unicode::BitTranslationSets NONASCII_bixData::nonAscii_4th_BitCCs() {
-    return unicode::ComputeBitTranslationSets(mNFD_CharMap[3], unicode::XlateMode::LiteralBit);
+    return unicode::ComputeBitTranslationSets(mnonAscii_CharMap[3], unicode::XlateMode::LiteralBit);
 }
 
 unicode::BitTranslationSets NONASCII_bixData::nonAscii_5th_BitCCs() {
-    return unicode::ComputeBitTranslationSets(mNFD_CharMap[4], unicode::XlateMode::LiteralBit);
+    return unicode::ComputeBitTranslationSets(mnonAscii_CharMap[4], unicode::XlateMode::LiteralBit);
 }
 
 //  These declarations are for command line processing.
