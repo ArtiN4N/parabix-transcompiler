@@ -7,10 +7,7 @@ using namespace kernel;
 using namespace llvm;
 using namespace pablo;
 
-class Replaceify : public pablo::PabloKernel {
-public:
-    Replaceify(KernelBuilder & b, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output);
-protected:
-    void generatePabloMethod() override;
-    replace_bixData & mBixData;
-};
+void ReplaceByBixData(PipelineBuilder & P,
+                  replace_bixData & BixData,    
+                  StreamSet * Basis, StreamSet * Output
+                  );

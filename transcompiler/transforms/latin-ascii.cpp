@@ -93,23 +93,9 @@ ToLasciiFunctionType generatePipeline(CPUDriver & pxDriver) {
     FilterByMask(P, u8index, U21_u8indexed, U21);
     SHOW_BIXNUM(U21);
 
-    replace_bixData nonAscii_data(asciiCodeData);
-    auto insert_ccs = nonAscii_data.insertionBixNumCCs();
-
-    StreamSet * Insertion_BixNum = P->CreateStreamSet(insert_ccs.size());
-    P->CreateKernelCall<CharClassesKernel>(insert_ccs, U21, Insertion_BixNum);
-    SHOW_STREAM(Insertion_BixNum);
-
-    StreamSet * SpreadMask = InsertionSpreadMask(P, Insertion_BixNum, InsertPosition::After);
-    SHOW_STREAM(SpreadMask);
-
-    StreamSet * ExpandedBasis = P->CreateStreamSet(21, 1);
-    SpreadByMask(P, SpreadMask, U21, ExpandedBasis);
-    SHOW_BIXNUM(ExpandedBasis);
-
+    replace_bixData replace_data(asciiCodeData);
     StreamSet * ascii_Basis = P->CreateStreamSet(21, 1);
-    P->CreateKernelCall<Replaceify>(nonAscii_data, ExpandedBasis, ascii_Basis);
-    SHOW_BIXNUM(ascii_Basis);
+    ReplaceByBixData(P, replace_data, U21, ascii_Basis);
 
     // Convert back to UTF8 from codepoints.
     StreamSet * const OutputBasis = P->CreateStreamSet(8);

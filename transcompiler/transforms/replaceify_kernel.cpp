@@ -50,6 +50,14 @@ using namespace kernel;
 using namespace llvm;
 using namespace pablo;
 
+class Replaceify : public pablo::PabloKernel {
+public:
+    Replaceify(KernelBuilder & b, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output);
+protected:
+    void generatePabloMethod() override;
+    replace_bixData & mBixData;
+};
+
 Replaceify::Replaceify (KernelBuilder & b, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output)
 : PabloKernel(b, "Replaceify" + std::to_string(Basis->getNumElements()) + "x1",
 // inputs
@@ -110,4 +118,20 @@ void Replaceify::generatePabloMethod() {
 
         pb.createAssign(pb.createExtract(outputVar, pb.getInteger(i)), output_basis[i]);
     }
+}
+
+
+void ReplaceByBixData(PipelineBuilder & P, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output) {
+    auto insert_ccs = BixData.insertionBixNumCCs();
+
+    StreamSet * Insertion_BixNum = P->CreateStreamSet(insert_ccs.size());
+    P->CreateKernelCall<CharClassesKernel>(insert_ccs, Basis, Insertion_BixNum);
+    SHOW_STREAM(Insertion_BixNum);
+
+    StreamSet * SpreadMask = InsertionSpreadMask(P, Insertion_BixNum, InsertPosition::After);
+
+    StreamSet * ExpandedBasis = P->CreateStreamSet(21, 1);
+    SpreadByMask(P, SpreadMask, Basis, ExpandedBasis);
+
+    P->CreateKernelCall<Replaceify>(BixData, ExpandedBasis, Output);
 }
