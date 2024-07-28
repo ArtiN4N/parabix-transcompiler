@@ -245,7 +245,7 @@ ToLasciiFunctionType generatePipeline(CPUDriver & pxDriver) {
 
     StreamSet * U21 = P->CreateStreamSet(21, 1);
     FilterByMask(P, u8index, U21_u8indexed, U21);
-    SHOW_BIXNUM(U21);
+    //SHOW_BIXNUM(U21);
 
     NONASCII_bixData nonAscii_data;
     auto insert_ccs = nonAscii_data.nonAscii_Insertion_BixNumCCs();
