@@ -101,7 +101,7 @@ std::vector<re::CC *> NONASCII_bixData::nonAscii_Insertion_BixNumCCs() {
         if ((insert_amt & 4) == 4) {
             std::cout << std::hex << p.first << std::endl;
             std::cout << insert_amt << std::endl;
-            std::cout << (insert_amt & 8) == 8 << std::endl;
+            std::cout << ((insert_amt & 8) == 8) << std::endl;
         }
 
     }
