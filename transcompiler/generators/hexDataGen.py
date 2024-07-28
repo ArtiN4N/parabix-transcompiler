@@ -207,6 +207,9 @@ for line in lines:
     # Convert the hex strings to integers
     start = int(start_str[2:], 16)  # Remove 'U+' and convert to int
     end = int(end_str[2:], 16)      # Remove 'U+' and convert to int
+    max = start + 0xFF
+    if end > max:
+        end = max
     # Append all integers in the range to the list
     all_integers.extend(range(start, end + 1))
 
