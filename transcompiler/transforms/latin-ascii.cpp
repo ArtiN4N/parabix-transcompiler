@@ -159,7 +159,7 @@ void Lasciify::generatePabloMethod() {
     }
 
     std::vector<Var *> nAsciiVars;
-    nAsciiVars.resize(mBixData.bitsNeeded, mBixData.bitsNeeded);
+    nAsciiVars.assign(mBixData.bitsNeeded, {});
 
     unsigned j = 0;
     for (auto& set : nAsciiSets) {
