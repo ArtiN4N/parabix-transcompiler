@@ -65,8 +65,6 @@ struct NONASCII_bixData {
 };
 
 NONASCII_bixData::NONASCII_bixData() {
-    std::cout << "generating bixdata" << std::endl;
-
     for (auto& pair : latinnonasciicodes) {
         mnonAscii_length.emplace(pair.first, pair.second.size());
 
@@ -98,6 +96,12 @@ std::vector<re::CC *> NONASCII_bixData::nonAscii_Insertion_BixNumCCs() {
         }
         if ((insert_amt & 4) == 4) {
             BixNumCCs[2].insert(p.first);
+        }
+
+        if ((insert_amt & 4) == 4) {
+            std::cout << std::hex << p.first << std::endl;
+            std::cout << insert_amt << std::endl;
+            std::cout << (insert_amt & 8) == 8 << std::endl;
         }
 
     }
