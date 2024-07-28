@@ -58,21 +58,21 @@ struct NONASCII_bixData {
     unicode::BitTranslationSets matchBitXorCCs(unsigned);
     unicode::BitTranslationSets matchBitCCs(unsigned);
     unsigned bitsNeeded;
+    unsigned maxAdd;
 private:
     std::vector<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>> mUnicodeMap;
     std::unordered_map<codepoint_t, unsigned> mInsertLength;
     unicode::TranslationMap mCharMap[5];
-    unsigned mMaxAdd;
 };
 
 NONASCII_bixData::NONASCII_bixData() {
     mUnicodeMap = asciiCodeData;
 
-    mMaxAdd = 0;
+    maxAdd = 0;
     for (auto& pair : mUnicodeMap) {
         mInsertLength.emplace(pair.first, pair.second.size());
-        if (pair.second.size() > mMaxAdd) {
-            mMaxAdd++;
+        if (pair.second.size() > maxAdd) {
+            maxAdd++;
         }
 
         unsigned int i = 0;
@@ -82,7 +82,7 @@ NONASCII_bixData::NONASCII_bixData() {
         }
     }
 
-    unsigned n = mMaxAdd;
+    unsigned n = maxAdd;
 
     bitsNeeded = 0;
     while (n) {
@@ -161,7 +161,7 @@ void Lasciify::generatePabloMethod() {
     std::cout << "after asciiset init" << std::endl;
 
     std::vector<std::vector<Var *>> nAsciiVars;
-    nAsciiVars.assign(mBixData.bitsNeeded + 1, {});
+    nAsciiVars.assign(mBixData.maxAdd, {});
 
     std::cout << "before asciivar init" << std::endl;
     unsigned j = 0;
