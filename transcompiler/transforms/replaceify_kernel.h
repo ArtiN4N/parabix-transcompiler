@@ -1,6 +1,9 @@
 #pragma once
 
 #include <vector>
+#include <fcntl.h>
+#include <string>
+#include <iostream>
 
 #include "replace_bixData.h"
 
