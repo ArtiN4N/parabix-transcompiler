@@ -97,11 +97,13 @@ std::vector<re::CC *> NONASCII_bixData::nonAscii_Insertion_BixNumCCs() {
         if ((insert_amt & 4) == 4) {
             BixNumCCs[2].insert(p.first);
         }
+
+        std::cout << insert_amt & 1 << ", ";
+        std::cout << insert_amt & 2 << ", ";
+        std::cout << insert_amt & 4 << std::endl;
     }
 
-    std::cout << BixNumCCs[0] << ", ";
-    std::cout << BixNumCCs[1] << ", ";
-    std::cout << BixNumCCs[2] << std::endl;
+    
 
     return {re::makeCC(BixNumCCs[0], &cc::Unicode),
             re::makeCC(BixNumCCs[1], &cc::Unicode),
