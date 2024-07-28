@@ -183,8 +183,10 @@ void Lasciify::generatePabloMethod() {
     std::vector<PabloAST *> output_basis(basis.size());
 
     for (unsigned i = 0; i < basis.size(); i++) {
-        if (i < nAsciiSets[0].size()) {
-            output_basis[i] = pb.createXor(basis[i], nAsciiSets[0][i]);
+
+        auto initSet = nAsciiSets[0];
+        if (i < initSet.size()) {
+            output_basis[i] = pb.createXor(basis[i], initSet[i]);
         } else {
             output_basis[i] = basis[i];
         }
