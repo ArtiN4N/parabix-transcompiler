@@ -57,12 +57,12 @@ struct NONASCII_bixData {
     std::vector<re::CC *> insertionBixNumCCs();
     unicode::BitTranslationSets matchBitXorCCs(unsigned);
     unicode::BitTranslationSets matchBitCCs(unsigned);
+    unsigned bitsNeeded;
 private:
     std::vector<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>> mUnicodeMap;
     std::unordered_map<codepoint_t, unsigned> mInsertLength;
     unicode::TranslationMap mCharMap[5];
     unsigned mMaxAdd;
-    unsigned mBitsNeeded;
 };
 
 NONASCII_bixData::NONASCII_bixData() {
@@ -84,9 +84,9 @@ NONASCII_bixData::NONASCII_bixData() {
 
     unsigned n = mMaxAdd;
 
-    mBitsNeeded = 0;
+    bitsNeeded = 0;
     while (n) {
-        mBitsNeeded++;
+        bitsNeeded++;
         n >>= 1;
     }
 }
@@ -94,7 +94,7 @@ NONASCII_bixData::NONASCII_bixData() {
 std::vector<re::CC *> NONASCII_bixData::insertionBixNumCCs() {
     unicode::BitTranslationSets BixNumCCs;
 
-    for (unsigned i = 0; i < mBitsNeeded; i++) {
+    for (unsigned i = 0; i < bitsNeeded; i++) {
         BixNumCCs.push_back(UCD::UnicodeSet());
     }
 
@@ -102,7 +102,7 @@ std::vector<re::CC *> NONASCII_bixData::insertionBixNumCCs() {
         auto insert_amt = p.second - 1;
 
         unsigned bitAmt = 1;
-        for (unsigned i = 0; i < mBitsNeeded; i++) {
+        for (unsigned i = 0; i < bitsNeeded; i++) {
             if ((insert_amt & bitAmt) == bitAmt) {
                 BixNumCCs[i].insert(p.first);
             }
@@ -111,7 +111,7 @@ std::vector<re::CC *> NONASCII_bixData::insertionBixNumCCs() {
     }
 
     std::vector<re::CC *> ret;
-    for (unsigned i = 0; i < mBitsNeeded; i++) {
+    for (unsigned i = 0; i < bitsNeeded; i++) {
         ret.push_back(re::makeCC(BixNumCCs[i], &cc::Unicode));
     }
     
@@ -154,12 +154,12 @@ void Lasciify::generatePabloMethod() {
 
     std::vector<unicode::BitTranslationSets> nAsciiSets;
     nAsciiSets.push_back(mBixData.matchBitXorCCs(0));
-    for (unsigned i = 1; i < mBitsNeeded; i++) {
+    for (unsigned i = 1; i < mBixData.bitsNeeded; i++) {
         nAsciiSets.push_back(mBixData.matchBitCCs(i));
     }
 
     std::vector<Var *> nAsciiVars;
-    nAsciiVars.resize(mBitsNeeded, mBitsNeeded);
+    nAsciiVars.resize(mBixData.bitsNeeded, mBixData.bitsNeeded);
 
     unsigned j = 0;
     for (auto& set : nAsciiSets) {
@@ -197,7 +197,7 @@ void Lasciify::generatePabloMethod() {
 
             j++;
         }
-        
+
         pb.createAssign(pb.createExtract(outputVar, pb.getInteger(i)), output_basis[i]);
     }
 }
