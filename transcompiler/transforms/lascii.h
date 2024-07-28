@@ -16,7 +16,10 @@ std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>> latinnonasciicodes = 
 {0x00DF,std::vector<UCD::codepoint_t>{0x0073,0x0073}},
 {0x00E6,std::vector<UCD::codepoint_t>{0x0061,0x0065}},
 {0x00F0,std::vector<UCD::codepoint_t>{0x0064}},
-{0x00F8,std::vector<UCD::codepoint_t>{0x006F}},
+{0x00F8,std::vector<UCD::codepoint_t>{0x006F}}
+};
+/*
+,
 {0x00FE,std::vector<UCD::codepoint_t>{0x0074,0x0068}},
 {0x0110,std::vector<UCD::codepoint_t>{0x0044}},
 {0x0111,std::vector<UCD::codepoint_t>{0x0064}},
@@ -856,3 +859,4 @@ std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>> latinnonasciicodes = 
 {0x2A75,std::vector<UCD::codepoint_t>{0x003D,0x003D}},
 {0x2A76,std::vector<UCD::codepoint_t>{0x003D,0x003D,0x0020}}
 };
+*/
