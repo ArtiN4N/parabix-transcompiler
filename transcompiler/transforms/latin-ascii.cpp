@@ -52,8 +52,8 @@ using namespace kernel;
 using namespace llvm;
 using namespace pablo;
 
-struct NONASCII_bixData {
-    NONASCII_bixData();
+struct replace_bixData {
+    replace_bixData(std::vector<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>>);
     std::vector<re::CC *> insertionBixNumCCs();
     unicode::BitTranslationSets matchBitXorCCs(unsigned);
     unicode::BitTranslationSets matchBitCCs(unsigned);
@@ -65,8 +65,8 @@ private:
     unicode::TranslationMap mCharMap[5];
 };
 
-NONASCII_bixData::NONASCII_bixData() {
-    mUnicodeMap = asciiCodeData;
+replace_bixData::replace_bixData(std::vector<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>> data) {
+    mUnicodeMap = data;
 
     maxAdd = 0;
     for (auto& pair : mUnicodeMap) {
@@ -91,7 +91,7 @@ NONASCII_bixData::NONASCII_bixData() {
     }
 }
 
-std::vector<re::CC *> NONASCII_bixData::insertionBixNumCCs() {
+std::vector<re::CC *> replace_bixData::insertionBixNumCCs() {
     unicode::BitTranslationSets BixNumCCs;
 
     for (unsigned i = 0; i < bitsNeeded; i++) {
@@ -119,11 +119,11 @@ std::vector<re::CC *> NONASCII_bixData::insertionBixNumCCs() {
     return ret;
 }
 
-unicode::BitTranslationSets NONASCII_bixData::matchBitXorCCs(unsigned i) {
+unicode::BitTranslationSets replace_bixData::matchBitXorCCs(unsigned i) {
     return unicode::ComputeBitTranslationSets(mCharMap[i]);
 }
 
-unicode::BitTranslationSets NONASCII_bixData::matchBitCCs(unsigned i) {
+unicode::BitTranslationSets replace_bixData::matchBitCCs(unsigned i) {
     return unicode::ComputeBitTranslationSets(mCharMap[i], unicode::XlateMode::LiteralBit);
 }
 
@@ -134,13 +134,13 @@ static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), 
 
 class Replaceify : public pablo::PabloKernel {
 public:
-    Replaceify(KernelBuilder & b, NONASCII_bixData & BixData, StreamSet * Basis, StreamSet * Output);
+    Replaceify(KernelBuilder & b, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output);
 protected:
     void generatePabloMethod() override;
-    NONASCII_bixData & mBixData;
+    replace_bixData & mBixData;
 };
 
-Replaceify::Replaceify (KernelBuilder & b, NONASCII_bixData & BixData, StreamSet * Basis, StreamSet * Output)
+Replaceify::Replaceify (KernelBuilder & b, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output)
 : PabloKernel(b, "Replaceify" + std::to_string(Basis->getNumElements()) + "x1",
 // inputs
 {Binding{"basis", Basis}},
@@ -237,7 +237,7 @@ ToLasciiFunctionType generatePipeline(CPUDriver & pxDriver) {
     FilterByMask(P, u8index, U21_u8indexed, U21);
     SHOW_BIXNUM(U21);
 
-    NONASCII_bixData nonAscii_data;
+    replace_bixData nonAscii_data(asciiCodeData);
     auto insert_ccs = nonAscii_data.insertionBixNumCCs();
 
     StreamSet * Insertion_BixNum = P->CreateStreamSet(insert_ccs.size());
