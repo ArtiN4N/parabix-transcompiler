@@ -98,9 +98,9 @@ std::vector<re::CC *> NONASCII_bixData::nonAscii_Insertion_BixNumCCs() {
             BixNumCCs[2].insert(p.first);
         }
 
-        std::cout << insert_amt & 1 << ", ";
-        std::cout << insert_amt & 2 << ", ";
-        std::cout << insert_amt & 4 << std::endl;
+        std::cout << (insert_amt & 1) << ", ";
+        std::cout << (insert_amt & 2) << ", ";
+        std::cout << (insert_amt & 4) << std::endl;
     }
 
     
