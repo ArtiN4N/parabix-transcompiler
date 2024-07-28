@@ -120,7 +120,6 @@ void Replaceify::generatePabloMethod() {
     }
 }
 
-
 void ReplaceByBixData(PipelineBuilder & P, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output) {
     auto insert_ccs = BixData.insertionBixNumCCs();
 
@@ -130,7 +129,7 @@ void ReplaceByBixData(PipelineBuilder & P, replace_bixData & BixData, StreamSet 
     StreamSet * SpreadMask = InsertionSpreadMask(P, Insertion_BixNum, InsertPosition::After);
 
     StreamSet * ExpandedBasis = P.CreateStreamSet(21, 1);
-    SpreadByMask(static_cast<PipelineBuilder&>(P), static_cast<StreamSet*>(SpreadMask), static_cast<StreamSet*>(Basis), static_cast<StreamSet*>(ExpandedBasis));
+    SpreadByMask(P, SpreadMask, Basis, ExpandedBasis, 0, false, kernel::StreamExpandOptimization::None, 64, GammaDistribution(5.0f, 0.1f));
 
     P.CreateKernelCall<Replaceify>(BixData, ExpandedBasis, Output);
 }
