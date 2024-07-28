@@ -106,11 +106,6 @@ std::vector<re::CC *> NONASCII_bixData::nonAscii_Insertion_BixNumCCs() {
 
     }
 
-    //auto & out = llvm::errs();
-    //for (auto& p : BixNumCCs) {
-        //p.print(out);
-    //}
-
     return {re::makeCC(BixNumCCs[0], &cc::Unicode),
             re::makeCC(BixNumCCs[1], &cc::Unicode),
             re::makeCC(BixNumCCs[2], &cc::Unicode)
