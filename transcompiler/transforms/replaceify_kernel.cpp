@@ -1,5 +1,3 @@
-#pragma once
-
 #include <vector>
 #include <fcntl.h>
 #include <string>
