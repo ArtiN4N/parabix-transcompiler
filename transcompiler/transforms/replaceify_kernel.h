@@ -1,14 +1,11 @@
 #pragma once
 
-#include <vector>
-#include <fcntl.h>
-#include <string>
-#include <iostream>
-
 #include "replace_bixData.h"
 #include <pablo/pablo_kernel.h>
 
-namespace kernel {
+using namespace kernel;
+using namespace llvm;
+using namespace pablo;
 
 class Replaceify : public pablo::PabloKernel {
 public:
@@ -17,5 +14,3 @@ protected:
     void generatePabloMethod() override;
     replace_bixData & mBixData;
 };
-
-}

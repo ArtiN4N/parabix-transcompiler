@@ -46,11 +46,9 @@
 #include <re/cc/cc_compiler.h>
 #include <re/cc/cc_kernel.h>
 
+using namespace kernel;
 using namespace llvm;
 using namespace pablo;
-
-
-namespace kernel {
 
 Replaceify::Replaceify (KernelBuilder & b, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output)
 : PabloKernel(b, "Replaceify" + std::to_string(Basis->getNumElements()) + "x1",
@@ -112,5 +110,4 @@ void Replaceify::generatePabloMethod() {
 
         pb.createAssign(pb.createExtract(outputVar, pb.getInteger(i)), output_basis[i]);
     }
-}
 }
