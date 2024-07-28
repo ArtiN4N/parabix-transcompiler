@@ -264,43 +264,7 @@ ToLasciiFunctionType generatePipeline(CPUDriver & pxDriver) {
     SHOW_BIXNUM(U21);
 
     NONASCII_bixData nonAscii_data;
-    //auto insert_ccs = nonAscii_data.nonAscii_Insertion_BixNumCCs();
-
-    unicode::BitTranslationSets BixNumCCs;
-
-    BixNumCCs.push_back(UCD::UnicodeSet());
-    BixNumCCs.push_back(UCD::UnicodeSet());
-    BixNumCCs.push_back(UCD::UnicodeSet());
-
-    for (auto& p : nonAscii_data.mnonAscii_length) {
-        
-
-        auto insert_amt = p.second - 1;
-
-        if ((insert_amt & 1) == 1) {
-            BixNumCCs[0].insert(p.first);
-        }
-        if ((insert_amt & 2) == 2) {
-            BixNumCCs[1].insert(p.first);
-        }
-        if ((insert_amt & 4) == 4) {
-            BixNumCCs[2].insert(p.first);
-        }
-
-    }
-
-    //auto & out = llvm::errs();
-    //for (auto& p : BixNumCCs) {
-        //p.print(out);
-    //}
-
-    std::vector<re::CC *> insert_ccs = {re::makeCC(BixNumCCs[0], &cc::Unicode),
-            re::makeCC(BixNumCCs[1], &cc::Unicode),
-            re::makeCC(BixNumCCs[2], &cc::Unicode)
-    };
-
-
-    std::cout << insert_ccs.size() << std::endl;
+    auto insert_ccs = nonAscii_data.nonAscii_Insertion_BixNumCCs();
 
     StreamSet * Insertion_BixNum = P->CreateStreamSet(insert_ccs.size());
     P->CreateKernelCall<CharClassesKernel>(insert_ccs, U21, Insertion_BixNum);
