@@ -158,14 +158,14 @@ void Lasciify::generatePabloMethod() {
         nAsciiSets.push_back(mBixData.matchBitCCs(i));
     }
 
-    std::vector<Var *> nAsciiVars;
+    std::vector<std::vector<Var *>> nAsciiVars;
     nAsciiVars.assign(mBixData.bitsNeeded, {});
 
     unsigned j = 0;
     for (auto& set : nAsciiSets) {
         for (unsigned i = 0; i < set.size(); i++) {
             Var * v = pb.createVar("nAscii" + std::to_string(j) + "_bit" + std::to_string(i), pb.createZeroes());
-            nAsciiVars[j]->push_back(v);
+            nAsciiVars[i].push_back(v);
             unicodeCompiler.addTarget(v, re::makeCC(set[i], &cc::Unicode));
         }
 
