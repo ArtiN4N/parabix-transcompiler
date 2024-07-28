@@ -4,6 +4,8 @@
 #include <iostream>
 
 #include "lascii.h"
+#include "replaceify_kernel.h"
+#include "replacebixData.h"
 
 #include <unicode/data/PropertyObjects.h>
 #include <unicode/data/PropertyObjectTable.h>
@@ -52,156 +54,10 @@ using namespace kernel;
 using namespace llvm;
 using namespace pablo;
 
-struct replace_bixData {
-    replace_bixData(std::vector<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>>);
-    std::vector<re::CC *> insertionBixNumCCs();
-    unicode::BitTranslationSets matchBitXorCCs(unsigned);
-    unicode::BitTranslationSets matchBitCCs(unsigned);
-    unsigned bitsNeeded;
-    unsigned maxAdd;
-private:
-    std::vector<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>> mUnicodeMap;
-    std::unordered_map<codepoint_t, unsigned> mInsertLength;
-    unicode::TranslationMap mCharMap[5];
-};
-
-replace_bixData::replace_bixData(std::vector<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>> data) {
-    mUnicodeMap = data;
-
-    maxAdd = 0;
-    for (auto& pair : mUnicodeMap) {
-        mInsertLength.emplace(pair.first, pair.second.size());
-        if (pair.second.size() > maxAdd) {
-            maxAdd++;
-        }
-
-        unsigned int i = 0;
-        for (auto& target : pair.second) {
-            mCharMap[i].emplace(pair.first, target);
-            i++;
-        }
-    }
-
-    unsigned n = maxAdd;
-
-    bitsNeeded = 0;
-    while (n) {
-        bitsNeeded++;
-        n >>= 1;
-    }
-}
-
-std::vector<re::CC *> replace_bixData::insertionBixNumCCs() {
-    unicode::BitTranslationSets BixNumCCs;
-
-    for (unsigned i = 0; i < bitsNeeded; i++) {
-        BixNumCCs.push_back(UCD::UnicodeSet());
-    }
-
-    for (auto& p : mInsertLength) {
-        auto insert_amt = p.second - 1;
-
-        unsigned bitAmt = 1;
-        for (unsigned i = 0; i < bitsNeeded; i++) {
-            if ((insert_amt & bitAmt) == bitAmt) {
-                BixNumCCs[i].insert(p.first);
-            }
-            bitAmt <<= 1;
-        }
-    }
-
-    std::vector<re::CC *> ret;
-    for (unsigned i = 0; i < bitsNeeded; i++) {
-        ret.push_back(re::makeCC(BixNumCCs[i], &cc::Unicode));
-    }
-    
-
-    return ret;
-}
-
-unicode::BitTranslationSets replace_bixData::matchBitXorCCs(unsigned i) {
-    return unicode::ComputeBitTranslationSets(mCharMap[i]);
-}
-
-unicode::BitTranslationSets replace_bixData::matchBitCCs(unsigned i) {
-    return unicode::ComputeBitTranslationSets(mCharMap[i], unicode::XlateMode::LiteralBit);
-}
-
 //  These declarations are for command line processing.
 //  See the LLVM CommandLine 2.0 Library Manual https://llvm.org/docs/CommandLine.html
 static cl::OptionCategory LasciiOptions("lascii Options", "lascii control options.");
 static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), cl::Required, cl::cat(LasciiOptions));
-
-class Replaceify : public pablo::PabloKernel {
-public:
-    Replaceify(KernelBuilder & b, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output);
-protected:
-    void generatePabloMethod() override;
-    replace_bixData & mBixData;
-};
-
-Replaceify::Replaceify (KernelBuilder & b, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output)
-: PabloKernel(b, "Replaceify" + std::to_string(Basis->getNumElements()) + "x1",
-// inputs
-{Binding{"basis", Basis}},
-// output
-{Binding{"Output", Output}}), mBixData(BixData) {
-}
-
-void Replaceify::generatePabloMethod() {
-    PabloBuilder pb(getEntryScope());
-    UTF::UTF_Compiler unicodeCompiler(getInput(0), pb);
-
-    std::vector<unicode::BitTranslationSets> nReplaceSets;
-    nReplaceSets.push_back(mBixData.matchBitXorCCs(0));
-    for (unsigned i = 1; i < mBixData.maxAdd; i++) {
-        nReplaceSets.push_back(mBixData.matchBitCCs(i));
-    }
-
-    std::vector<std::vector<Var *>> nReplaceVars;
-    nReplaceVars.assign(mBixData.maxAdd, {});
-
-    unsigned j = 0;
-    for (auto& set : nReplaceSets) {
-        for (unsigned i = 0; i < set.size(); i++) {
-            Var * v = pb.createVar("nAscii" + std::to_string(j) + "_bit" + std::to_string(i), pb.createZeroes());
-            nReplaceVars[j].push_back(v);
-            unicodeCompiler.addTarget(v, re::makeCC(set[i], &cc::Unicode));
-        }
-
-        j++;
-    }
-
-    if (LLVM_UNLIKELY(re::AlgorithmOptionIsSet(re::DisableIfHierarchy))) {
-        unicodeCompiler.compile(UTF::UTF_Compiler::IfHierarchy::None);
-    } else {
-        unicodeCompiler.compile();
-    }
-
-    
-    std::vector<PabloAST *> basis = getInputStreamSet("basis");
-    Var * outputVar = getOutputStreamVar("Output");
-    std::vector<PabloAST *> output_basis(basis.size());
-
-    for (unsigned i = 0; i < basis.size(); i++) {
-        auto initSet = nReplaceVars[0];
-        if (i < initSet.size()) {
-            output_basis[i] = pb.createXor(basis[i], initSet[i]);
-        } else {
-            output_basis[i] = basis[i];
-        }
-
-        for (unsigned j = 1; j < mBixData.maxAdd; j++) {
-            auto set = nReplaceVars[j];
-            if (i < set.size()) {
-                output_basis[i] = pb.createOr(pb.createAdvance(set[i], j), output_basis[i]);
-            }
-        }
-
-        pb.createAssign(pb.createExtract(outputVar, pb.getInteger(i)), output_basis[i]);
-    }
-}
-
 
 typedef void (*ToLasciiFunctionType)(uint32_t fd);
 
