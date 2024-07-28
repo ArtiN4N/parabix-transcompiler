@@ -267,7 +267,7 @@ ToLasciiFunctionType generatePipeline(CPUDriver & pxDriver) {
 
     StreamSet * Insertion_BixNum = P->CreateStreamSet(insert_ccs.size());
     P->CreateKernelCall<CharClassesKernel>(insert_ccs, U21, Insertion_BixNum);
-    SHOW_BIXNUM(Insertion_BixNum);
+    SHOW_STREAM(Insertion_BixNum);
 
     StreamSet * SpreadMask = InsertionSpreadMask(P, Insertion_BixNum, InsertPosition::After);
     SHOW_STREAM(SpreadMask);
