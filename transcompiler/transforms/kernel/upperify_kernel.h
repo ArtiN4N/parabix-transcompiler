@@ -90,7 +90,7 @@ inline void doUpperTransform(const std::unique_ptr<PipelineBuilder> & P, StreamS
     return doUpperTransform(*P.get(), Basis, Output);
 }
 
-inline void doUpperTransform( & P, StreamSet * Basis, StreamSet * Output) {
+inline void doUpperTransform(const std::unique_ptr<ProgramBuilder> & P, StreamSet * Basis, StreamSet * Output) {
     return doUpperTransform(*P.get(), Basis, Output);
 }
 
