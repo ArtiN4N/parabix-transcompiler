@@ -112,5 +112,5 @@ void doHalfFullTransform(PipelineBuilder & P, StreamSet * Basis, StreamSet * Out
     P.CreateKernelCall<CharClassesKernel>(translation_ccs, Basis, translationBasis);
 
     // Perform the logic of the FullHalfify kernel on the codepoiont values.
-    P.CreateKernelCall<FullHalfify>(Basis, translationBasis, Output);
+    P.CreateKernelCall<HalfFullify>(Basis, translationBasis, Output);
 }
