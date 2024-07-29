@@ -298,7 +298,7 @@ std::string compilePipeline(std::string piplineCode, bool usesCustomProgName, st
 
     runCommand("cd ../; cmake ..");
 
-    runCommand("../../transcompiler/bash bash maketarget.sh " + makeName);
+    runCommand("cd ../; make " + makeName);
 
     return makeName;
 }
