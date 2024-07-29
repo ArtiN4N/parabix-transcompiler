@@ -37,6 +37,7 @@
 #include <re/cc/cc_compiler.h>
 #include <re/cc/cc_kernel.h>
 
+#include "upperify_kernel.h"
 
 #define SHOW_STREAM(name) if (codegen::EnableIllustrator) P->captureBitstream(#name, name)
 #define SHOW_BIXNUM(name) if (codegen::EnableIllustrator) P->captureBixNum(#name, name)
@@ -50,40 +51,6 @@ using namespace pablo;
 //  See the LLVM CommandLine 2.0 Library Manual https://llvm.org/docs/CommandLine.html
 static cl::OptionCategory UpperOptions("upper Options", "upper control options.");
 static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), cl::Required, cl::cat(UpperOptions));
-
-class Upperify : public pablo::PabloKernel {
-public:
-    Upperify(KernelBuilder & b, StreamSet * U21, StreamSet * translationBasis, StreamSet * u32Basis)
-    : pablo::PabloKernel(b, "Upperify",
-                        {Binding{"U21", U21}, Binding{"translationBasis", translationBasis}},
-                            {Binding{"u32Basis", u32Basis}}) {}
-protected:
-    void generatePabloMethod() override;
-};
-
-void Upperify::generatePabloMethod() {
-    //  pb is an object used for build Pablo language statements
-    pablo::PabloBuilder pb(getEntryScope());
-
-    // Get the input stream sets.
-    std::vector<PabloAST *> U21 = getInputStreamSet("U21");
-
-    std::vector<PabloAST *> translationBasis = getInputStreamSet("translationBasis");
-    std::vector<PabloAST *> transformed(U21.size());
-
-    Var * outputBasisVar = getOutputStreamVar("u32Basis");
-
-    // For each bit of the input stream
-    for (unsigned i = 0; i < U21.size(); i++) {
-        // If the translation set covers said bit
-        if (i < translationBasis.size()) // XOR the input bit with the transformation bit  
-            transformed[i] = pb.createXor(translationBasis[i], U21[i]);
-        else transformed[i] = U21[i];
-
-        pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), transformed[i]);
-    }
-}
-
 
 typedef void (*ToUpperFunctionType)(uint32_t fd);
 
@@ -119,25 +86,8 @@ ToUpperFunctionType generatePipeline(CPUDriver & pxDriver) {
     FilterByMask(P, u8index, U21_u8indexed, U21);
     SHOW_BIXNUM(U21);
 
-    // Get the uppercase mapping object, can create a translation set from that
-    UCD::CodePointPropertyObject* upperPropertyObject = dyn_cast<UCD::CodePointPropertyObject>(UCD::get_SUC_PropertyObject());
-    unicode::BitTranslationSets upperTranslationSet;
-    upperTranslationSet = upperPropertyObject->GetBitTransformSets();
-
-    // Turn the upper translation set into a vector of character classes
-    std::vector<re::CC *> upperTranslation_ccs;
-    for (auto & b : upperTranslationSet) {
-        upperTranslation_ccs.push_back(re::makeCC(b, &cc::Unicode));
-    }
-
-    StreamSet * translationBasis = P->CreateStreamSet(upperTranslation_ccs.size());
-    P->CreateKernelCall<CharClassesKernel>(upperTranslation_ccs, U21, translationBasis);
-    SHOW_BIXNUM(translationBasis);
-
-    // Perform the logic of the Upperify kernel on the codepoiont values.
-    StreamSet * u32Basis = P->CreateStreamSet(21, 1);
-    P->CreateKernelCall<Upperify>(U21, translationBasis, u32Basis);
-    SHOW_BIXNUM(u32Basis);
+    StreamSet * finalBasis = P->CreateStreamSet(21, 1);
+    doUpperTransform(P, U21, finalBasis);
 
     // Convert back to UTF8 from codepoints.
     StreamSet * const OutputBasis = P->CreateStreamSet(8);
