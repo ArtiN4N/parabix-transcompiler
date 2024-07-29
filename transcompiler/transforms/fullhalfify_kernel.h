@@ -85,11 +85,11 @@ void FullHalfify::generatePabloMethod() {
 void doFullHalfTransform(PipelineBuilder & P, StreamSet * Basis, StreamSet * Output);
 
 inline void doFullHalfTransform(const std::unique_ptr<PipelineBuilder> & P, StreamSet * Basis, StreamSet * Output) {
-    return doFullHalfTransform(*P.get(), BixData, Basis, Output);
+    return doFullHalfTransform(*P.get(), Basis, Output);
 }
 
 inline void doFullHalfTransform(const std::unique_ptr<ProgramBuilder> & P, StreamSet * Basis, StreamSet * Output) {
-    return doFullHalfTransform(*P.get(), BixData, Basis, Output);
+    return doFullHalfTransform(*P.get(), Basis, Output);
 }
 
 void doFullHalfTransform(PipelineBuilder & P, StreamSet * Basis, StreamSet * Output) {
