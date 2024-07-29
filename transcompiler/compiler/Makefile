@@ -1,2 +1,2 @@
 all:
-	g++ compiler.cpp -o bin/compiler.exe
+	g++ compiler.cpp -o ../../build/bin/compiler
