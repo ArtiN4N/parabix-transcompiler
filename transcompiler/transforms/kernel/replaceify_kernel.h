@@ -193,26 +193,18 @@ void Replaceify::generatePabloMethod() {
     }
 }
 
-void ReplaceByBixData(PipelineBuilder & P, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output);
+void ReplaceByBixData(const std::unique_ptr<ProgramBuilder> & P, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output);
 
-inline void ReplaceByBixData(const std::unique_ptr<PipelineBuilder> & P, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output) {
-    return ReplaceByBixData(*P.get(), BixData, Basis, Output);
-}
-
-inline void ReplaceByBixData(const std::unique_ptr<ProgramBuilder> & P, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output) {
-    return ReplaceByBixData(*P.get(), BixData, Basis, Output);
-}
-
-void ReplaceByBixData(PipelineBuilder & P, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output) {
+void ReplaceByBixData(const std::unique_ptr<ProgramBuilder> & P, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output) {
     auto insert_ccs = BixData.insertionBixNumCCs();
 
-    StreamSet * Insertion_BixNum = P.CreateStreamSet(insert_ccs.size());
-    P.CreateKernelCall<CharClassesKernel>(insert_ccs, Basis, Insertion_BixNum);
+    StreamSet * Insertion_BixNum = P->CreateStreamSet(insert_ccs.size());
+    P->CreateKernelCall<CharClassesKernel>(insert_ccs, Basis, Insertion_BixNum);
 
     StreamSet * SpreadMask = InsertionSpreadMask(P, Insertion_BixNum, InsertPosition::After);
 
-    StreamSet * ExpandedBasis = P.CreateStreamSet(21, 1);
+    StreamSet * ExpandedBasis = P->CreateStreamSet(21, 1);
     SpreadByMask(P, SpreadMask, Basis, ExpandedBasis, 0, false, kernel::StreamExpandOptimization::None, 64, GammaDistribution(5.0f, 0.1f));
 
-    P.CreateKernelCall<Replaceify>(BixData, ExpandedBasis, Output);
+    P->CreateKernelCall<Replaceify>(BixData, ExpandedBasis, Output);
 }
