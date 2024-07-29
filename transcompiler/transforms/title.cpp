@@ -97,7 +97,7 @@ ToTitleFunctionType generatePipeline(CPUDriver & pxDriver) {
 
     // Convert back to UTF8 from codepoints.
     StreamSet * const OutputBasis = P->CreateStreamSet(8);
-    U21_to_UTF8(P, u32Basis, OutputBasis);
+    U21_to_UTF8(P, finalBasis, OutputBasis);
 
     SHOW_BIXNUM(OutputBasis);
 
