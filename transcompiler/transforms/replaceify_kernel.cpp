@@ -3,8 +3,8 @@
 #include <string>
 #include <iostream>
 
-#include "replace_bixData.h"
-#include "replaceify_kernel.h"
+//#include "replace_bixData.h"
+//#include "replaceify_kernel.h"
 
 #include <unicode/data/PropertyObjects.h>
 #include <unicode/data/PropertyObjectTable.h>
