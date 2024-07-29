@@ -69,28 +69,20 @@ void Invert::generatePabloMethod() {
     pb.createAssign(pb.createExtract(outVar, pb.getInteger(0)), inverted);
 }
 
-void doRemoveTransform(PipelineBuilder & P, std::string toRemoveStr, StreamSet * Basis, StreamSet * Output);
+void doRemoveTransform(const std::unique_ptr<ProgramBuilder> & P, std::string toRemoveStr, StreamSet * Basis, StreamSet * Output);
 
-inline void doRemoveTransform(const std::unique_ptr<PipelineBuilder> & P, std::string toRemoveStr, StreamSet * Basis, StreamSet * Output) {
-    return doRemoveTransform(*P.get(), toRemoveStr, Basis, Output);
-}
-
-inline void doRemoveTransform(const std::unique_ptr<ProgramBuilder> & P, std::string toRemoveStr, StreamSet * Basis, StreamSet * Output) {
-    return doRemoveTransform(*P.get(), toRemoveStr, Basis, Output);
-}
-
-void doRemoveTransform(PipelineBuilder & P, std::string toRemoveStr, StreamSet * Basis, StreamSet * Output) {
+void doRemoveTransform(const std::unique_ptr<ProgramBuilder> & P, std::string toRemoveStr, StreamSet * Basis, StreamSet * Output) {
     re::RE * toRemoveRegex = re::simplifyRE(re::RE_Parser::parse(toRemoveStr));
     toRemoveRegex = UCD::linkAndResolve(toRemoveRegex);
     toRemoveRegex = UCD::externalizeProperties(toRemoveRegex);
     re::CC * toRemoveClass = dyn_cast<re::CC>(toRemoveRegex);
 
-    StreamSet * toRemoveMarker = P.CreateStreamSet(1);
+    StreamSet * toRemoveMarker = P->CreateStreamSet(1);
     std::vector<re::CC *> toRemoveMarker_CC = {toRemoveClass};
-    P.CreateKernelCall<CharacterClassKernelBuilder>(toRemoveMarker_CC, Basis, toRemoveMarker);
+    P->CreateKernelCall<CharacterClassKernelBuilder>(toRemoveMarker_CC, Basis, toRemoveMarker);
 
-    StreamSet * toKeepMarker = P.CreateStreamSet(1);
-    P.CreateKernelCall<Invert>(toRemoveMarker, toKeepMarker);
+    StreamSet * toKeepMarker = P->CreateStreamSet(1);
+    P->CreateKernelCall<Invert>(toRemoveMarker, toKeepMarker);
 
     FilterByMask(P, toKeepMarker, Basis, Output);
 }
