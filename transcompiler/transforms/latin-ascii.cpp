@@ -93,12 +93,12 @@ ToLasciiFunctionType generatePipeline(CPUDriver & pxDriver) {
     SHOW_BIXNUM(U21);
 
     replace_bixData LAT_replace_data(asciiCodeData);
-    StreamSet * LAT_Basis = P->CreateStreamSet(21, 1);
-    ReplaceByBixData(P, LAT_replace_data, U21, LAT_Basis);
+    StreamSet * finalBasis = P->CreateStreamSet(21, 1);
+    ReplaceByBixData(P, LAT_replace_data, U21, finalBasis);
 
     // Convert back to UTF8 from codepoints.
     StreamSet * const OutputBasis = P->CreateStreamSet(8);
-    U21_to_UTF8(P, LAT_Basis, OutputBasis);
+    U21_to_UTF8(P, finalBasis, OutputBasis);
 
     SHOW_BIXNUM(OutputBasis);
 
