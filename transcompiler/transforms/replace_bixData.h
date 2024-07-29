@@ -54,3 +54,39 @@ replace_bixData::replace_bixData(std::array<std::pair<UCD::codepoint_t, std::vec
         n >>= 1;
     }
 }
+
+std::vector<re::CC *> replace_bixData::insertionBixNumCCs() {
+    unicode::BitTranslationSets BixNumCCs;
+
+    for (unsigned i = 0; i < bitsNeeded; i++) {
+        BixNumCCs.push_back(UCD::UnicodeSet());
+    }
+
+    for (auto& p : mInsertLength) {
+        auto insert_amt = p.second - 1;
+
+        unsigned bitAmt = 1;
+        for (unsigned i = 0; i < bitsNeeded; i++) {
+            if ((insert_amt & bitAmt) == bitAmt) {
+                BixNumCCs[i].insert(p.first);
+            }
+            bitAmt <<= 1;
+        }
+    }
+
+    std::vector<re::CC *> ret;
+    for (unsigned i = 0; i < bitsNeeded; i++) {
+        ret.push_back(re::makeCC(BixNumCCs[i], &cc::Unicode));
+    }
+    
+
+    return ret;
+}
+
+unicode::BitTranslationSets replace_bixData::matchBitXorCCs(unsigned i) {
+    return unicode::ComputeBitTranslationSets(mCharMap[i]);
+}
+
+unicode::BitTranslationSets replace_bixData::matchBitCCs(unsigned i) {
+    return unicode::ComputeBitTranslationSets(mCharMap[i], unicode::XlateMode::LiteralBit);
+}
