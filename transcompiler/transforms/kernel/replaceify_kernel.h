@@ -199,7 +199,7 @@ inline void ReplaceByBixData(const std::unique_ptr<PipelineBuilder> & P, replace
     return ReplaceByBixData(*P.get(), BixData, Basis, Output);
 }
 
-inline void ReplaceByBixData(, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output) {
+inline void ReplaceByBixData(const std::unique_ptr<ProgramBuilder> & P, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output) {
     return ReplaceByBixData(*P.get(), BixData, Basis, Output);
 }
 
