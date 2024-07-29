@@ -84,17 +84,9 @@ void Upperify::generatePabloMethod() {
     }
 }
 
-void doUpperTransform(PipelineBuilder & P, StreamSet * Basis, StreamSet * Output);
+void doUpperTransform(const std::unique_ptr<ProgramBuilder>, StreamSet * Basis, StreamSet * Output);
 
-inline void doUpperTransform(const std::unique_ptr<PipelineBuilder> & P, StreamSet * Basis, StreamSet * Output) {
-    return doUpperTransform(*P.get(), Basis, Output);
-}
-
-inline void doUpperTransform(const std::unique_ptr<ProgramBuilder> & P, StreamSet * Basis, StreamSet * Output) {
-    return doUpperTransform(*P.get(), Basis, Output);
-}
-
-void doUpperTransform(PipelineBuilder & P, StreamSet * Basis, StreamSet * Output) {
+void doUpperTransform(const std::unique_ptr<ProgramBuilder>, StreamSet * Basis, StreamSet * Output) {
     // Get the uppercase mapping object, can create a translation set from that
     UCD::CodePointPropertyObject* propertyObject = dyn_cast<UCD::CodePointPropertyObject>(UCD::get_SUC_PropertyObject());
     unicode::BitTranslationSets translationSet;
@@ -106,9 +98,9 @@ void doUpperTransform(PipelineBuilder & P, StreamSet * Basis, StreamSet * Output
         translation_ccs.push_back(re::makeCC(b, &cc::Unicode));
     }
 
-    StreamSet * translationBasis = P.CreateStreamSet(translation_ccs.size());
-    P.CreateKernelCall<CharClassesKernel>(translation_ccs, Basis, translationBasis);
+    StreamSet * translationBasis = P->CreateStreamSet(translation_ccs.size());
+    P->CreateKernelCall<CharClassesKernel>(translation_ccs, Basis, translationBasis);
 
     // Perform the logic of the Upperify kernel on the codepoiont values.
-    P.CreateKernelCall<Upperify>(Basis, translationBasis, Output);
+    P->CreateKernelCall<Upperify>(Basis, translationBasis, Output);
 }
