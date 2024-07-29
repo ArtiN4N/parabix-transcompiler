@@ -93,20 +93,16 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
     FilterByMask(P, u8index, U21_u8indexed, U21);
 
     StreamSet * finalBasis1 = P->CreateStreamSet(21, 1);
-    doRemoveTransform(P, "[leá]", U21, finalBasis1);
+    doFullHalfTransform(P, U21, finalBasis1);
     StreamSet * finalBasis2 = P->CreateStreamSet(21, 1);
-    doFullHalfTransform(P, finalBasis1, finalBasis2);
+    doUpperTransform(P, finalBasis1, finalBasis2);
     StreamSet * finalBasis3 = P->CreateStreamSet(21, 1);
-    doRemoveTransform(P, "[o]", finalBasis2, finalBasis3);
-    StreamSet * finalBasis4 = P->CreateStreamSet(21, 1);
-    doUpperTransform(P, finalBasis3, finalBasis4);
-    StreamSet * finalBasis5 = P->CreateStreamSet(21, 1);
     replace_bixData LAT_replace_data(asciiCodeData);
-    ReplaceByBixData(P, LAT_replace_data, finalBasis4, finalBasis5);
+    ReplaceByBixData(P, LAT_replace_data, finalBasis2, finalBasis3);
 
     StreamSet * const OutputBasis = P->CreateStreamSet(8);
 
-    U21_to_UTF8(P, finalBasis5, OutputBasis);
+    U21_to_UTF8(P, finalBasis3, OutputBasis);
 
     StreamSet * OutputBytes = P->CreateStreamSet(1, 8);
     P->CreateKernelCall<P2SKernel>(OutputBasis, OutputBytes);
