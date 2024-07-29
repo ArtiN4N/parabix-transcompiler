@@ -5,10 +5,19 @@
 #include <cstdlib>
 #include <algorithm>
 #include <sstream>
+#include <cctype>
+#include <array>
 
+#include "validcode.h"
+
+
+void toLowercase(std::string& str) {
+    std::transform(str.begin(), str.end(), str.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+}
 
 void exitTransCompiler() {
-    std::cout << std::endl;
+    std::cout << "Use the '-h' flag to see more information about using this compiler\n" << std::endl;
     exit(0);
 }
 
@@ -18,24 +27,26 @@ std::string LDMLvalidTransformsText() {
 }
 
 void printFormatAndExit() {
-    std::cout << "This program is a transcompiler, which takes LDML transforms as an input, and applies them to a text source file\n"
-              << "How to use: ./parabix_transcompiler sourcefile.txt transform1 transform2 ...\n"
+    std::cout << "This program is a transcompiler, which takes LDML transforms as an input, and creates an executable that applies those transforms to an input file\n"
+              << "How to use: ./parabix_transcompiler transform1 transform2 ...\n"
               << "This program can take an indefinite number of transforms\n"
               << "you can call this program with '-h' as an argument to display the eligible transforms and what they do\n"
               << "you can call this program with '-li' followed by an text input file to optionally source LDML transforms from a file instead of the command line\n"
               << "sourcing LDML transforms requires each transform to be seperated by a semi-colon character (;)\n"
-              << "you can call this program with '-o' followed by an text output file to optionally store the transformed source text into a file\n";
+              << "you can call this program with '-o' followed by an text output file to optionally store the transformed source text by the compiled program into a file\n"
+              << "you can call this program with '-n' followed by name to optionally use a custom name for the compiled program\n";
     exitTransCompiler();
 }
 
 void printHelpAndExit() {
-    std::cout << "This program is a transcompiler, which takes LDML transforms as an input, and applies them to a text source file\n"
-              << "How to use: ./parabix_transcompiler sourcefile.txt transform1 transform2 ...\n"
+    std::cout << "This program is a transcompiler, which takes LDML transforms as an input, and creates an executable that applies those transforms to an input file\n"
+              << "How to use: ./parabix_transcompiler transform1 transform2 ...\n"
               << "This program can take an indefinite number of transforms\n"
               << "you can call this program with '-h' as an argument to display the eligible transforms and what they do\n"
               << "you can call this program with '-li' followed by an text input file to optionally source LDML transforms from a file instead of the command line\n"
               << "sourcing LDML transforms requires each transform to be seperated by a semi-colon character (;)\n"
-              << "you can call this program with '-o' followed by an text output file to optionally store the transformed source text into a file\n"
+              << "you can call this program with '-o' followed by an text output file to optionally store the transformed source text by the compiled program into a file\n"
+              << "you can call this program with '-n' followed by name to optionally use a custom name for the compiled program\n"
               << "Below are the valid LDML transforms you can specify:\n\n"
               << LDMLvalidTransformsText();
     exitTransCompiler();
@@ -62,17 +73,136 @@ void getLDMLfrom(std::string src, std::vector<std::string>& transform) {
     }
 }
 
+enum LDMLtransformEnum {
+    NULL_T = 0,
+    FULLHALF_T,
+    HALFFULL_T,
+    LASCII_T,
+    LOWER_T,
+    UPPER_T,
+    TITLE_T,
+    REMOVE_T
+};
+
+struct LDMLtransformSet {
+    std::vector<LDMLtransformEnum> transforms;
+    std::array<int, 8> transformUses;
+
+    LDMLtransformSet();
+};
+
+LDMLtransformSet::LDMLtransformSet() {
+    for (int i = 0; i < transformUses.size(); i++) transformUses[i] = 0;
+}
+
+LDMLtransformSet validateTransforms(std::vector<std::string> transforms) {
+    LDMLtransformSet ret;
+    ret = LDMLtransformSet();
+
+    for (auto transform : transforms) {
+        toLowercase(transform);
+
+        if (transform == "null")
+            ret.transforms.push_back(LDMLtransformEnum::NULL_T);
+        else if (transform == "fullwidth-halfwidth")
+            ret.transforms.push_back(LDMLtransformEnum::FULLHALF_T);
+        else if (transform == "halfwidth-fullwidth")
+            ret.transforms.push_back(LDMLtransformEnum::HALFFULL_T);
+        else if (transform == "latin-ascii")
+            ret.transforms.push_back(LDMLtransformEnum::LASCII_T);
+        else if (transform == "lower")
+            ret.transforms.push_back(LDMLtransformEnum::LOWER_T);
+        else if (transform == "upper")
+            ret.transforms.push_back(LDMLtransformEnum::UPPER_T);
+        else if (transform == "title")
+            ret.transforms.push_back(LDMLtransformEnum::TITLE_T);
+        else if (transform == "remove")
+            ret.transforms.push_back(LDMLtransformEnum::REMOVE_T);
+        else {
+            std::cerr << transform << " is not a valid LDML transform" << std::endl;
+            exitTransCompiler();
+        }
+    }
+    
+    std::cout << std::endl << "The provided LDML transforms are valid!" << std::endl;
+
+    return ret;
+}
+
+void codeGenError() {
+    std::cerr << "The parabix code could not be generated" << std::endl;
+        exitTransCompiler();
+}
+
+std::string createPipelineFrom(LDMLtransformSet transformSet, bool outputToFile, std::string transformedOut) {
+    std::string ret = "";
+    
+    std::string codeBegin;
+    std::string codePipelineBegin;
+    std::string codePipelineDynamic;
+    std::string codePipelineEnd;
+    std::string codeEnd;
+    
+    codeBegin += ValidCode::includes;
+
+    int i = 0;
+    bool addedTransform = false;
+    for (auto transform : transformSet.transforms) {
+        if (transform != LDMLtransformEnum::NULL_T) addedTransform = true;
+        else continue;
+        
+        if (transform == LDMLtransformEnum::LASCII_T && transformSet.transformUses[transform] == 0)
+            codeBegin += ValidCode::lasciiDataInclude;
+        
+        // set up for final basis
+        if (i == transformSet.transforms.size()) {
+
+        }
+
+        transformSet.transformUses[transform] += 1;
+        i++;
+    }
+
+    codeBegin += ValidCode::beginBoiler;
+
+    if (!addedTransform)
+        codePipelineBegin += ValidCode::pipelineBeginBoilerOnNull;
+    else
+        codePipelineBegin += ValidCode::pipelineBeginBoiler;
+    
+    codePipelineEnd += ValidCode::pipelineEndBoiler;
+    codeEnd += ValidCode::endBoiler;
+
+    std::cout << std::endl << "Successfully created parabix code!" << std::endl;
+
+    ret += codeBegin + codePipelineBegin + codePipelineDynamic + codePipelineEnd + codeEnd;
+    std::cout << std::endl << "Here is the generated code:" << std::endl << ret << std::endl;
+    return ret;
+}
+
+std::string compilePipeline(std::string piplineCode, bool usesCustomProgName, std::string customProgName) {
+    if (false) {
+        std::cerr << "The parabix program could not be generated" << std::endl;
+        exitTransCompiler();
+    }
+
+    std::cout << std::endl << "Successfully compiled parabix program!" << std::endl;
+
+    std::string ret = "executablename";
+    return ret;
+}
+
 int main(int argc, char* argv[]) {
     std::vector<std::string> LMDLtransforms;
-
-    bool readTextSrc = false;
-    std::string textInputSrc;
 
     bool readLDMLFromFile = false;
     std::string LMDLsrc;
 
     bool outputToFile = false;
-    std::string LDMLout;
+    std::string transformedOut;
+
+    bool usesCustomProgName = false;
+    std::string customProgName;
 
     std::cout << std::endl;
 
@@ -81,6 +211,7 @@ int main(int argc, char* argv[]) {
     // Take an unlimited amount of input, with each being a transform
     // However, if the '-li' flag is used, ignore transform input, and take from an input file
     // If the '-o' flag is used, instead of outputting to the command line, output to the specified file
+    // If the '-n' flag is used, the compiled program will use a user specified name
     // If the '-h' flag is used, show the user how to use the compiler, and abort
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -99,13 +230,15 @@ int main(int argc, char* argv[]) {
             if (i + 1 >= argc) printFormatAndExit();
             outputToFile = true;
             i++;
-            LDMLout = argv[i];
+            transformedOut = argv[i];
             continue;
         }
 
-        if (!readTextSrc) {
-            textInputSrc = arg;
-            readTextSrc = true;
+        if (arg == "-n") {
+            if (i + 1 >= argc) printFormatAndExit();
+            usesCustomProgName = true;
+            i++;
+            customProgName = argv[i];
             continue;
         }
 
@@ -114,18 +247,15 @@ int main(int argc, char* argv[]) {
         LMDLtransforms.push_back(arg);
     }
 
-    if (readLDMLFromFile) getLDMLfrom(LMDLsrc, LMDLtransforms);
+    if (readLDMLFromFile)
+        getLDMLfrom(LMDLsrc, LMDLtransforms);
 
-    std::cout << "Given transforms:" << std::endl;
-    for (auto transform : LMDLtransforms) {
-        std::cout << transform << std::endl;
-    }
+    LDMLtransformSet validTransforms = validateTransforms(LMDLtransforms);
+    
+    std::string piplineCode = createPipelineFrom(validTransforms, outputToFile, transformedOut);
+    std::string compiledProgFilename = compilePipeline(piplineCode, usesCustomProgName, customProgName);
 
-    if (outputToFile) {
-        std::cout << "Writing transformed input to file: " << LDMLout << std::endl;
-    }
-
-    std::cout << std::endl;
+    std::cout << std::endl << compiledProgFilename << " compiled successfully!" << std::endl;
 
     return 0;
 }
