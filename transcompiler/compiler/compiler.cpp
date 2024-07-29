@@ -8,6 +8,7 @@
 #include <cctype>
 #include <array>
 #include <regex>
+#include <filesystem>
 
 
 #include "validcode.h"
@@ -228,16 +229,76 @@ std::string createPipelineFrom(LDMLtransformSet transformSet, bool outputToFile,
     return ret;
 }
 
+fs::path getExecutablePath() {
+    char buffer[1024];
+    ssize_t count = readlink("/proc/self/exe", buffer, sizeof(buffer) - 1);
+    if (count != -1) {
+        buffer[count] = '\0';
+        return fs::path(buffer).remove_filename();
+    } else {
+        throw std::runtime_error("Failed to get executable path");
+    }
+}
+
+void createCMakeLists(const std::string& cmakeListFile, const std::string& programName, const std::string& sourceFile) {
+    std::ofstream cmakeFile(cmakeListFile);
+    if (cmakeFile.is_open()) {
+        cmakeFile << "parabix_add_executable(\n"
+                  << "NAME\n"
+                  << "    " << programName << "\n"
+                  << "SRC\n"
+                  << "    " << sourceFile << "\n"
+                  << "DEPS\n"
+                  << "    grep\n"
+                  << "    pablo\n"
+                  << "    kernel.basis\n"
+                  << "    kernel.io\n"
+                  << "    kernel.pipeline\n"
+                  << "    kernel.streamutils\n"
+                  << "    kernel.util\n"
+                  << "    re.cc\n"
+                  << "    toolchain\n"
+                  << ")";
+        cmakeFile.close();
+    } else {
+        std::cerr << "Unable to open CMakeLists.txt file.";
+        exit(1);
+    }
+}
+
+void runCommand(const std::string& command) {
+    int result = system(command.c_str());
+    if (result != 0) {
+        std::cerr << "Command failed: " << command << std::endl;
+        exit(1);
+    }
+}
+
 std::string compilePipeline(std::string piplineCode, bool usesCustomProgName, std::string customProgName) {
-    if (false) {
-        std::cerr << "The parabix program could not be generated" << std::endl;
+    std::filesystem::path exePath = getExecutablePath();
+    // Change the current working directory to the directory of the executable
+    std::filesystem::current_path(exePath);
+
+    std::string codeFileName = "../../transcompiler/transforms/TRANSCOMPILERAUTOGENTEMPSOURCECODE.cpp";
+    std::string makeName = "TRANSCOMPILERAUTOGEN";
+    if (usesCustomProgName) makeName = customProgName;
+
+    std::ofstream outFile(codeFileName);
+    if (!outFile.is_open()) {
+        std::cerr << "Error: Could not open file " << codeFileName << std::endl;
         exitTransCompiler();
     }
 
-    std::cout << std::endl << "Successfully compiled parabix program!" << std::endl;
+    outFile << sourceCode;
+    outFile.close();
 
-    std::string ret = "executablename";
-    return ret;
+    createCMakeLists("../../transcompiler/transforms/CMakeLists.txt", makeName, codeFileName);
+
+    runCommand("../cmake ..");
+
+    runCommand("../../transcompiler/bash bash maketarget.sh " + makeName);
+
+    return makeName;
 }
 
 int main(int argc, char* argv[]) {
