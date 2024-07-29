@@ -42,6 +42,8 @@
 #include <re/cc/cc_compiler.h>
 #include <re/cc/cc_kernel.h>
 
+#include "kernel/removeify_kernel.h"
+
 
 #define SHOW_STREAM(name) if (codegen::EnableIllustrator) P->captureBitstream(#name, name)
 #define SHOW_BIXNUM(name) if (codegen::EnableIllustrator) P->captureBixNum(#name, name)
@@ -55,27 +57,6 @@ using namespace pablo;
 //  See the LLVM CommandLine 2.0 Library Manual https://llvm.org/docs/CommandLine.html
 static cl::OptionCategory RemoveOptions("remove Options", "remove control options.");
 static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), cl::Required, cl::cat(RemoveOptions));
-
-
-// from csv2json.cpp
-class Invert : public PabloKernel {
-public:
-    Invert(KernelBuilder & b, StreamSet * mask, StreamSet * inverted)
-        : PabloKernel(b, "Invert",
-                      {Binding{"mask", mask}},
-                      {Binding{"inverted", inverted}}) {}
-protected:
-    void generatePabloMethod() override;
-};
-
-void Invert::generatePabloMethod() {
-    pablo::PabloBuilder pb(getEntryScope());
-    PabloAST * mask = getInputStreamSet("mask")[0];
-    PabloAST * inverted = pb.createInFile(pb.createNot(mask));
-    Var * outVar = getOutputStreamVar("inverted");
-    pb.createAssign(pb.createExtract(outVar, pb.getInteger(0)), inverted);
-}
-
 
 typedef void (*ToRemoveFunctionType)(uint32_t fd);
 
@@ -111,27 +92,12 @@ ToRemoveFunctionType generatePipeline(CPUDriver & pxDriver) {
     FilterByMask(P, u8index, U21_u8indexed, U21);
     SHOW_BIXNUM(U21);
 
-    std::string toRemoveStr = "[abcdef!]";
-    re::RE * toRemoveRegex = re::simplifyRE(re::RE_Parser::parse(toRemoveStr));
-    toRemoveRegex = UCD::linkAndResolve(toRemoveRegex);
-    toRemoveRegex = UCD::externalizeProperties(toRemoveRegex);
-    re::CC * toRemoveClass = dyn_cast<re::CC>(toRemoveRegex);
-
-    StreamSet * toRemoveMarker = P->CreateStreamSet(1);
-    std::vector<re::CC *> toRemoveMarker_CC = {toRemoveClass};
-    P->CreateKernelCall<CharacterClassKernelBuilder>(toRemoveMarker_CC, U21, toRemoveMarker);
-    SHOW_STREAM(toRemoveMarker);
-
-    StreamSet * toKeepMarker = P->CreateStreamSet(1);
-    P->CreateKernelCall<Invert>(toRemoveMarker, toKeepMarker);
-    SHOW_STREAM(toKeepMarker);
-
-    StreamSet * removeBasis = P->CreateStreamSet(21, 1);
-    FilterByMask(P, toKeepMarker, U21, removeBasis);
+    StreamSet * finalBasis = P->CreateStreamSet(21, 1);
+    doRemoveTransform(P, "[leá]", U21, finalBasis);
 
     // Convert back to UTF8 from codepoints.
     StreamSet * const OutputBasis = P->CreateStreamSet(8);
-    U21_to_UTF8(P, removeBasis, OutputBasis);
+    U21_to_UTF8(P, finalBasis, OutputBasis);
 
     SHOW_BIXNUM(OutputBasis);
 
