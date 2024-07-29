@@ -9,6 +9,8 @@
 #include <array>
 #include <regex>
 #include <filesystem>
+#include <unistd.h>
+#include <limits.h>
 
 
 #include "validcode.h"
@@ -289,7 +291,7 @@ std::string compilePipeline(std::string piplineCode, bool usesCustomProgName, st
         exitTransCompiler();
     }
 
-    outFile << sourceCode;
+    outFile << piplineCode;
     outFile.close();
 
     createCMakeLists("../../transcompiler/transforms/CMakeLists.txt", makeName, codeFileName);
