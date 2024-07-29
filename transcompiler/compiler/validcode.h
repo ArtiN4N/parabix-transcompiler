@@ -149,7 +149,7 @@ std::string pipelineEndBoiler = R"(
     P->CreateKernelCall<P2SKernel>(OutputBasis, OutputBytes);
     P->CreateKernelCall<StdOutKernel>(OutputBytes);
 
-    return reinterpret_cast<ToLasciiFunctionType>(P->compile());
+    return reinterpret_cast<TranscompilerAutoGenFunctionType>(P->compile());
 }
 )";
 

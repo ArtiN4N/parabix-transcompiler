@@ -87,6 +87,7 @@ enum LDMLtransformEnum {
 struct LDMLtransformSet {
     std::vector<LDMLtransformEnum> transforms;
     std::array<int, 8> transformUses;
+    std::vector<std::string> removeRegex;
 
     LDMLtransformSet();
 };
@@ -116,9 +117,10 @@ LDMLtransformSet validateTransforms(std::vector<std::string> transforms) {
             ret.transforms.push_back(LDMLtransformEnum::UPPER_T);
         else if (transform == "title")
             ret.transforms.push_back(LDMLtransformEnum::TITLE_T);
-        else if (transform == "remove")
+        else if (transform.substr(0, 6) == "remove") {
             ret.transforms.push_back(LDMLtransformEnum::REMOVE_T);
-        else {
+            ret.removeRegex.push_back(transform.substr(6));
+        } else {
             std::cerr << transform << " is not a valid LDML transform" << std::endl;
             exitTransCompiler();
         }
@@ -165,6 +167,7 @@ std::string createPipelineFrom(LDMLtransformSet transformSet, bool outputToFile,
     codePipelineEnd += ValidCode::pipelineOutputBasisDefine;
 
     int i = 0;
+    int regexI = 0;
     int size = transformSet.transforms.size();
     bool addedTransform = false;
     for (auto transform : transformSet.transforms) {
@@ -181,10 +184,13 @@ std::string createPipelineFrom(LDMLtransformSet transformSet, bool outputToFile,
 
         codePipelineDynamic += "    StreamSet * finalBasis" + std::to_string(i + 1) + " = P->CreateStreamSet(21, 1);\n";
 
-        if (transform == LDMLtransformEnum::LASCII_T && transformSet.transformUses[transform] == 0) {
-            codeBegin += ValidCode::lasciiDataInclude;
+        if (transform == LDMLtransformEnum::LASCII_T) {
+            if (transformSet.transformUses[transform] == 0) codeBegin += ValidCode::lasciiDataInclude;
             codePipelineDynamic += "    replace_bixData LAT_replace_data(asciiCodeData);\n";
             codePipelineDynamic += "    ReplaceByBixData(P, LAT_replace_data, " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
+        } else if (transform == LDMLtransformEnum::REMOVE_T) {
+            codePipelineDynamic += "    " + fnName + "(P, " + transformSet.removeRegex[regexI] + ", " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
+            regexI++;
         } else {
             codePipelineDynamic += "    " + fnName + "(P, " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
         }
