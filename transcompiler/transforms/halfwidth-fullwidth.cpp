@@ -53,40 +53,6 @@ using namespace pablo;
 static cl::OptionCategory HalfFullOptions("halfFull Options", "halfFull control options.");
 static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), cl::Required, cl::cat(HalfFullOptions));
 
-class HalfFullify : public pablo::PabloKernel {
-public:
-    HalfFullify(KernelBuilder & b, StreamSet * U21, StreamSet * translationBasis, StreamSet * u32Basis)
-    : pablo::PabloKernel(b, "HalfFullify",
-                        {Binding{"U21", U21}, Binding{"translationBasis", translationBasis}},
-                            {Binding{"u32Basis", u32Basis}}) {}
-protected:
-    void generatePabloMethod() override;
-};
-
-void HalfFullify::generatePabloMethod() {
-    //  pb is an object used for build Pablo language statements
-    pablo::PabloBuilder pb(getEntryScope());
-
-    // Get the input stream sets.
-    std::vector<PabloAST *> U21 = getInputStreamSet("U21");
-
-    std::vector<PabloAST *> translationBasis = getInputStreamSet("translationBasis");
-    std::vector<PabloAST *> transformed(U21.size());
-
-    Var * outputBasisVar = getOutputStreamVar("u32Basis");
-
-    // For each bit of the input stream
-    for (unsigned i = 0; i < U21.size(); i++) {
-        // If the translation set covers said bit
-        if (i < translationBasis.size()) // XOR the input bit with the transformation bit  
-            transformed[i] = pb.createXor(translationBasis[i], U21[i]);
-        else transformed[i] = U21[i];
-
-        pb.createAssign(pb.createExtract(outputBasisVar, pb.getInteger(i)), transformed[i]);
-    }
-}
-
-
 typedef void (*ToHalfFullFunctionType)(uint32_t fd);
 
 ToHalfFullFunctionType generatePipeline(CPUDriver & pxDriver) {
