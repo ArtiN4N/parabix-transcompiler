@@ -123,16 +123,6 @@ unicode::BitTranslationSets replace_bixData::matchBitCCs(unsigned i) {
     return unicode::ComputeBitTranslationSets(mCharMap[i], unicode::XlateMode::LiteralBit);
 }
 
-void ReplaceByBixData(PipelineBuilder & P, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output);
-
-inline void ReplaceByBixData(const std::unique_ptr<PipelineBuilder> & P, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output) {
-    return ReplaceByBixData(*P.get(), BixData, Basis, Output);
-}
-
-inline void ReplaceByBixData(const std::unique_ptr<ProgramBuilder> & P, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output) {
-    return ReplaceByBixData(*P.get(), BixData, Basis, Output);
-}
-
 class Replaceify : public pablo::PabloKernel {
 public:
     Replaceify(KernelBuilder & b, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output);
@@ -201,6 +191,16 @@ void Replaceify::generatePabloMethod() {
 
         pb.createAssign(pb.createExtract(outputVar, pb.getInteger(i)), output_basis[i]);
     }
+}
+
+void ReplaceByBixData(PipelineBuilder & P, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output);
+
+inline void ReplaceByBixData(const std::unique_ptr<PipelineBuilder> & P, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output) {
+    return ReplaceByBixData(*P.get(), BixData, Basis, Output);
+}
+
+inline void ReplaceByBixData(const std::unique_ptr<ProgramBuilder> & P, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output) {
+    return ReplaceByBixData(*P.get(), BixData, Basis, Output);
 }
 
 void ReplaceByBixData(PipelineBuilder & P, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output) {
