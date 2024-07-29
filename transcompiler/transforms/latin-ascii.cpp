@@ -3,7 +3,7 @@
 #include <string>
 #include <iostream>
 
-#include "lascii.h"
+#include "lasciiData.h"
 #include "replace_bixData.h"
 #include "replaceify_kernel.h"
 

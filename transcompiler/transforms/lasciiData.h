@@ -8,7 +8,9 @@
 #include <unicode/utf/utf_compiler.h>
 #include <unicode/utf/transchar.h>
 
-const std::vector<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>> asciiCodeData = {
+constexpr size_t outerSize = 845;
+
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerSize> asciiCodeData = {
 {0x00C6,{0x0041,0x0045}},
 {0x00D0,{0x0044}},
 {0x00D8,{0x004F}},

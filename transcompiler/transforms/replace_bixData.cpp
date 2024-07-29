@@ -15,11 +15,10 @@
 #include <re/cc/cc_compiler.h>
 #include <re/cc/cc_kernel.h>
 
-replace_bixData::replace_bixData(std::vector<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>> data) {
-    mUnicodeMap = data;
-
+template <std::size_t N>
+replace_bixData::replace_bixData(std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, N>) {
     maxAdd = 0;
-    for (auto& pair : mUnicodeMap) {
+    for (auto& pair : data) {
         mInsertLength.emplace(pair.first, pair.second.size());
         if (pair.second.size() > maxAdd) {
             maxAdd++;
