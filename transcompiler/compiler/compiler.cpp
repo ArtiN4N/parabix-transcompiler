@@ -229,12 +229,12 @@ std::string createPipelineFrom(LDMLtransformSet transformSet, bool outputToFile,
     return ret;
 }
 
-fs::path getExecutablePath() {
+std::filesystem::path getExecutablePath() {
     char buffer[1024];
     ssize_t count = readlink("/proc/self/exe", buffer, sizeof(buffer) - 1);
     if (count != -1) {
         buffer[count] = '\0';
-        return fs::path(buffer).remove_filename();
+        return std::filesystem::path(buffer).remove_filename();
     } else {
         throw std::runtime_error("Failed to get executable path");
     }
