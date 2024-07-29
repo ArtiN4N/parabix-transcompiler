@@ -47,16 +47,16 @@ namespace ValidCode {
 #include <re/cc/cc_compiler.h>
 #include <re/cc/cc_kernel.h>
 
-#include "fullhalfify_kernel.h"
-#include "halffullify_kernel.h"
-#include "lowerify_kernel.h"
-#include "removeify_kernel.h"
-#include "replaceify_kernel.h"
-#include "titleify_kernel.h"
-#include "upperify_kernel.h"
+#include "kernel/fullhalfify_kernel.h"
+#include "kernel/halffullify_kernel.h"
+#include "kernel/lowerify_kernel.h"
+#include "kernel/removeify_kernel.h"
+#include "kernel/replaceify_kernel.h"
+#include "kernel/titleify_kernel.h"
+#include "kernel/upperify_kernel.h"
 )";
 
-std::string lasciiDataInclude = R"(#include "lasciiData.h")";
+std::string lasciiDataInclude = R"(#include "data/lasciiData.h")";
 
 std::string beginBoiler = R"(
 #define SHOW_STREAM(name) if (codegen::EnableIllustrator) P->captureBitstream(#name, name)
