@@ -92,8 +92,8 @@ ToLasciiFunctionType generatePipeline(CPUDriver & pxDriver) {
     FilterByMask(P, u8index, U21_u8indexed, U21);
     SHOW_BIXNUM(U21);
 
-    replace_bixData LAT_replace_data(asciiCodeData);
     StreamSet * finalBasis = P->CreateStreamSet(21, 1);
+    replace_bixData LAT_replace_data(asciiCodeData);
     ReplaceByBixData(P, LAT_replace_data, U21, finalBasis);
 
     // Convert back to UTF8 from codepoints.

@@ -129,6 +129,24 @@ LDMLtransformSet validateTransforms(std::vector<std::string> transforms) {
     return ret;
 }
 
+std::string getKernelFnName(LDMLtransformEnum transform) {
+    if (transform == LDMLtransformEnum::FULLHALF_T)
+        return "doFullHalfTransform";
+    else if (transform == LDMLtransformEnum::HALFFULL_T)
+        return "doHalfFullTransform";
+    else if (transform == LDMLtransformEnum::LASCII_T)
+        return "ReplaceByBixData";
+    else if (transform == LDMLtransformEnum::LOWER_T)
+        return "doLowerTransform";
+    else if (transform == LDMLtransformEnum::UPPER_T)
+        return "doUpperTransform";
+    else if (transform == LDMLtransformEnum::TITLE_T)
+        return "doTitleTransform";
+    else if (transform == LDMLtransformEnum::REMOVE_T)
+        return "doRemoveTransform";
+    else return "null";
+}
+
 void codeGenError() {
     std::cerr << "The parabix code could not be generated" << std::endl;
         exitTransCompiler();
@@ -144,30 +162,45 @@ std::string createPipelineFrom(LDMLtransformSet transformSet, bool outputToFile,
     std::string codeEnd;
     
     codeBegin += ValidCode::includes;
+    codePipelineEnd += ValidCode::pipelineOutputBasisDefine;
 
     int i = 0;
+    int size = transformSet.transforms.size();
     bool addedTransform = false;
     for (auto transform : transformSet.transforms) {
         if (transform != LDMLtransformEnum::NULL_T) addedTransform = true;
-        else continue;
-        
-        if (transform == LDMLtransformEnum::LASCII_T && transformSet.transformUses[transform] == 0)
-            codeBegin += ValidCode::lasciiDataInclude;
-        
-        // set up for final basis
-        if (i == transformSet.transforms.size()) {
+        else {
+            size--;
+            continue;
+        };
 
+        std::string input = "U21";
+        if (i > 0) input = "finalBasis" + std::to_string(i);
+
+        std::string fnName = getKernelFnName(transform);
+
+        codePipelineDynamic += "    StreamSet * finalBasis" + std::to_string(i + 1) + " = P->CreateStreamSet(21, 1);\n";
+
+        if (transform == LDMLtransformEnum::LASCII_T && transformSet.transformUses[transform] == 0) {
+            codeBegin += ValidCode::lasciiDataInclude;
+            codePipelineDynamic += "    replace_bixData LAT_replace_data(asciiCodeData);\n";
+            codePipelineDynamic += "    ReplaceByBixData(P, LAT_replace_data, " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
+        } else {
+            codePipelineDynamic += "    " + fnName + "(P, " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
         }
 
         transformSet.transformUses[transform] += 1;
         i++;
     }
 
+    codePipelineEnd += "    U21_to_UTF8(P, finalBasis" + std::to_string(i) + ", OutputBasis);";
+
     codeBegin += ValidCode::beginBoiler;
 
-    if (!addedTransform)
+    if (!addedTransform) {
         codePipelineBegin += ValidCode::pipelineBeginBoilerOnNull;
-    else
+        codePipelineEnd += "    U21_to_UTF8(P, finalBasis1, OutputBasis);";
+    } else
         codePipelineBegin += ValidCode::pipelineBeginBoiler;
     
     codePipelineEnd += ValidCode::pipelineEndBoiler;

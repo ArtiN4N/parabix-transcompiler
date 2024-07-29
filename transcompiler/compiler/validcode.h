@@ -47,7 +47,13 @@ namespace ValidCode {
 #include <re/cc/cc_compiler.h>
 #include <re/cc/cc_kernel.h>
 
+#include "fullhalfify_kernel.h"
+#include "halffullify_kernel.h"
+#include "lowerify_kernel.h"
+#include "removeify_kernel.h"
 #include "replaceify_kernel.h"
+#include "titleify_kernel.h"
+#include "upperify_kernel.h"
 )";
 
 std::string lasciiDataInclude = R"(#include "lasciiData.h")";
@@ -95,8 +101,8 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
     StreamSet * U21_u8indexed = P->CreateStreamSet(21, 1);
     P->CreateKernelCall<UTF8_Decoder>(BasisBits, U21_u8indexed);
 
-    StreamSet * finalBasis = P->CreateStreamSet(21, 1);
-    FilterByMask(P, u8index, U21_u8indexed, finalBasis);
+    StreamSet * finalBasis1 = P->CreateStreamSet(21, 1);
+    FilterByMask(P, u8index, U21_u8indexed, finalBasis1);
 )";
 
 std::string pipelineBeginBoiler = R"(
@@ -129,12 +135,15 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
 
     StreamSet * U21 = P->CreateStreamSet(21, 1);
     FilterByMask(P, u8index, U21_u8indexed, U21);
+
+)";
+
+std::string pipelineOutputBasisDefine = R"(
+    StreamSet * const OutputBasis = P->CreateStreamSet(8);
+
 )";
 
 std::string pipelineEndBoiler = R"(
-    // Convert back to UTF8 from codepoints.
-    StreamSet * const OutputBasis = P->CreateStreamSet(8);
-    U21_to_UTF8(P, finalBasis, OutputBasis);
 
     StreamSet * OutputBytes = P->CreateStreamSet(1, 8);
     P->CreateKernelCall<P2SKernel>(OutputBasis, OutputBytes);
