@@ -93,7 +93,7 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
     FilterByMask(P, u8index, U21_u8indexed, U21);
 
     StreamSet * finalBasis1 = P->CreateStreamSet(21, 1);
-    doRemoveTransform(P, U21, finalBasis1);
+    doRemoveTransform(P, [le├í], U21, finalBasis1);
     StreamSet * finalBasis2 = P->CreateStreamSet(21, 1);
     doFullHalfTransform(P, finalBasis1, finalBasis2);
 
@@ -105,7 +105,7 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
     P->CreateKernelCall<P2SKernel>(OutputBasis, OutputBytes);
     P->CreateKernelCall<StdOutKernel>(OutputBytes);
 
-    return reinterpret_cast<ToLasciiFunctionType>(P->compile());
+    return reinterpret_cast<TranscompilerAutoGenFunctionType>(P->compile());
 }
 
 int main(int argc, char *argv[]) {
