@@ -4,7 +4,7 @@
 #include <iostream>
 
 #include "lasciiData.h"
-#include "replace_bixData.h"
+//#include "replace_bixData.h"
 #include "replaceify_kernel.h"
 
 #include <unicode/data/PropertyObjects.h>
