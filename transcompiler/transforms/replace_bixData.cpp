@@ -15,31 +15,6 @@
 #include <re/cc/cc_compiler.h>
 #include <re/cc/cc_kernel.h>
 
-template <std::size_t N>
-replace_bixData::replace_bixData(std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, N> data) {
-    maxAdd = 0;
-    for (auto& pair : data) {
-        mInsertLength.emplace(pair.first, pair.second.size());
-        if (pair.second.size() > maxAdd) {
-            maxAdd++;
-        }
-
-        unsigned int i = 0;
-        for (auto& target : pair.second) {
-            mCharMap[i].emplace(pair.first, target);
-            i++;
-        }
-    }
-
-    unsigned n = maxAdd;
-
-    bitsNeeded = 0;
-    while (n) {
-        bitsNeeded++;
-        n >>= 1;
-    }
-}
-
 std::vector<re::CC *> replace_bixData::insertionBixNumCCs() {
     unicode::BitTranslationSets BixNumCCs;
 
