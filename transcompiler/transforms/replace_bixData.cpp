@@ -16,7 +16,7 @@
 #include <re/cc/cc_kernel.h>
 
 template <std::size_t N>
-replace_bixData::replace_bixData(std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, N>) {
+replace_bixData::replace_bixData(std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, N> data) {
     maxAdd = 0;
     for (auto& pair : data) {
         mInsertLength.emplace(pair.first, pair.second.size());
