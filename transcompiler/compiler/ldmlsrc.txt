@@ -1,3 +1,7 @@
 NULL;
 REMOVE [leá];
+NULL;
 fULLwidth-halfwidth;
+REMOVE [o];
+UPPER;
+NULL;

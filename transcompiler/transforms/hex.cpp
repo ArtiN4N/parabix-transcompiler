@@ -96,10 +96,14 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
     doRemoveTransform(P, "[leá]", U21, finalBasis1);
     StreamSet * finalBasis2 = P->CreateStreamSet(21, 1);
     doFullHalfTransform(P, finalBasis1, finalBasis2);
+    StreamSet * finalBasis3 = P->CreateStreamSet(21, 1);
+    doRemoveTransform(P, "[o]", finalBasis2, finalBasis3);
+    StreamSet * finalBasis4 = P->CreateStreamSet(21, 1);
+    doUpperTransform(P, finalBasis3, finalBasis4);
 
     StreamSet * const OutputBasis = P->CreateStreamSet(8);
 
-    U21_to_UTF8(P, finalBasis2, OutputBasis);
+    U21_to_UTF8(P, finalBasis4, OutputBasis);
 
     StreamSet * OutputBytes = P->CreateStreamSet(1, 8);
     P->CreateKernelCall<P2SKernel>(OutputBasis, OutputBytes);
