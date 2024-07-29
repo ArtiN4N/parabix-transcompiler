@@ -41,8 +41,8 @@
 #include <re/cc/cc_compiler.h>
 #include <re/cc/cc_kernel.h>
 
-#include "lasciiData.h"
-#include "replaceify_kernel.h"
+#include "data/lasciiData.h"
+#include "kernel/replaceify_kernel.h"
 
 
 #define SHOW_STREAM(name) if (codegen::EnableIllustrator) P->captureBitstream(#name, name)

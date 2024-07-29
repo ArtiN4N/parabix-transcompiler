@@ -42,7 +42,7 @@
 #include <re/cc/cc_compiler.h>
 #include <re/cc/cc_kernel.h>
 
-#include "titleify_kernel.h"
+#include "kernel/titleify_kernel.h"
 
 
 #define SHOW_STREAM(name) if (codegen::EnableIllustrator) P->captureBitstream(#name, name)
