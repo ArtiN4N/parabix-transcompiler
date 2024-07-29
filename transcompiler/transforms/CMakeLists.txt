@@ -105,8 +105,6 @@ NAME
     lascii
 SRC
     latin-ascii.cpp
-    replaceify_kernel.cpp
-    replace_bixData.cpp
 DEPS
     grep
     pablo
@@ -124,8 +122,6 @@ NAME
     hex
 SRC
     hex.cpp
-    replaceify_kernel.cpp
-    replace_bixData.cpp
 DEPS
     grep
     pablo
