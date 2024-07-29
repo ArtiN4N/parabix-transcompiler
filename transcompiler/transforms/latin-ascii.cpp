@@ -3,9 +3,6 @@
 #include <string>
 #include <iostream>
 
-#include "lasciiData.h"
-#include "replaceify_kernel.h"
-
 #include <unicode/data/PropertyObjects.h>
 #include <unicode/data/PropertyObjectTable.h>
 #include <unicode/core/unicode_set.h>
@@ -43,6 +40,9 @@
 #include <re/cc/cc_compiler_target.h>
 #include <re/cc/cc_compiler.h>
 #include <re/cc/cc_kernel.h>
+
+#include "lasciiData.h"
+#include "replaceify_kernel.h"
 
 
 #define SHOW_STREAM(name) if (codegen::EnableIllustrator) P->captureBitstream(#name, name)
@@ -92,13 +92,13 @@ ToLasciiFunctionType generatePipeline(CPUDriver & pxDriver) {
     FilterByMask(P, u8index, U21_u8indexed, U21);
     SHOW_BIXNUM(U21);
 
-    replace_bixData replace_data(asciiCodeData);
-    StreamSet * ascii_Basis = P->CreateStreamSet(21, 1);
-    ReplaceByBixData(P, replace_data, U21, ascii_Basis);
+    replace_bixData LAT_replace_data(asciiCodeData);
+    StreamSet * LAT_Basis = P->CreateStreamSet(21, 1);
+    ReplaceByBixData(P, LAT_replace_data, U21, LAT_Basis);
 
     // Convert back to UTF8 from codepoints.
     StreamSet * const OutputBasis = P->CreateStreamSet(8);
-    U21_to_UTF8(P, ascii_Basis, OutputBasis);
+    U21_to_UTF8(P, LAT_Basis, OutputBasis);
 
     SHOW_BIXNUM(OutputBasis);
 
