@@ -93,7 +93,7 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
     FilterByMask(P, u8index, U21_u8indexed, U21);
 
     StreamSet * finalBasis1 = P->CreateStreamSet(21, 1);
-    doRemoveTransform(P, [le├í], U21, finalBasis1);
+    doRemoveTransform(P, "[leá]", U21, finalBasis1);
     StreamSet * finalBasis2 = P->CreateStreamSet(21, 1);
     doFullHalfTransform(P, finalBasis1, finalBasis2);
 

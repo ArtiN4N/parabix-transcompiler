@@ -7,6 +7,8 @@
 #include <sstream>
 #include <cctype>
 #include <array>
+#include <regex>
+
 
 #include "validcode.h"
 
@@ -53,12 +55,19 @@ void printHelpAndExit() {
 }
 
 void getLDMLfrom(std::string src, std::vector<std::string>& transform) {
+    //, std::ios::in | std::ios::binary
     std::ifstream file(src);
     if (!file.is_open()) {
         std::cerr << "Unable to open file: " << src << std::endl;
         exitTransCompiler(); // Exit the program with an error code
     }
-    std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    std::string content;
+    std::string text;
+    while (getline(file,text)) {
+        content += text;
+    }
+
+    //((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 
     // Remove spaces and newlines
     content.erase(std::remove(content.begin(), content.end(), ' '), content.end());
@@ -117,9 +126,11 @@ LDMLtransformSet validateTransforms(std::vector<std::string> transforms) {
             ret.transforms.push_back(LDMLtransformEnum::UPPER_T);
         else if (transform == "title")
             ret.transforms.push_back(LDMLtransformEnum::TITLE_T);
-        else if (transform.substr(0, 6) == "remove") {
+        else if (transform.substr(0, 6)== "remove") {
             ret.transforms.push_back(LDMLtransformEnum::REMOVE_T);
-            ret.removeRegex.push_back(transform.substr(6));
+
+            std::string regexPat = transform.substr(6);
+            ret.removeRegex.push_back(regexPat);
         } else {
             std::cerr << transform << " is not a valid LDML transform" << std::endl;
             exitTransCompiler();
@@ -189,7 +200,7 @@ std::string createPipelineFrom(LDMLtransformSet transformSet, bool outputToFile,
             codePipelineDynamic += "    replace_bixData LAT_replace_data(asciiCodeData);\n";
             codePipelineDynamic += "    ReplaceByBixData(P, LAT_replace_data, " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
         } else if (transform == LDMLtransformEnum::REMOVE_T) {
-            codePipelineDynamic += "    " + fnName + "(P, " + transformSet.removeRegex[regexI] + ", " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
+            codePipelineDynamic += "    " + fnName + "(P, \"" + transformSet.removeRegex[regexI] + "\", " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
             regexI++;
         } else {
             codePipelineDynamic += "    " + fnName + "(P, " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
