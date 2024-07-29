@@ -157,13 +157,13 @@ std::string endBoiler = R"(
 int main(int argc, char *argv[]) {
     //  ParseCommandLineOptions uses the LLVM CommandLine processor, but we also add
     //  standard Parabix command line options such as -help, -ShowPablo and many others.
-    codegen::ParseCommandLineOptions(argc, argv, {&LasciiOptions, pablo::pablo_toolchain_flags(), codegen::codegen_flags()});
+    codegen::ParseCommandLineOptions(argc, argv, {&TranscompilerAutoGenOptions, pablo::pablo_toolchain_flags(), codegen::codegen_flags()});
 
     //  A CPU driver is capable of compiling and running Parabix programs on the CPU.
     CPUDriver driver("transcompilerAutoGen");
 
     //  Build and compile the Parabix pipeline by calling the Pipeline function above.
-    ToLasciiFunctionType fn = generatePipeline(driver);
+    TranscompilerAutoGenFunctionType fn = generatePipeline(driver);
     
     //  The compile function "fn"  can now be used.   It takes a file
     //  descriptor as an input, which is specified by the filename given by
