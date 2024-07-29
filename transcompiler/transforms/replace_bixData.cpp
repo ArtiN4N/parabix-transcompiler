@@ -1,6 +1,6 @@
 #include <vector>
 
-#include "replace_bixData.h"
+//#include "replace_bixData.h"
 
 #include <unicode/data/PropertyObjects.h>
 #include <unicode/data/PropertyObjectTable.h>
