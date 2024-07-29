@@ -93,16 +93,16 @@ void doFullHalfTransform(PipelineBuilder & P, StreamSet * Basis, StreamSet * Out
 {0x30CC, 0xFF87}, {0x30CD, 0xFF88}, {0x30CE, 0xFF89}, {0x30CF, 0xFF8A}, {0x30D2, 0xFF8B}, {0x30D5, 0xFF8C}, {0x30D8, 0xFF8D}, {0x30DB, 0xFF8E}, {0x30DE, 0xFF8F}, {0x30DF, 0xFF90}, {0x30E0, 0xFF91}, {0x30E1, 0xFF92}, {0x30E2, 0xFF93}, {0x30E3, 0xFF6C}, {0x30E4, 0xFF94}, {0x30E5, 0xFF6D}, {0x30E6, 0xFF95}, {0x30E7, 0xFF6E}, {0x30E8, 0xFF96}, {0x30E9, 0xFF97}, {0x30EA, 0xFF98}, {0x30EB, 0xFF99}, {0x30EC, 0xFF9A}, {0x30ED, 0xFF9B}, {0x30EF, 0xFF9C}, {0x30F3, 0xFF9D}, {0x309C, 0xFF9F}, {0x3099, 0xFF9E}, {0x309B, 0xFF9E}, {0x30FC, 0xFF70}, {0x30FB, 0xFF65}, {0xFF5F, 0x2985}, {0xFF60, 0x2986 }, {0x3002, 0xFF61}, {0x300C, 0xFF62}, {0x300D, 0xFF63}, {0x3001, 0xFF64}, {0xFFE0, 0x00A2}, {0xFFE1, 0x00A3}, {0xFFE2, 0x00AC}, {0xFFE3, 0x00AF}, {0xFFE4, 0x00A6}, {0xFFE5, 0x00A5}, {0xFFE6, 0x20A9}, {0x2502, 0xFFE8}, {0x2190, 0xFFE9}, {0x2191, 0xFFEA}, {0x2192, 0xFFEB}, {0x2193, 0xFFEC}, {0x25A0, 0xFFED}, {0x25CB, 0xFFEE}};
 
     unicode::TranslationMap mExplicitCodepointMap = (unicode::TranslationMap) explicit_cp_data;
-    unicode::BitTranslationSets fullHalfTranslationSet = unicode::ComputeBitTranslationSets(mExplicitCodepointMap);
+    unicode::BitTranslationSets translationSet = unicode::ComputeBitTranslationSets(mExplicitCodepointMap);
 
     // Turn the fullHalf translation set into a vector of character classes
-    std::vector<re::CC *> fullHalfTranslation_ccs;
-    for (auto & b : fullHalfTranslationSet) {
-        fullHalfTranslation_ccs.push_back(re::makeCC(b, &cc::Unicode));
+    std::vector<re::CC *> translation_ccs;
+    for (auto & b : translationSet) {
+        translation_ccs.push_back(re::makeCC(b, &cc::Unicode));
     }
 
-    StreamSet * translationBasis = P.CreateStreamSet(fullHalfTranslation_ccs.size());
-    P.CreateKernelCall<CharClassesKernel>(fullHalfTranslation_ccs, Basis, translationBasis);
+    StreamSet * translationBasis = P.CreateStreamSet(translation_ccs.size());
+    P.CreateKernelCall<CharClassesKernel>(translation_ccs, Basis, translationBasis);
 
     // Perform the logic of the FullHalfify kernel on the codepoiont values.
     P.CreateKernelCall<FullHalfify>(Basis, translationBasis, Output);
