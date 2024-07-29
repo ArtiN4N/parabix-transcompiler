@@ -67,8 +67,6 @@ void getLDMLfrom(std::string src, std::vector<std::string>& transform) {
         content += text;
     }
 
-    //((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-
     // Remove spaces and newlines
     content.erase(std::remove(content.begin(), content.end(), ' '), content.end());
     content.erase(std::remove(content.begin(), content.end(), '\n'), content.end());

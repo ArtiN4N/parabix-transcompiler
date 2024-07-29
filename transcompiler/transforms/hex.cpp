@@ -48,7 +48,7 @@
 #include "kernel/replaceify_kernel.h"
 #include "kernel/titleify_kernel.h"
 #include "kernel/upperify_kernel.h"
-
+#include "data/lasciiData.h"
 #define SHOW_STREAM(name) if (codegen::EnableIllustrator) P->captureBitstream(#name, name)
 #define SHOW_BIXNUM(name) if (codegen::EnableIllustrator) P->captureBixNum(#name, name)
 #define SHOW_BYTES(name) if (codegen::EnableIllustrator) P->captureByteData(#name, name)
@@ -100,10 +100,13 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
     doRemoveTransform(P, "[o]", finalBasis2, finalBasis3);
     StreamSet * finalBasis4 = P->CreateStreamSet(21, 1);
     doUpperTransform(P, finalBasis3, finalBasis4);
+    StreamSet * finalBasis5 = P->CreateStreamSet(21, 1);
+    replace_bixData LAT_replace_data(asciiCodeData);
+    ReplaceByBixData(P, LAT_replace_data, finalBasis4, finalBasis5);
 
     StreamSet * const OutputBasis = P->CreateStreamSet(8);
 
-    U21_to_UTF8(P, finalBasis4, OutputBasis);
+    U21_to_UTF8(P, finalBasis5, OutputBasis);
 
     StreamSet * OutputBytes = P->CreateStreamSet(1, 8);
     P->CreateKernelCall<P2SKernel>(OutputBasis, OutputBytes);
