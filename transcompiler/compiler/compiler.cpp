@@ -296,7 +296,7 @@ std::string compilePipeline(std::string piplineCode, bool usesCustomProgName, st
 
     createCMakeLists("../../transcompiler/transforms/CMakeLists.txt", makeName, codeFileName);
 
-    runCommand("../cmake ..");
+    runCommand("cd ../; cmake ..");
 
     runCommand("../../transcompiler/bash bash maketarget.sh " + makeName);
 
