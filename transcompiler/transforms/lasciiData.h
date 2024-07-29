@@ -10,7 +10,7 @@
 
 constexpr size_t outerSize = 846;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerSize> asciiCodeData = {
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerSize> asciiCodeData = {{
 {0x00C6,{0x0041,0x0045}},
 {0x00D0,{0x0044}},
 {0x00D8,{0x004F}},
@@ -857,4 +857,4 @@ const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, out
 {0x2A74,{0x003A,0x003A,0x003D}},
 {0x2A75,{0x003D,0x003D}},
 {0x2A76,{0x003D,0x003D,0x0020}}
-};
+}};
