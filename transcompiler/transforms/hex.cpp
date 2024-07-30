@@ -107,6 +107,8 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
     replace_bixData LAS_replace_data(asciiCodeData);
     ReplaceByBixData(P, LAS_replace_data, U21, finalBasis1);
 
+    std::cout << "working on going to greek now" <, std::endl;
+
     StreamSet * finalBasis2 = P->CreateStreamSet(21, 1);
     replace_bixData SCRIPT_replace_data1(latingreekungegndata);
     ReplaceByBixData(P, SCRIPT_replace_data1, finalBasis1, finalBasis2);
