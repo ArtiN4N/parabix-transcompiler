@@ -202,7 +202,7 @@ std::string createPipelineFrom(LDMLtransformSet transformSet, bool outputToFile,
             codePipelineDynamic += "    replace_bixData LAT_replace_data" + std::to_string(uses + 1) + "(asciiCodeData);\n";
             codePipelineDynamic += "    ReplaceByBixData(P, LAT_replace_data" + std::to_string(uses + 1) + ", " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
         } else if (transform == LDMLtransformEnum::REMOVE_T) {
-            codePipelineDynamic += "    " + fnName + "(P, \"" + transformSet.removeRegex[regexI] + "\", " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
+            codePipelineDynamic += "    " + fnName + "(P, R\"(" + transformSet.removeRegex[regexI] + ")\", " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
             regexI++;
         } else {
             codePipelineDynamic += "    " + fnName + "(P, " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
