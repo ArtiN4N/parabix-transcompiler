@@ -212,7 +212,7 @@ std::string createPipelineFrom(LDMLtransformSet transformSet, bool outputToFile,
     int size = transformSet.transforms.size();
     bool addedTransform = false;
     for (auto transform : transformSet.transforms) {
-        if (transform != LDMLtransformEnum::NULL_T && transform != LDMLtransformEnum::SCRIPT_T) addedTransform = true;
+        if (transform != LDMLtransformEnum::NULL_T) addedTransform = true;
         else {
             size--;
             continue;
