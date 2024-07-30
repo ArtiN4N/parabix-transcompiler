@@ -111,23 +111,23 @@ LDMLtransformSet validateTransforms(std::vector<std::string> transforms) {
     ret = LDMLtransformSet();
 
     for (auto transform : transforms) {
-        toLowercase(transform);
+        std::string transformCheck = toLowercase(transform);
 
-        if (transform == "null")
+        if (transformCheck == "null")
             ret.transforms.push_back(LDMLtransformEnum::NULL_T);
-        else if (transform == "fullwidth-halfwidth")
+        else if (transformCheck == "fullwidth-halfwidth")
             ret.transforms.push_back(LDMLtransformEnum::FULLHALF_T);
-        else if (transform == "halfwidth-fullwidth")
+        else if (transformCheck == "halfwidth-fullwidth")
             ret.transforms.push_back(LDMLtransformEnum::HALFFULL_T);
-        else if (transform == "latin-ascii")
+        else if (transformCheck == "latin-ascii")
             ret.transforms.push_back(LDMLtransformEnum::LASCII_T);
-        else if (transform == "lower")
+        else if (transformCheck == "lower")
             ret.transforms.push_back(LDMLtransformEnum::LOWER_T);
-        else if (transform == "upper")
+        else if (transformCheck == "upper")
             ret.transforms.push_back(LDMLtransformEnum::UPPER_T);
-        else if (transform == "title")
+        else if (transformCheck == "title")
             ret.transforms.push_back(LDMLtransformEnum::TITLE_T);
-        else if (transform.substr(0, 6)== "remove") {
+        else if (transformCheck.substr(0, 6)== "remove") {
             ret.transforms.push_back(LDMLtransformEnum::REMOVE_T);
 
             std::string regexPat = transform.substr(6);
