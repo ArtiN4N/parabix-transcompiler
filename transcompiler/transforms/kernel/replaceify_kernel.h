@@ -172,7 +172,7 @@ void Replaceify::generatePabloMethod() {
     }
 
     
-    std::vector<PabloAST *> basis = getInputStreamSet("basis");
+    std::vector<PabloAST *> basis = getInputStreamSet("Basis");
     Var * outputVar = getOutputStreamVar("Output");
     std::vector<PabloAST *> output_basis(basis.size());
 
