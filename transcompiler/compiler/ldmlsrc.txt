@@ -1,3 +1,4 @@
-fULLwidth-halfwidth;
+latin-ASCII;
 UPPER;
 latin-ASCII;
+REMOVE [/s];

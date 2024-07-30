@@ -197,9 +197,10 @@ std::string createPipelineFrom(LDMLtransformSet transformSet, bool outputToFile,
         codePipelineDynamic += "    StreamSet * finalBasis" + std::to_string(i + 1) + " = P->CreateStreamSet(21, 1);\n";
 
         if (transform == LDMLtransformEnum::LASCII_T) {
-            if (transformSet.transformUses[transform] == 0) codeBegin += ValidCode::lasciiDataInclude;
-            codePipelineDynamic += "    replace_bixData LAT_replace_data(asciiCodeData);\n";
-            codePipelineDynamic += "    ReplaceByBixData(P, LAT_replace_data, " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
+            int uses = transformSet.transformUses[transform];
+            if (uses == 0) codeBegin += ValidCode::lasciiDataInclude;
+            codePipelineDynamic += "    replace_bixData LAT_replace_data" + std::to_string(uses + 1) + "(asciiCodeData);\n";
+            codePipelineDynamic += "    ReplaceByBixData(P, LAT_replace_data" + std::to_string(uses + 1) + ", " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
         } else if (transform == LDMLtransformEnum::REMOVE_T) {
             codePipelineDynamic += "    " + fnName + "(P, \"" + transformSet.removeRegex[regexI] + "\", " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
             regexI++;
