@@ -135,6 +135,7 @@ LDMLtransformSet validateTransforms(std::vector<std::string> transforms) {
 
     for (auto transform : transforms) {
         std::string transformCheck = toLowercase(transform);
+        removeCharacters(transformCheck, ":");
         std::cout << transformCheck << std::endl;
         if (transformCheck == "null")
             ret.transforms.push_back(LDMLtransformEnum::NULL_T);
