@@ -135,10 +135,11 @@ public:
     : pablo::PabloKernel(b, "Replaceify",
                         {Binding{"Basis", Basis}},
                             {Binding{"Output", Output}}), mBixData(BixData) {}
-replace_bixData & mBixData;
+
 protected:
     void generatePabloMethod() override;
-    
+private:
+    replace_bixData & mBixData;
 };
 
 void Replaceify::generatePabloMethod() {
@@ -147,6 +148,7 @@ void Replaceify::generatePabloMethod() {
 
     std::cout << "called replaceify" << std::endl;
     std::cout << mBixData.maxAdd << ", " << mBixData.bitsNeeded << std::endl;
+
 
     std::vector<unicode::BitTranslationSets> nReplaceSets;
     nReplaceSets.push_back(mBixData.matchBitXorCCs(0));
