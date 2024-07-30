@@ -59,18 +59,16 @@ struct replace_bixData {
     unsigned maxAdd;
 private:
     std::unordered_map<codepoint_t, unsigned> mInsertLength;
-    unicode::TranslationMap mCharMap[5];
+    unicode::TranslationMap mCharMap[20];
 };
 
 template <std::size_t N>
 replace_bixData::replace_bixData(std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, N> data) {
     maxAdd = 0;
     for (auto& pair : data) {
-        std::cout << "cp = " << pair.first << ", " << pair.second.size() << std::endl;
         mInsertLength.emplace(pair.first, pair.second.size());
         if (pair.second.size() > maxAdd) {
             maxAdd++;
-            std::cout << "maxadd now = " << maxAdd << std::endl;
         }
 
         unsigned int i = 0;
