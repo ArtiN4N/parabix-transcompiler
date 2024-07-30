@@ -102,14 +102,14 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
     StreamSet * U21 = P->CreateStreamSet(21, 1);
     FilterByMask(P, u8index, U21_u8indexed, U21);
 
-    StreamSet * finalBasis1 = P->CreateStreamSet(21, 1);
+    /*StreamSet * finalBasis1 = P->CreateStreamSet(21, 1);
     replace_bixData SCRIPT_replace_data1(latingreekungegndata);
     ReplaceByBixData(P, SCRIPT_replace_data1, U21, finalBasis1);
-    SHOW_BIXNUM(finalBasis1);
+    SHOW_BIXNUM(finalBasis1);*/
     
     StreamSet * finalBasis2 = P->CreateStreamSet(21, 1);
     replace_bixData SCRIPT_replace_data2(greeklatindata);
-    ReplaceByBixData(P, SCRIPT_replace_data2, finalBasis1, finalBasis2);
+    ReplaceByBixData(P, SCRIPT_replace_data2, U21, finalBasis2);
     SHOW_BIXNUM(finalBasis2);
     /*StreamSet * finalBasis3 = P->CreateStreamSet(21, 1);
     replace_bixData SCRIPT_replace_data3(latingujaratidata);
