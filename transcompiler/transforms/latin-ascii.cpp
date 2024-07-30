@@ -94,6 +94,9 @@ ToLasciiFunctionType generatePipeline(CPUDriver & pxDriver) {
 
     StreamSet * finalBasis = P->CreateStreamSet(21, 1);
     replace_bixData LAT_replace_data(asciiCodeData);
+
+    std::cout << "about to enter kernel" << std::endl;
+
     ReplaceByBixData(P, LAT_replace_data, U21, finalBasis);
 
     // Convert back to UTF8 from codepoints.
