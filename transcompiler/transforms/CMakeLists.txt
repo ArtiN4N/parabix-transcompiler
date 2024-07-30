@@ -133,3 +133,20 @@ DEPS
     re.cc
     toolchain
 )
+
+parabix_add_executable(
+NAME
+    TRANSCOMPILERAUTOGEN
+SRC
+    TRANSCOMPILERAUTOGENTEMPSOURCECODE.cpp
+DEPS
+    grep
+    pablo
+    kernel.basis
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    kernel.util
+    re.cc
+    toolchain
+)
