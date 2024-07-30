@@ -404,6 +404,7 @@ int main(int argc, char* argv[]) {
     LDMLtransformSet validTransforms = validateTransforms(LMDLtransforms);
     
     std::string piplineCode = createPipelineFrom(validTransforms, outputToFile, transformedOut);
+    std::cout << "out of code pipeline" << std::endl;
     std::string compiledProgFilename = compilePipeline(piplineCode, usesCustomProgName, customProgName);
 
     std::cout << std::endl << compiledProgFilename << " compiled successfully!" << std::endl;
