@@ -115,6 +115,7 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
 
     StreamSet * finalBasis3 = P->CreateStreamSet(21, 1);
     doUpperTransform(P, finalBasis2, finalBasis3);
+    SHOW_BIXNUM(finalBasis3);
 
     StreamSet * finalBasis4 = P->CreateStreamSet(21, 1);
     doLowerTransform(P, finalBasis3, finalBasis4);
