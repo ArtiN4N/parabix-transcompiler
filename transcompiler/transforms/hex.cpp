@@ -104,15 +104,18 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
     FilterByMask(P, u8index, U21_u8indexed, U21);
 
     StreamSet * finalBasis1 = P->CreateStreamSet(21, 1);
-    replace_bixData LAS_replace_data(asciiCodeData);
-    ReplaceByBixData(P, LAS_replace_data, U21, finalBasis1);
+    replace_bixData LAT_replace_data(asciiCodeData);
+
+    std::cout << "about to enter kernel" << std::endl;
+
+    ReplaceByBixData(P, LAT_replace_data, U21, finalBasis1);
 
     std::cout << "working on going to greek now" << std::endl;
 
     StreamSet * finalBasis2 = P->CreateStreamSet(21, 1);
     replace_bixData SCRIPT_replace_data1(latingreekungegndata);
 
-    std::cout << "about to enter kernel" << std::endl;
+    
 
     ReplaceByBixData(P, SCRIPT_replace_data1, finalBasis1, finalBasis2);
     //SHOW_BIXNUM(finalBasis1);
