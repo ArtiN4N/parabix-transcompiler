@@ -228,6 +228,7 @@ void ReplaceByBixData(PipelineBuilder & P, replace_bixData & BixData, StreamSet 
     SpreadByMask(P, SpreadMask, Basis, ExpandedBasis, 0, false, kernel::StreamExpandOptimization::None, 64, GammaDistribution(5.0f, 0.1f));
     SHOW_BIXNUM(ExpandedBasis);
 
+    std::cout << BixData.maxAdd << ", " << BixData.bitsNeeded << std::endl;
     std::cout << "calling replaceify" << std::endl;
     P.CreateKernelCall<Replaceify>(BixData, ExpandedBasis, Output);
     SHOW_BIXNUM(Output);
