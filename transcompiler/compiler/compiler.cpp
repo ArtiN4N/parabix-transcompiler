@@ -265,7 +265,7 @@ std::string createPipelineFrom(LDMLtransformSet transformSet, bool outputToFile,
     std::cout << std::endl << "Successfully created parabix code!" << std::endl;
 
     ret += codeBegin + codePipelineBegin + codePipelineDynamic + codePipelineEnd + codeEnd;
-    std::cout << std::endl << "Here is the generated code:" << std::endl << ret << std::endl;
+    //std::cout << std::endl << "Here is the generated code:" << std::endl << ret << std::endl;
     return ret;
 }
 
@@ -316,6 +316,7 @@ void runCommand(const std::string& command) {
 }
 
 std::string compilePipeline(std::string piplineCode, bool usesCustomProgName, std::string customProgName) {
+    std::cout << "in pipeline" << std::endl;
     std::filesystem::path exePath = getExecutablePath();
     // Change the current working directory to the directory of the executable
     std::filesystem::current_path(exePath);
