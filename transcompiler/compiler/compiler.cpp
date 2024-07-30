@@ -100,7 +100,7 @@ enum LDMLtransformEnum {
 
 struct LDMLtransformSet {
     std::vector<LDMLtransformEnum> transforms;
-    std::array<int, 8> transformUses;
+    std::array<int, 9> transformUses;
     std::vector<std::string> removeRegex;
     std::vector<std::string> scriptData;
 
@@ -211,6 +211,7 @@ std::string createPipelineFrom(LDMLtransformSet transformSet, bool outputToFile,
     int lasciiUses = 0;
     int size = transformSet.transforms.size();
     bool addedTransform = false;
+
     for (auto transform : transformSet.transforms) {
         if (transform != LDMLtransformEnum::NULL_T) addedTransform = true;
         else {
@@ -232,11 +233,11 @@ std::string createPipelineFrom(LDMLtransformSet transformSet, bool outputToFile,
             codePipelineDynamic += "    ReplaceByBixData(P, LAT_replace_data" + std::to_string(lasciiUses + 1) + ", " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
             lasciiUses++;
         } else if (transform == LDMLtransformEnum::SCRIPT_T) {
-            //int uses = transformSet.transformUses[transform];
-            //if (scripts == 0) codeBegin += "#include \"data/" + transformSet.scriptData[scripts] + "\"" + "\n";
-            //codePipelineDynamic += "    replace_bixData SCRIPT_replace_data" + std::to_string(scripts + 1) + "(" + transformSet.scriptData[scripts].substr(0, transformSet.scriptData[scripts].length() - 2) + ");\n";
-            //codePipelineDynamic += "    ReplaceByBixData(P, SCRIPT_replace_data" + std::to_string(scripts + 1) + ", " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
-            //scripts++;
+            int uses = transformSet.transformUses[transform];
+            if (scripts == 0) codeBegin += "#include \"data/" + transformSet.scriptData[scripts] + "\"" + "\n";
+            codePipelineDynamic += "    replace_bixData SCRIPT_replace_data" + std::to_string(scripts + 1) + "(" + transformSet.scriptData[scripts].substr(0, transformSet.scriptData[scripts].length() - 2) + ");\n";
+            codePipelineDynamic += "    ReplaceByBixData(P, SCRIPT_replace_data" + std::to_string(scripts + 1) + ", " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
+            scripts++;
         }else if (transform == LDMLtransformEnum::REMOVE_T) {
             codePipelineDynamic += "    " + fnName + "(P, R\"(" + transformSet.removeRegex[regexI] + ")\", " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
             regexI++;
