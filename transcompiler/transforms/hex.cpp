@@ -45,7 +45,7 @@
 #include "kernel/halffullify_kernel.h"
 #include "kernel/lowerify_kernel.h"
 #include "kernel/removeify_kernel.h"
-#include "kernel/replaceify_kernel.h"
+
 #include "kernel/titleify_kernel.h"
 #include "kernel/upperify_kernel.h"
 #include "data/latingreekungegndata.h"
@@ -59,6 +59,7 @@
 #include "data/hangullatindata.h"
 #include "data/latinhebrewdata.h"
 #include "data/hebrewlatindata.h"*/
+#include "kernel/replaceify_kernel.h"
 
 #define SHOW_STREAM(name) if (codegen::EnableIllustrator) P->captureBitstream(#name, name)
 #define SHOW_BIXNUM(name) if (codegen::EnableIllustrator) P->captureBixNum(#name, name)
