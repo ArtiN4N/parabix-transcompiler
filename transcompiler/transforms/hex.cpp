@@ -48,16 +48,16 @@
 #include "kernel/replaceify_kernel.h"
 #include "kernel/titleify_kernel.h"
 #include "kernel/upperify_kernel.h"
-//#include "data/latinarabicdata.h"
+#include "data/latinarabicdata.h"
 #include "data/arabiclatindata.h"
-/*#include "data/latinarmeniandata.h"
+#include "data/latinarmeniandata.h"
 #include "data/armenianlatindata.h"
 #include "data/latinbengalidata.h"
 #include "data/bengalilatindata.h"
 #include "data/latinbopomofodata.h"
 #include "data/bopomofolatindata.h"
 #include "data/latincanadianaboriginaldata.h"
-#include "data/canadianaboriginallatindata.h"*/
+#include "data/canadianaboriginallatindata.h"
 
 #define SHOW_STREAM(name) if (codegen::EnableIllustrator) P->captureBitstream(#name, name)
 #define SHOW_BIXNUM(name) if (codegen::EnableIllustrator) P->captureBixNum(#name, name)

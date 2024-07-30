@@ -59,7 +59,7 @@ struct replace_bixData {
     unsigned maxAdd;
 private:
     std::unordered_map<codepoint_t, unsigned> mInsertLength;
-    unicode::TranslationMap mCharMap[20];
+    std::vector<unicode::TranslationMap> mCharMap;
 };
 
 template <std::size_t N>
@@ -69,6 +69,7 @@ replace_bixData::replace_bixData(std::array<std::pair<UCD::codepoint_t, std::vec
         mInsertLength.emplace(pair.first, pair.second.size());
         if (pair.second.size() > maxAdd) {
             maxAdd++;
+            mCharMap.push_back({});
         }
 
         unsigned int i = 0;
