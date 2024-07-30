@@ -339,6 +339,17 @@ std::string compilePipeline(std::string piplineCode, bool usesCustomProgName, st
 
     runCommand("cd ../; make " + makeName);
 
+    if (usesCustomProgName) {
+        std::string oldName = "TRANSCOMPILERAUTOGEN";
+        std::string newName = customProgName;
+
+        if (std::rename(oldName, newName) != 0) {
+            std::perror("Error renaming file");
+        } else {
+            std::cout << "File renamed successfully" << std::endl;
+        }
+    }
+
     return makeName;
 }
 
