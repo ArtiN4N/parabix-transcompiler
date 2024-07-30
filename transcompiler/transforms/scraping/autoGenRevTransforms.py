@@ -4,7 +4,7 @@ from selenium.webdriver.common.keys import Keys
 import time
 import unicodedata
 
-def get_latin_characters():
+def get_script_characters(script):
     latin_characters = []
 
     # Iterate through Unicode code points
@@ -12,7 +12,8 @@ def get_latin_characters():
         char = chr(codepoint)
         try:
             # Check if the character is in the Latin script
-            if 'LATIN' in unicodedata.name(char):
+            if script in unicodedata.name(char):
+                
                 latin_characters.append(char)
         except ValueError:
             # Some code points do not have a character, skip them
@@ -20,12 +21,12 @@ def get_latin_characters():
 
     return ''.join(latin_characters)
 
-latin_characters = get_latin_characters()
+#latin_characters = get_latin_characters()
 #print(latin_characters)
 
-input_lowertext = "\n".join("abcdefghijklmnopqrstuvwxyz")
-input_uppertext = "\n".join("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
-input_text = latin_characters#input_lowertext + "\n" + input_uppertext
+#input_lowertext = "\n".join("abcdefghijklmnopqrstuvwxyz")
+#input_uppertext = "\n".join("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+#input_text = latin_characters#input_lowertext + "\n" + input_uppertext
 
 driver = webdriver.Chrome()
 url = "https://util.unicode.org/UnicodeJsps/transform.jsp"
@@ -35,9 +36,25 @@ def split_string(s, chunk_size):
     return [s[i:i + chunk_size] for i in range(0, len(s), chunk_size)]
 
 
+def extract_non_latin_word(line):
+    # Split the line by '::' and strip any extra spaces
+    parts = [part.strip().replace(";", "").replace(":: ", "") for part in line.split('-') if part.strip()]
+    # Check if there are at least two parts
+    if len(parts) < 2:
+        raise ValueError("Input format is incorrect. Expected at least two parts.")
+    
+    # Extract the part before 'Latin' and clean up
+    #non_latin_part = parts[1].replace('Latin', '').strip()
+    
+    return parts[0]
+
 #print(len(input_text))
 results = []
 def perform_transformation(transform):
+    script = extract_non_latin_word(transform).upper()
+    
+    input_text = get_script_characters(script)
+    #print(input_text)
     chunks = split_string(input_text, 460)  # Adjust chunk_size as needed
     res = []
     k = 0
@@ -83,7 +100,7 @@ def perform_transformation(transform):
 
 
 transforms = []
-inputTransformFile = "transforms.txt"
+inputTransformFile = "revTransforms.txt"
 
 with open(inputTransformFile, 'r', encoding='utf-8') as transformfile:
     transforms = transformfile.read().splitlines()
@@ -93,9 +110,9 @@ with open(inputTransformFile, 'r', encoding='utf-8') as transformfile:
 skipping = True
 for transform in transforms:
     #transformed_text = 
-    if transform != ":: Latin-Ethiopic/ALALOC;" and skipping:
-        continue
-    skipping = False
+    #if transform != ":: Latin-Ethiopic/ALALOC;" and skipping:
+        #continue
+    #skipping = False
     perform_transformation(transform)
     #results[transform] = transformed_text
     #print(transformed_text)
