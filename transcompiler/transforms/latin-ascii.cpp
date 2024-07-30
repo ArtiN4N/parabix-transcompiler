@@ -41,7 +41,7 @@
 #include <re/cc/cc_compiler.h>
 #include <re/cc/cc_kernel.h>
 
-#include "data/lasciiData.h"
+#include "data/lasciidata.h"
 #include "kernel/replaceify_kernel.h"
 
 
