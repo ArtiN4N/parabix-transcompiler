@@ -131,15 +131,15 @@ unicode::BitTranslationSets replace_bixData::matchBitCCs(unsigned i) {
 
 class Replaceify : public pablo::PabloKernel {
 public:
-    Replaceify(KernelBuilder & b, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output)
+    Replaceify(KernelBuilder & b, std::unique_ptr<replace_bixData> && BixData, StreamSet * Basis, StreamSet * Output)
     : pablo::PabloKernel(b, "Replaceify",
                         {Binding{"Basis", Basis}},
-                            {Binding{"Output", Output}}), mBixData(BixData) {}
+                            {Binding{"Output", Output}}), mBixData(std::move(BixData)) {}
 
 protected:
     void generatePabloMethod() override;
 private:
-    replace_bixData & mBixData;
+    std::unique_ptr<replace_bixData> mBixData;
 };
 
 void Replaceify::generatePabloMethod() {
@@ -147,17 +147,17 @@ void Replaceify::generatePabloMethod() {
     UTF::UTF_Compiler unicodeCompiler(getInput(0), pb);
 
     std::cout << "called replaceify" << std::endl;
-    std::cout << mBixData.maxAdd << ", " << mBixData.bitsNeeded << std::endl;
+    std::cout << mBixData->maxAdd << ", " << mBixData->bitsNeeded << std::endl;
 
 
     std::vector<unicode::BitTranslationSets> nReplaceSets;
-    nReplaceSets.push_back(mBixData.matchBitXorCCs(0));
-    for (unsigned i = 1; i < mBixData.maxAdd; i++) {
-        nReplaceSets.push_back(mBixData.matchBitCCs(i));
+    nReplaceSets.push_back(mBixData->matchBitXorCCs(0));
+    for (unsigned i = 1; i < mBixData->maxAdd; i++) {
+        nReplaceSets.push_back(mBixData->matchBitCCs(i));
     }
 
     std::vector<std::vector<Var *>> nReplaceVars;
-    nReplaceVars.assign(mBixData.maxAdd, {});
+    nReplaceVars.assign(mBixData->maxAdd, {});
 
     unsigned j = 0;
     for (auto& set : nReplaceSets) {
@@ -189,7 +189,7 @@ void Replaceify::generatePabloMethod() {
             output_basis[i] = basis[i];
         }
 
-        for (unsigned j = 1; j < mBixData.maxAdd; j++) {
+        for (unsigned j = 1; j < mBixData->maxAdd; j++) {
             auto set = nReplaceVars[j];
             if (i < set.size()) {
                 output_basis[i] = pb.createOr(pb.createAdvance(set[i], j), output_basis[i]);
