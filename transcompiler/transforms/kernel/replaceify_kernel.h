@@ -71,7 +71,6 @@ replace_bixData::replace_bixData(std::array<std::pair<UCD::codepoint_t, std::vec
             
             for (auto i = 0; i < (pair.second.size() - maxAdd); i++) {
                 mCharMap.push_back({});
-                std::cout << "hi" << std::endl;
             }
             maxAdd++;  
         }
