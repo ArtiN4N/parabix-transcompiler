@@ -104,6 +104,7 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
     
     StreamSet * finalBasis2 = P->CreateStreamSet(21, 1);
     replace_bixData SCRIPT_replace_data2(arabiclatindata);
+    std::cout << bitsNeeded << ", " << maxAdd << std::endl;
     ReplaceByBixData(P, SCRIPT_replace_data2, U21, finalBasis2);
     /*
     StreamSet * finalBasis1 = P->CreateStreamSet(21, 1);
