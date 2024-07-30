@@ -233,9 +233,8 @@ std::string createPipelineFrom(LDMLtransformSet transformSet, bool outputToFile,
             lasciiUses++;
         } else if (transform == LDMLtransformEnum::SCRIPT_T) {
             //int uses = transformSet.transformUses[transform];
-            codeBegin += R"(#include "data/)" + transformSet.scriptData[scripts] + R"(")" + "\n";
-            std::string dataName = transformSet.scriptData[scripts].substr(0, transformSet.scriptData[scripts].length() - 2);
-            codePipelineDynamic += "    replace_bixData SCRIPT_replace_data" + std::to_string(scripts + 1) + "(" + dataName + ");\n";
+            codeBegin += "#include \"data/" + transformSet.scriptData[scripts] + "\"" + "\n";
+            codePipelineDynamic += "    replace_bixData SCRIPT_replace_data" + std::to_string(scripts + 1) + "(" + transformSet.scriptData[scripts].substr(0, transformSet.scriptData[scripts].length() - 2) + ");\n";
             codePipelineDynamic += "    ReplaceByBixData(P, SCRIPT_replace_data" + std::to_string(scripts + 1) + ", " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
             scripts++;
         }else if (transform == LDMLtransformEnum::REMOVE_T) {
@@ -265,6 +264,7 @@ std::string createPipelineFrom(LDMLtransformSet transformSet, bool outputToFile,
     std::cout << std::endl << "Successfully created parabix code!" << std::endl;
 
     ret += codeBegin + codePipelineBegin + codePipelineDynamic + codePipelineEnd + codeEnd;
+    std::cout << "leaving pipeline" << std::endl;
     //std::cout << std::endl << "Here is the generated code:" << std::endl << ret << std::endl;
     return ret;
 }
