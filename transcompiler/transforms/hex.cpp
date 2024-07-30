@@ -48,16 +48,16 @@
 #include "kernel/replaceify_kernel.h"
 #include "kernel/titleify_kernel.h"
 #include "kernel/upperify_kernel.h"
-#include "data/latinarabicdata.h"
-#include "data/arabiclatindata.h"
-#include "data/latinarmeniandata.h"
-#include "data/armenianlatindata.h"
-#include "data/latinbengalidata.h"
-#include "data/bengalilatindata.h"
-#include "data/latinbopomofodata.h"
-#include "data/bopomofolatindata.h"
-#include "data/latincanadianaboriginaldata.h"
-#include "data/canadianaboriginallatindata.h"
+#include "data/latingreekungegndata.h"
+/*#include "data/greeklatindata.h"
+#include "data/latingujaratidata.h"
+#include "data/gujaratilatindata.h"
+#include "data/latingurmukhidata.h"
+#include "data/gurmukhilatindata.h"
+#include "data/latinhanguldata.h"
+#include "data/hangullatindata.h"
+#include "data/latinhebrewdata.h"
+#include "data/hebrewlatindata.h"*/
 
 #define SHOW_STREAM(name) if (codegen::EnableIllustrator) P->captureBitstream(#name, name)
 #define SHOW_BIXNUM(name) if (codegen::EnableIllustrator) P->captureBixNum(#name, name)
@@ -101,45 +101,42 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
 
     StreamSet * U21 = P->CreateStreamSet(21, 1);
     FilterByMask(P, u8index, U21_u8indexed, U21);
-    
-    StreamSet * finalBasis2 = P->CreateStreamSet(21, 1);
-    replace_bixData SCRIPT_replace_data2(arabiclatindata);
-    ReplaceByBixData(P, SCRIPT_replace_data2, U21, finalBasis2);
-    /*
+
     StreamSet * finalBasis1 = P->CreateStreamSet(21, 1);
-    replace_bixData SCRIPT_replace_data1(latinarabicdata);
+    replace_bixData SCRIPT_replace_data1(latingreekungegndata);
     ReplaceByBixData(P, SCRIPT_replace_data1, U21, finalBasis1);
-    
-    
+    /*
+    StreamSet * finalBasis2 = P->CreateStreamSet(21, 1);
+    replace_bixData SCRIPT_replace_data2(greeklatindata);
+    ReplaceByBixData(P, SCRIPT_replace_data2, finalBasis1, finalBasis2);
     StreamSet * finalBasis3 = P->CreateStreamSet(21, 1);
-    replace_bixData SCRIPT_replace_data3(latinarmeniandata);
-    ReplaceByBixData(P, SCRIPT_replace_data3, finalBasis1, finalBasis3);
+    replace_bixData SCRIPT_replace_data3(latingujaratidata);
+    ReplaceByBixData(P, SCRIPT_replace_data3, finalBasis2, finalBasis3);
     StreamSet * finalBasis4 = P->CreateStreamSet(21, 1);
-    replace_bixData SCRIPT_replace_data4(armenianlatindata);
+    replace_bixData SCRIPT_replace_data4(gujaratilatindata);
     ReplaceByBixData(P, SCRIPT_replace_data4, finalBasis3, finalBasis4);
     StreamSet * finalBasis5 = P->CreateStreamSet(21, 1);
-    replace_bixData SCRIPT_replace_data5(latinbengalidata);
+    replace_bixData SCRIPT_replace_data5(latingurmukhidata);
     ReplaceByBixData(P, SCRIPT_replace_data5, finalBasis4, finalBasis5);
     StreamSet * finalBasis6 = P->CreateStreamSet(21, 1);
-    replace_bixData SCRIPT_replace_data6(bengalilatindata);
+    replace_bixData SCRIPT_replace_data6(gurmukhilatindata);
     ReplaceByBixData(P, SCRIPT_replace_data6, finalBasis5, finalBasis6);
     StreamSet * finalBasis7 = P->CreateStreamSet(21, 1);
-    replace_bixData SCRIPT_replace_data7(latinbopomofodata);
+    replace_bixData SCRIPT_replace_data7(latinhanguldata);
     ReplaceByBixData(P, SCRIPT_replace_data7, finalBasis6, finalBasis7);
     StreamSet * finalBasis8 = P->CreateStreamSet(21, 1);
-    replace_bixData SCRIPT_replace_data8(bopomofolatindata);
+    replace_bixData SCRIPT_replace_data8(hangullatindata);
     ReplaceByBixData(P, SCRIPT_replace_data8, finalBasis7, finalBasis8);
     StreamSet * finalBasis9 = P->CreateStreamSet(21, 1);
-    replace_bixData SCRIPT_replace_data9(latincanadianaboriginaldata);
+    replace_bixData SCRIPT_replace_data9(latinhebrewdata);
     ReplaceByBixData(P, SCRIPT_replace_data9, finalBasis8, finalBasis9);
     StreamSet * finalBasis10 = P->CreateStreamSet(21, 1);
-    replace_bixData SCRIPT_replace_data10(canadianaboriginallatindata);
-    ReplaceByBixData(P, SCRIPT_replace_data10, finalBasis9, finalBasis10);
-    */
+    replace_bixData SCRIPT_replace_data10(hebrewlatindata);
+    ReplaceByBixData(P, SCRIPT_replace_data10, finalBasis9, finalBasis10);*/
 
     StreamSet * const OutputBasis = P->CreateStreamSet(8);
 
-    U21_to_UTF8(P, finalBasis2, OutputBasis);
+    U21_to_UTF8(P, finalBasis1, OutputBasis);
 
     StreamSet * OutputBytes = P->CreateStreamSet(1, 8);
     P->CreateKernelCall<P2SKernel>(OutputBasis, OutputBytes);
