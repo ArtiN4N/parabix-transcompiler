@@ -200,13 +200,13 @@ void Replaceify::generatePabloMethod() {
     }
 }
 
-void ReplaceByBixData(PipelineBuilder & P, std::unique_ptr<replace_bixData> && BixData, StreamSet * Basis, StreamSet * Output);
+void ReplaceByBixData(PipelineBuilder & P, std::unique_ptr<replace_bixData> & BixData, StreamSet * Basis, StreamSet * Output);
 
-inline void ReplaceByBixData(const std::unique_ptr<PipelineBuilder> & P, std::unique_ptr<replace_bixData> && BixData, StreamSet * Basis, StreamSet * Output) {
+inline void ReplaceByBixData(const std::unique_ptr<PipelineBuilder> & P, std::unique_ptr<replace_bixData> & BixData, StreamSet * Basis, StreamSet * Output) {
     return ReplaceByBixData(*P.get(), BixData, Basis, Output);
 }
 
-inline void ReplaceByBixData(const std::unique_ptr<ProgramBuilder> & P, std::unique_ptr<replace_bixData> && BixData, StreamSet * Basis, StreamSet * Output) {
+inline void ReplaceByBixData(const std::unique_ptr<ProgramBuilder> & P, std::unique_ptr<replace_bixData> & BixData, StreamSet * Basis, StreamSet * Output) {
     return ReplaceByBixData(*P.get(), BixData, Basis, Output);
 }
 
@@ -214,8 +214,8 @@ inline void ReplaceByBixData(const std::unique_ptr<ProgramBuilder> & P, std::uni
 #define SHOW_BIXNUM(name) if (codegen::EnableIllustrator) P.captureBixNum(#name, name)
 #define SHOW_BYTES(name) if (codegen::EnableIllustrator) P.captureByteData(#name, name)
 
-void ReplaceByBixData(PipelineBuilder & P, std::unique_ptr<replace_bixData> && BixData, StreamSet * Basis, StreamSet * Output) {
-    auto insert_ccs = BixData.insertionBixNumCCs();
+void ReplaceByBixData(PipelineBuilder & P, std::unique_ptr<replace_bixData> & BixData, StreamSet * Basis, StreamSet * Output) {
+    auto insert_ccs = BixData->insertionBixNumCCs();
 
     StreamSet * Insertion_BixNum = P.CreateStreamSet(insert_ccs.size());
     P.CreateKernelCall<CharClassesKernel>(insert_ccs, Basis, Insertion_BixNum);
@@ -228,8 +228,8 @@ void ReplaceByBixData(PipelineBuilder & P, std::unique_ptr<replace_bixData> && B
     SpreadByMask(P, SpreadMask, Basis, ExpandedBasis, 0, false, kernel::StreamExpandOptimization::None, 64, GammaDistribution(5.0f, 0.1f));
     SHOW_BIXNUM(ExpandedBasis);
 
-    std::cout << BixData.maxAdd << ", " << BixData.bitsNeeded << std::endl;
+    std::cout << BixData->maxAdd << ", " << BixData->bitsNeeded << std::endl;
     std::cout << "calling replaceify" << std::endl;
-    P.CreateKernelCall<Replaceify>(BixData, ExpandedBasis, Output);
+    P.CreateKernelCall<Replaceify>(std::move(BixData), ExpandedBasis, Output);
     SHOW_BIXNUM(Output);
 }
