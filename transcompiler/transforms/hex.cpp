@@ -113,12 +113,12 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
 
     std::cout << "working on going to greek now" << std::endl;
 
-    StreamSet * finalBasis2 = P->CreateStreamSet(21, 1);
-    replace_bixData SCRIPT_replace_data1(latingreekungegndata);
+    //StreamSet * finalBasis2 = P->CreateStreamSet(21, 1);
+    //replace_bixData SCRIPT_replace_data1(latingreekungegndata);
 
     
 
-    ReplaceByBixData(P, SCRIPT_replace_data1, finalBasis1, finalBasis2);
+    //ReplaceByBixData(P, SCRIPT_replace_data1, finalBasis1, finalBasis2);
     //SHOW_BIXNUM(finalBasis1);
     
     /*StreamSet * finalBasis2 = P->CreateStreamSet(21, 1);
@@ -152,7 +152,7 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
 
     StreamSet * const OutputBasis = P->CreateStreamSet(8);
 
-    U21_to_UTF8(P, finalBasis2, OutputBasis);
+    U21_to_UTF8(P, finalBasis1, OutputBasis);
 
     StreamSet * OutputBytes = P->CreateStreamSet(1, 8);
     P->CreateKernelCall<P2SKernel>(OutputBasis, OutputBytes);
