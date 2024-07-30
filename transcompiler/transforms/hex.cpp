@@ -111,8 +111,14 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
     SHOW_BIXNUM(finalBasis1);
 
     StreamSet * finalBasis2 = P->CreateStreamSet(21, 1);
+    doLowerTransform(P, finalBasis1, finalBasis2);
+
+    StreamSet * finalBasis3 = P->CreateStreamSet(21, 1);
+    doLowerTransform(P, finalBasis2, finalBasis3);
+
+    StreamSet * finalBasis4 = P->CreateStreamSet(21, 1);
     std::unique_ptr<replace_bixData> SCRIPT_replace_data1 = std::make_unique<replace_bixData>(latingreekungegndata);
-    ReplaceByBixData(P, SCRIPT_replace_data1, finalBasis1, finalBasis2);
+    ReplaceByBixData(P, SCRIPT_replace_data1, finalBasis3, finalBasis4);
     
     
     /*StreamSet * finalBasis2 = P->CreateStreamSet(21, 1);
@@ -146,7 +152,7 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
 
     StreamSet * const OutputBasis = P->CreateStreamSet(8);
 
-    U21_to_UTF8(P, finalBasis2, OutputBasis);
+    U21_to_UTF8(P, finalBasis4, OutputBasis);
 
     StreamSet * OutputBytes = P->CreateStreamSet(1, 8);
     P->CreateKernelCall<P2SKernel>(OutputBasis, OutputBytes);
