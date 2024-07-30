@@ -133,10 +133,12 @@ class Replaceify : public pablo::PabloKernel {
 public:
     Replaceify(KernelBuilder & b, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output)
     : pablo::PabloKernel(b, "Replaceify",
-                        {Binding{"BixData", BixData}, Binding{"Basis", Basis}},
-                            {Binding{"Output", Output}}) {}
+                        {Binding{"Basis", Basis}},
+                            {Binding{"Output", Output}}), mBixData(BixData) {}
+replace_bixData & mBixData;
 protected:
     void generatePabloMethod() override;
+    
 };
 
 void Replaceify::generatePabloMethod() {
@@ -177,6 +179,7 @@ void Replaceify::generatePabloMethod() {
     for (unsigned i = 0; i < basis.size(); i++) {
         auto initSet = nReplaceVars[0];
         if (i < initSet.size()) {
+            pb.createDebugPrint(pb.createXor(basis[i], initSet[i]));
             output_basis[i] = pb.createXor(basis[i], initSet[i]);
         } else {
             output_basis[i] = basis[i];
