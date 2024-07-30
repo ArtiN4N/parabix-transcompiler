@@ -111,6 +111,9 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
 
     StreamSet * finalBasis2 = P->CreateStreamSet(21, 1);
     replace_bixData SCRIPT_replace_data1(latingreekungegndata);
+
+    std::cout << "about to enter kernel" << std::endl;
+
     ReplaceByBixData(P, SCRIPT_replace_data1, finalBasis1, finalBasis2);
     //SHOW_BIXNUM(finalBasis1);
     
