@@ -70,6 +70,7 @@ replace_bixData::replace_bixData(std::array<std::pair<UCD::codepoint_t, std::vec
         mInsertLength.emplace(pair.first, pair.second.size());
         if (pair.second.size() > maxAdd) {
             maxAdd++;
+            std::cout << "maxadd now = " << maxAdd << std::endl;
         }
 
         unsigned int i = 0;
