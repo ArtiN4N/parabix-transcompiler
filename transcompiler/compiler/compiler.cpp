@@ -333,9 +333,9 @@ std::string compilePipeline(std::string piplineCode, bool usesCustomProgName, st
     outFile << piplineCode;
     outFile.close();
 
-    createCMakeLists("../../transcompiler/transforms/CMakeLists.txt", makeName, codeFileName);
+    //createCMakeLists("../../transcompiler/transforms/CMakeLists.txt", makeName, codeFileName);
 
-    runCommand("cd ../; cmake ..");
+    //runCommand("cd ../; cmake ..");
 
     runCommand("cd ../; make " + makeName);
 
