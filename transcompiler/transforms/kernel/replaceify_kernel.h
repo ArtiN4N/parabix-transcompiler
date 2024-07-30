@@ -145,6 +145,7 @@ void Replaceify::generatePabloMethod() {
     PabloBuilder pb(getEntryScope());
     UTF::UTF_Compiler unicodeCompiler(getInput(0), pb);
 
+    std::cout << "called replaceify" << std::endl;
     std::cout << mBixData.maxAdd << ", " << mBixData.bitsNeeded << std::endl;
 
     std::vector<unicode::BitTranslationSets> nReplaceSets;
@@ -225,6 +226,7 @@ void ReplaceByBixData(PipelineBuilder & P, replace_bixData & BixData, StreamSet 
     SpreadByMask(P, SpreadMask, Basis, ExpandedBasis, 0, false, kernel::StreamExpandOptimization::None, 64, GammaDistribution(5.0f, 0.1f));
     SHOW_BIXNUM(ExpandedBasis);
 
+    std::cout << "calling replaceify" << std::endl;
     P.CreateKernelCall<Replaceify>(BixData, ExpandedBasis, Output);
     SHOW_BIXNUM(Output);
 }
