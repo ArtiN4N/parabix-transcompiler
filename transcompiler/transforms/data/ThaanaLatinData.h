@@ -11,7 +11,7 @@
 
 constexpr size_t outerThaanaLatinDataSize = 50;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerThaanaLatinDataSize> ThaanaLatinData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerThaanaLatinDataSize> thaanalatindata = {{
 {0x0780, {0x0068}},
 {0x0781, {0x0161}},
 {0x0782, {0x006e}},

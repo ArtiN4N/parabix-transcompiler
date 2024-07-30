@@ -11,7 +11,7 @@
 
 constexpr size_t outerGreekLatinDataSize = 374;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerGreekLatinDataSize> GreekLatinData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerGreekLatinDataSize> greeklatindata = {{
 {0x0342, {0x0302}},
 {0x0343, {}},
 {0x0344, {0x0308,0x0301}},

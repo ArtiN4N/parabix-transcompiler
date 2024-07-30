@@ -11,7 +11,7 @@
 
 constexpr size_t outerTamilLatinDataSize = 72;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerTamilLatinDataSize> TamilLatinData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerTamilLatinDataSize> tamillatindata = {{
 {0x0b82, {0x1e41}},
 {0x0b83, {0x1e25}},
 {0x0b85, {0x0061}},

@@ -11,7 +11,7 @@
 
 constexpr size_t outerLatinJamoDataSize = 1366;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinJamoDataSize> LatinJamoData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinJamoDataSize> latinjamodata = {{
 {0x0041, {0x110b,0x1161}},
 {0x0042, {0x1107,0x1173}},
 {0x0043, {0x110f,0x1173}},

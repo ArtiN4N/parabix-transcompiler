@@ -9,9 +9,9 @@
 #include <unicode/utf/transchar.h>
 
 
-constexpr size_t outerLatinEthiopic/LambdinDataSize = 1366;
+constexpr size_t outerLatinEthiopicLambdinDataSize = 1366;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinEthiopic/LambdinDataSize> LatinEthiopic/LambdinData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinEthiopicLambdinDataSize> latinethiopiclambdindata = {{
 {0x0041, {0x0041}},
 {0x0042, {0x0042}},
 {0x0043, {0x0043}},

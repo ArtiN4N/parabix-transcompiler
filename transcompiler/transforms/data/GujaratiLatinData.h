@@ -11,7 +11,7 @@
 
 constexpr size_t outerGujaratiLatinDataSize = 91;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerGujaratiLatinDataSize> GujaratiLatinData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerGujaratiLatinDataSize> gujaratilatindata = {{
 {0x0a81, {0x006d,0x0310}},
 {0x0a82, {0x1e41}},
 {0x0a83, {0x1e25}},

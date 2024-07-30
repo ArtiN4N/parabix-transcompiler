@@ -11,7 +11,7 @@
 
 constexpr size_t outerLatinKatakanaDataSize = 1366;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinKatakanaDataSize> LatinKatakanaData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinKatakanaDataSize> latinkatakanadata = {{
 {0x0041, {0x30a2}},
 {0x0042, {0x30d6}},
 {0x0043, {0x30af}},

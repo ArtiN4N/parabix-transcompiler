@@ -11,7 +11,7 @@
 
 constexpr size_t outerLatinCyrillicDataSize = 1366;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinCyrillicDataSize> LatinCyrillicData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinCyrillicDataSize> latincyrillicdata = {{
 {0x0041, {0x0410}},
 {0x0042, {0x0411}},
 {0x0043, {0x0426}},

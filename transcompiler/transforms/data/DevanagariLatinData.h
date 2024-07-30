@@ -11,7 +11,7 @@
 
 constexpr size_t outerDevanagariLatinDataSize = 160;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerDevanagariLatinDataSize> DevanagariLatinData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerDevanagariLatinDataSize> devanagarilatindata = {{
 {0x0900, {0x0900}},
 {0x0901, {0x006d,0x0310}},
 {0x0902, {0x1e41}},

@@ -11,7 +11,7 @@
 
 constexpr size_t outerCanadianAboriginalLatinDataSize = 710;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerCanadianAboriginalLatinDataSize> CanadianAboriginalLatinData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerCanadianAboriginalLatinDataSize> canadianaboriginallatindata = {{
 {0x1400, {0x1400}},
 {0x1401, {0x0068,0x00ea}},
 {0x1402, {0x1402}},

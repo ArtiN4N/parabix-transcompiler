@@ -11,7 +11,7 @@
 
 constexpr size_t outerGurmukhiLatinDataSize = 80;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerGurmukhiLatinDataSize> GurmukhiLatinData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerGurmukhiLatinDataSize> gurmukhilatindata = {{
 {0x0a01, {0x006d,0x0310}},
 {0x0a02, {0x1e41}},
 {0x0a03, {0x0a03}},

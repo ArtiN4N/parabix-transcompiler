@@ -9,9 +9,9 @@
 #include <unicode/utf/transchar.h>
 
 
-constexpr size_t outerLatinEthiopic/Tekie_AlibekitDataSize = 1366;
+constexpr size_t outerLatinEthiopicTekie_AlibekitDataSize = 1366;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinEthiopic/Tekie_AlibekitDataSize> LatinEthiopic/Tekie_AlibekitData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinEthiopicTekie_AlibekitDataSize> latinethiopictekie_alibekitdata = {{
 {0x0041, {0x0041}},
 {0x0042, {0x0042}},
 {0x0043, {0x0043}},

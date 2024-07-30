@@ -11,7 +11,7 @@
 
 constexpr size_t outerLatinThaiDataSize = 1366;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinThaiDataSize> LatinThaiData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinThaiDataSize> latinthaidata = {{
 {0x0041, {0x0e30}},
 {0x0042, {0x0e1a}},
 {0x0043, {0x0e08}},

@@ -9,9 +9,9 @@
 #include <unicode/utf/transchar.h>
 
 
-constexpr size_t outerLatinEthiopic/Beta_MetsehafDataSize = 1366;
+constexpr size_t outerlatinethiopicbeta_metsehafdatasize = 1366;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinEthiopic/Beta_MetsehafDataSize> LatinEthiopic/Beta_MetsehafData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerlatinethiopicbeta_metsehafdatasize> latinethiopicbeta_metsehafdata = {{
 {0x0041, {0x0041}},
 {0x0042, {0x0042}},
 {0x0043, {0x0043}},

@@ -9,9 +9,9 @@
 #include <unicode/utf/transchar.h>
 
 
-constexpr size_t outerLatinEthiopic/WilliamsonDataSize = 1366;
+constexpr size_t outerLatinEthiopicWilliamsonDataSize = 1366;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinEthiopic/WilliamsonDataSize> LatinEthiopic/WilliamsonData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinEthiopicWilliamsonDataSize> latinethiopicwilliamsondata = {{
 {0x0041, {0x0041}},
 {0x0042, {0x0042}},
 {0x0043, {0x0043}},

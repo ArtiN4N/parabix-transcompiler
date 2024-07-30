@@ -94,13 +94,16 @@ enum LDMLtransformEnum {
     LOWER_T,
     UPPER_T,
     TITLE_T,
-    REMOVE_T
+    REMOVE_T,
+    SCRIPT_T
 };
 
 struct LDMLtransformSet {
     std::vector<LDMLtransformEnum> transforms;
     std::array<int, 8> transformUses;
     std::vector<std::string> removeRegex;
+    std::vector<std::string> scriptData;
+
 
     LDMLtransformSet();
 };
@@ -108,6 +111,23 @@ struct LDMLtransformSet {
 LDMLtransformSet::LDMLtransformSet() {
     for (int i = 0; i < transformUses.size(); i++) transformUses[i] = 0;
 }
+
+void removeCharacters(std::string& str, const std::string& charsToRemove) {
+    for (char c : charsToRemove) {
+        str.erase(std::remove(str.begin(), str.end(), c), str.end());
+    }
+}
+
+bool isScript(std::string check) {
+    removeCharacters(check, ":");
+    removeCharacters(check, "/");
+    check += "data.h";
+    return check == "arabic-latindata.h" || check == "armenian-latindata.h" || check == "bengali-latindata.h" || check == "bopomofo-latindata.h" || check == "canadianaboriginal-latindata.h" || check == "cyrillic-latindata.h" || check == "devanagari-latindata.h" || check == "ethiopic-latindata.h" || check == "gencheckcond.py" || check == "georgian-latindata.h" || check == "greek-latindata.h" || check == "gujarati-latindata.h" || check == "gurmukhi-latindata.h" || 
+check == "hangul-latindata.h" || check == "hebrew-latindata.h" || check == "hexdata.h" || check == "hiragana-latindata.h" || check == "kannada-latindata.h" || check == "katakana-latindata.h" || check == "latin-arabicdata.h" || check == "latin-armeniandata.h" || check == "latin-bengalidata.h" || check == "latin-bopomofodata.h" || check == "latin-canadianaboriginaldata.h" || check == "latin-cyrillicdata.h" || check == "latin-devanagaridata.h" || check == "latin-ethiopicaethiopicadata.h" || check == "latin-ethiopicalalocdata.h" || check == "latin-ethiopicbeta_metsehafdata.h" || check == "latin-ethiopicdata.h" || check == "latin-ethiopicies_jes_1964data.h" || check == "latin-ethiopiclambdindata.h" || check == "latin-ethiopicseradata.h" || check == "latin-ethiopictekie_alibekitdata.h" || check == "latin-ethiopicwilliamsondata.h" || check == "latin-ethiopicxalagetdata.h" || check == "latin-georgiandata.h" || check == "latin-greekdata.h" || check == "latin-greekungegndata.h" || check == "latin-gujaratidata.h" || check == "latin-gurmukhidata.h" || check == "latin-hanguldata.h" || check == "latin-hebrewdata.h" || check == "latin-hiraganadata.h" || check == "latin-jamodata.h" || check == "latin-kannadadata.h" || check == "latin-katakanadata.h" || check == "latin-malayalamdata.h" || check == "latin-oriyadata.h" || check == "latin-russianbgndata.h" || check == "latin-syriacdata.h" || check == "latin-tamildata.h" || check == "latin-telugudata.h" || check == "latin-thaanadata.h" || 
+check == "latin-thaidata.h" || check == "lowernames.py" || check == "malayalam-latindata.h" || check == "oriya-latindata.h" || check == "syriac-latindata.h" || check == "tamil-latindata.h" || check == "telugu-latindata.h" || check == "thaana-latindata.h" || check == "thai-latindata.h";
+}
+
+
 
 LDMLtransformSet validateTransforms(std::vector<std::string> transforms) {
     LDMLtransformSet ret;
@@ -135,6 +155,11 @@ LDMLtransformSet validateTransforms(std::vector<std::string> transforms) {
 
             std::string regexPat = transform.substr(6);
             ret.removeRegex.push_back(regexPat);
+        } else if (isScript(transformCheck)) {
+            ret.transforms.push_back(LDMLtransformEnum::SCRIPT_T);
+            removeCharacters(transformCheck, "-/");
+            transformCheck += "data.h";
+            ret.scriptData.push_back(transformCheck);
         } else {
             std::cerr << transform << " is not a valid LDML transform" << std::endl;
             exitTransCompiler();
@@ -151,8 +176,6 @@ std::string getKernelFnName(LDMLtransformEnum transform) {
         return "doFullHalfTransform";
     else if (transform == LDMLtransformEnum::HALFFULL_T)
         return "doHalfFullTransform";
-    else if (transform == LDMLtransformEnum::LASCII_T)
-        return "ReplaceByBixData";
     else if (transform == LDMLtransformEnum::LOWER_T)
         return "doLowerTransform";
     else if (transform == LDMLtransformEnum::UPPER_T)
@@ -161,7 +184,7 @@ std::string getKernelFnName(LDMLtransformEnum transform) {
         return "doTitleTransform";
     else if (transform == LDMLtransformEnum::REMOVE_T)
         return "doRemoveTransform";
-    else return "null";
+    else return "ReplaceByBixData";
 }
 
 void codeGenError() {
@@ -183,6 +206,8 @@ std::string createPipelineFrom(LDMLtransformSet transformSet, bool outputToFile,
 
     int i = 0;
     int regexI = 0;
+    int scripts = 0;
+    int lasciiUses = 0;
     int size = transformSet.transforms.size();
     bool addedTransform = false;
     for (auto transform : transformSet.transforms) {
@@ -200,11 +225,19 @@ std::string createPipelineFrom(LDMLtransformSet transformSet, bool outputToFile,
         codePipelineDynamic += "    StreamSet * finalBasis" + std::to_string(i + 1) + " = P->CreateStreamSet(21, 1);\n";
 
         if (transform == LDMLtransformEnum::LASCII_T) {
-            int uses = transformSet.transformUses[transform];
-            if (uses == 0) codeBegin += ValidCode::lasciiDataInclude;
-            codePipelineDynamic += "    replace_bixData LAT_replace_data" + std::to_string(uses + 1) + "(asciiCodeData);\n";
-            codePipelineDynamic += "    ReplaceByBixData(P, LAT_replace_data" + std::to_string(uses + 1) + ", " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
-        } else if (transform == LDMLtransformEnum::REMOVE_T) {
+            //int uses = transformSet.transformUses[transform];
+            if (lasciiUses == 0) codeBegin += ValidCode::lasciiDataInclude;
+            codePipelineDynamic += "    replace_bixData LAT_replace_data" + std::to_string(lasciiUses + 1) + "(asciiCodeData);\n";
+            codePipelineDynamic += "    ReplaceByBixData(P, LAT_replace_data" + std::to_string(lasciiUses + 1) + ", " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
+            lasciiUses++;
+        } else if (transform == LDMLtransformEnum::SCRIPT_T) {
+            //int uses = transformSet.transformUses[transform];
+            codeBegin += R"(#include "data/)" + transformSet.scriptData[scripts] + R"(")";
+            std::string dataName = transformSet.scriptData[scripts].substr(0, transformSet.scriptData[scripts].length() - 2);
+            codePipelineDynamic += "    replace_bixData SCRIPT_replace_data" + std::to_string(scripts + 1) + "(" + dataName + ");\n";
+            codePipelineDynamic += "    ReplaceByBixData(P, SCRIPT_replace_data" + std::to_string(scripts + 1) + ", " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
+            scripts++;
+        }else if (transform == LDMLtransformEnum::REMOVE_T) {
             codePipelineDynamic += "    " + fnName + "(P, R\"(" + transformSet.removeRegex[regexI] + ")\", " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
             regexI++;
         } else {
@@ -237,6 +270,7 @@ std::string createPipelineFrom(LDMLtransformSet transformSet, bool outputToFile,
 
 std::filesystem::path getExecutablePath() {
     char buffer[1024];
+    //ssize_t count = 0;
     ssize_t count = readlink("/proc/self/exe", buffer, sizeof(buffer) - 1);
     if (count != -1) {
         buffer[count] = '\0';
@@ -298,9 +332,9 @@ std::string compilePipeline(std::string piplineCode, bool usesCustomProgName, st
     outFile << piplineCode;
     outFile.close();
 
-    //createCMakeLists("../../transcompiler/transforms/CMakeLists.txt", makeName, codeFileName);
+    createCMakeLists("../../transcompiler/transforms/CMakeLists.txt", makeName, codeFileName);
 
-    //runCommand("cd ../; cmake ..");
+    runCommand("cd ../; cmake ..");
 
     runCommand("cd ../; make " + makeName);
 

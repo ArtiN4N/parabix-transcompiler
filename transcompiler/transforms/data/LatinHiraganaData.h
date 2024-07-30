@@ -11,7 +11,7 @@
 
 constexpr size_t outerLatinHiraganaDataSize = 1366;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinHiraganaDataSize> LatinHiraganaData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinHiraganaDataSize> latinhiraganadata = {{
 {0x0041, {0x3042}},
 {0x0042, {0x3076}},
 {0x0043, {0x304f}},

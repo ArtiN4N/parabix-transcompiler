@@ -11,7 +11,7 @@
 
 constexpr size_t outerLatinArabicDataSize = 1366;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinArabicDataSize> LatinArabicData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinArabicDataSize> latinarabicdata = {{
 {0x0041, {0x064e}},
 {0x0042, {0x0628}},
 {0x0043, {0x0643}},

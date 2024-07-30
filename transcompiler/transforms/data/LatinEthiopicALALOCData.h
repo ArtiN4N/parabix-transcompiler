@@ -9,9 +9,9 @@
 #include <unicode/utf/transchar.h>
 
 
-constexpr size_t outerLatinEthiopic/ALALOCDataSize = 1366;
+constexpr size_t outerLatinEthiopicALALOCDataSize = 1366;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinEthiopic/ALALOCDataSize> LatinEthiopic/ALALOCData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinEthiopicALALOCDataSize> latinethiopicalalocdata = {{
 {0x0041, {0x0041}},
 {0x0042, {0x0062}},
 {0x0043, {0x0043}},

@@ -11,7 +11,7 @@
 
 constexpr size_t outerLatinArmenianDataSize = 1366;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinArmenianDataSize> LatinArmenianData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinArmenianDataSize> latinarmeniandata = {{
 {0x0041, {0x0531}},
 {0x0042, {0x0532}},
 {0x0043, {0x053e}},

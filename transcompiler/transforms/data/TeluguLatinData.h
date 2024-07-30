@@ -11,7 +11,7 @@
 
 constexpr size_t outerTeluguLatinDataSize = 100;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerTeluguLatinDataSize> TeluguLatinData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerTeluguLatinDataSize> telugulatindata = {{
 {0x0c00, {0x0c00}},
 {0x0c01, {0x006d,0x0310}},
 {0x0c02, {0x1e41}},

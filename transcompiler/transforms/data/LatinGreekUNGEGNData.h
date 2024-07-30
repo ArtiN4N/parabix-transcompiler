@@ -9,9 +9,9 @@
 #include <unicode/utf/transchar.h>
 
 
-constexpr size_t outerLatinGreek/UNGEGNDataSize = 1366;
+constexpr size_t outerLatinGreekUNGEGNDataSize = 1366;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinGreek/UNGEGNDataSize> LatinGreek/UNGEGNData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinGreekUNGEGNDataSize> latingreekungegndata = {{
 {0x0041, {0x0391}},
 {0x0042, {0x039c,0x03a0}},
 {0x0043, {0x039a}},

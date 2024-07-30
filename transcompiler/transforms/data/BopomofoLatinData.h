@@ -11,7 +11,7 @@
 
 constexpr size_t outerBopomofoLatinDataSize = 75;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerBopomofoLatinDataSize> BopomofoLatinData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerBopomofoLatinDataSize> bopomofolatindata = {{
 {0x3105, {0x0062}},
 {0x3106, {0x0070}},
 {0x3107, {0x006d,0x0031}},

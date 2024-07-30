@@ -11,7 +11,7 @@
 
 constexpr size_t outerSyriacLatinDataSize = 90;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerSyriacLatinDataSize> SyriacLatinData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerSyriacLatinDataSize> syriaclatindata = {{
 {0x0700, {0x0700}},
 {0x0701, {0x0701}},
 {0x0702, {0x0702}},

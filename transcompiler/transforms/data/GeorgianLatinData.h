@@ -11,7 +11,7 @@
 
 constexpr size_t outerGeorgianLatinDataSize = 174;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerGeorgianLatinDataSize> GeorgianLatinData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerGeorgianLatinDataSize> georgianlatindata = {{
 {0x10a0, {0x10a0}},
 {0x10a1, {0x10a1}},
 {0x10a2, {0x10a2}},

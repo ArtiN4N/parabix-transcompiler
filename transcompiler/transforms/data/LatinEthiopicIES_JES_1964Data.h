@@ -9,9 +9,9 @@
 #include <unicode/utf/transchar.h>
 
 
-constexpr size_t outerLatinEthiopic/IES_JES_1964DataSize = 1366;
+constexpr size_t outerLatinEthiopicIES_JES_1964DataSize = 1366;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinEthiopic/IES_JES_1964DataSize> LatinEthiopic/IES_JES_1964Data = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinEthiopicIES_JES_1964DataSize> latinethiopicies_jes_1964data = {{
 {0x0041, {0x0041}},
 {0x0042, {0x0042}},
 {0x0043, {0x0043}},

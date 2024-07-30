@@ -11,7 +11,7 @@
 
 constexpr size_t outerHangulLatinDataSize = 11735;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerHangulLatinDataSize> HangulLatinData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerHangulLatinDataSize> hangullatindata = {{
 {0x1100, {0x0067}},
 {0x1101, {0x006b,0x006b}},
 {0x1102, {0x006e}},

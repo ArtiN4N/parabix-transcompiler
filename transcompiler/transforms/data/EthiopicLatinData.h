@@ -11,7 +11,7 @@
 
 constexpr size_t outerEthiopicLatinDataSize = 495;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerEthiopicLatinDataSize> EthiopicLatinData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerEthiopicLatinDataSize> ethiopiclatindata = {{
 {0x1200, {0x0068,0x0101}},
 {0x1201, {0x0068,0x0075}},
 {0x1202, {0x0068,0x0069}},

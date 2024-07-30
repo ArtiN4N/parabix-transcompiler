@@ -11,7 +11,7 @@
 
 constexpr size_t outerLatinHebrewDataSize = 1366;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinHebrewDataSize> LatinHebrewData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinHebrewDataSize> latinhebrewdata = {{
 {0x0041, {0x05b7}},
 {0x0042, {0x05d1}},
 {0x0043, {0x05e7}},

@@ -9,9 +9,9 @@
 #include <unicode/utf/transchar.h>
 
 
-constexpr size_t outerLatinEthiopic/XalagetDataSize = 1366;
+constexpr size_t outerLatinEthiopicXalagetDataSize = 1366;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinEthiopic/XalagetDataSize> LatinEthiopic/XalagetData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinEthiopicXalagetDataSize> latinethiopicxalagetdata = {{
 {0x0041, {0x12a3}},
 {0x0042, {0x1265}},
 {0x0043, {0x12d5}},

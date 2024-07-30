@@ -11,7 +11,7 @@
 
 constexpr size_t outerOriyaLatinDataSize = 91;
 
-const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerOriyaLatinDataSize> OriyaLatinData = {{
+const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerOriyaLatinDataSize> oriyalatindata = {{
 {0x0b01, {0x006d,0x0310}},
 {0x0b02, {0x1e41}},
 {0x0b03, {0x1e25}},
