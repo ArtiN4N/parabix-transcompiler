@@ -142,7 +142,7 @@ for result in results:
 
 
 """
-    outputStr += "constexpr size_t outer" + simplify_transform(result['transform']) + "Size = " + str(len(result['input_text'].splitlines())) + ";\n\nconst std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outer" + simplify_transform(result['transform']) + "Size> "
+    outputStr += "constexpr size_t outer" + simplify_transform(result['transform']) + "Size = " + str(len(result['input_text'])) + ";\n\nconst std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outer" + simplify_transform(result['transform']) + "Size> "
     outputStr += simplify_transform(result['transform'])
     outputStr += " = {"
     outputStr += "{\n"

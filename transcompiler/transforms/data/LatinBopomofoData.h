@@ -9,7 +9,7 @@
 #include <unicode/utf/transchar.h>
 
 
-constexpr size_t outerLatinBopomofoDataSize = 1;
+constexpr size_t outerLatinBopomofoDataSize = 1366;
 
 const std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, outerLatinBopomofoDataSize> LatinBopomofoData = {{
 {0x0041, {0x0041}},
