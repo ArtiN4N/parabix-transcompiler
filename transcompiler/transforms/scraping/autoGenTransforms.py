@@ -70,8 +70,7 @@ def char_to_utf16_hex(char):
     if len(char) != 1:
         raise ValueError("Input must be a single character.")
     
-    # Encode the character in UTF-16 and remove the BOM (Byte Order Mark)
-    utf16_bytes = char.encode('utf-16-be')[2:]
+    utf16_bytes = char.encode('utf-16-be')
     
     # Convert each byte to its hexadecimal representation and join them
     utf16_hex = ''.join(f"{byte:02x}" for byte in utf16_bytes)
@@ -135,7 +134,7 @@ for result in results:
     outputStr += "}"
     outputStr += "};\n"
 
-    with open("../data/" + simplify_transform(result['transform']) + "Data.h", "w", encoding='utf-8') as f:
+    with open("../data/" + simplify_transform(result['transform']) + ".h", "w", encoding='utf-8') as f:
         f.write(outputStr)
             
 
