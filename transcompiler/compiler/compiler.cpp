@@ -233,7 +233,7 @@ std::string createPipelineFrom(LDMLtransformSet transformSet, bool outputToFile,
             lasciiUses++;
         } else if (transform == LDMLtransformEnum::SCRIPT_T) {
             //int uses = transformSet.transformUses[transform];
-            if (scripts == 0) codeBegin += "#include \"data/" + transformSet.scriptData[scripts] + "\"" + "\n";
+            //if (scripts == 0) codeBegin += "#include \"data/" + transformSet.scriptData[scripts] + "\"" + "\n";
             //codePipelineDynamic += "    replace_bixData SCRIPT_replace_data" + std::to_string(scripts + 1) + "(" + transformSet.scriptData[scripts].substr(0, transformSet.scriptData[scripts].length() - 2) + ");\n";
             //codePipelineDynamic += "    ReplaceByBixData(P, SCRIPT_replace_data" + std::to_string(scripts + 1) + ", " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
             scripts++;
