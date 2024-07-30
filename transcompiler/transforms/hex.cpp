@@ -105,10 +105,10 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
     StreamSet * finalBasis1 = P->CreateStreamSet(21, 1);
     replace_bixData SCRIPT_replace_data1(latinarabicdata);
     ReplaceByBixData(P, SCRIPT_replace_data1, U21, finalBasis1);
-    StreamSet * finalBasis2 = P->CreateStreamSet(21, 1);
+    /*StreamSet * finalBasis2 = P->CreateStreamSet(21, 1);
     replace_bixData SCRIPT_replace_data2(arabiclatindata);
     ReplaceByBixData(P, SCRIPT_replace_data2, finalBasis1, finalBasis2);
-    /*
+    
     StreamSet * finalBasis3 = P->CreateStreamSet(21, 1);
     replace_bixData SCRIPT_replace_data3(latinarmeniandata);
     ReplaceByBixData(P, SCRIPT_replace_data3, finalBasis2, finalBasis3);
@@ -137,7 +137,7 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
 
     StreamSet * const OutputBasis = P->CreateStreamSet(8);
 
-    U21_to_UTF8(P, finalBasis2, OutputBasis);
+    U21_to_UTF8(P, finalBasis1, OutputBasis);
 
     StreamSet * OutputBytes = P->CreateStreamSet(1, 8);
     P->CreateKernelCall<P2SKernel>(OutputBasis, OutputBytes);
