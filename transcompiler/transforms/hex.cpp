@@ -50,6 +50,7 @@
 #include "kernel/upperify_kernel.h"
 #include "data/latingreekungegndata.h"
 #include "data/greeklatindata.h"
+#include "data/lasciidata.h"
 /*#include "data/latingujaratidata.h"
 #include "data/gujaratilatindata.h"
 #include "data/latingurmukhidata.h"
@@ -102,15 +103,19 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
     StreamSet * U21 = P->CreateStreamSet(21, 1);
     FilterByMask(P, u8index, U21_u8indexed, U21);
 
-    /*StreamSet * finalBasis1 = P->CreateStreamSet(21, 1);
-    replace_bixData SCRIPT_replace_data1(latingreekungegndata);
-    ReplaceByBixData(P, SCRIPT_replace_data1, U21, finalBasis1);
-    SHOW_BIXNUM(finalBasis1);*/
-    
+    StreamSet * finalBasis1 = P->CreateStreamSet(21, 1);
+    replace_bixData LAS_replace_data(asciiCodeData);
+    ReplaceByBixData(P, LAS_replace_data, U21, finalBasis1);
+
     StreamSet * finalBasis2 = P->CreateStreamSet(21, 1);
+    replace_bixData SCRIPT_replace_data1(latingreekungegndata);
+    ReplaceByBixData(P, SCRIPT_replace_data1, finalBasis1, finalBasis2);
+    //SHOW_BIXNUM(finalBasis1);
+    
+    /*StreamSet * finalBasis2 = P->CreateStreamSet(21, 1);
     replace_bixData SCRIPT_replace_data2(greeklatindata);
     ReplaceByBixData(P, SCRIPT_replace_data2, U21, finalBasis2);
-    SHOW_BIXNUM(finalBasis2);
+    SHOW_BIXNUM(finalBasis2);*/
     /*StreamSet * finalBasis3 = P->CreateStreamSet(21, 1);
     replace_bixData SCRIPT_replace_data3(latingujaratidata);
     ReplaceByBixData(P, SCRIPT_replace_data3, finalBasis2, finalBasis3);
