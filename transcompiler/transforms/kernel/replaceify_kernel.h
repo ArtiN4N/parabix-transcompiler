@@ -209,6 +209,10 @@ inline void ReplaceByBixData(const std::unique_ptr<ProgramBuilder> & P, replace_
     return ReplaceByBixData(*P.get(), BixData, Basis, Output);
 }
 
+#define SHOW_STREAM(name) if (codegen::EnableIllustrator) P.captureBitstream(#name, name)
+#define SHOW_BIXNUM(name) if (codegen::EnableIllustrator) P.captureBixNum(#name, name)
+#define SHOW_BYTES(name) if (codegen::EnableIllustrator) P.captureByteData(#name, name)
+
 void ReplaceByBixData(PipelineBuilder & P, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output) {
     auto insert_ccs = BixData.insertionBixNumCCs();
 
@@ -216,9 +220,12 @@ void ReplaceByBixData(PipelineBuilder & P, replace_bixData & BixData, StreamSet 
     P.CreateKernelCall<CharClassesKernel>(insert_ccs, Basis, Insertion_BixNum);
 
     StreamSet * SpreadMask = InsertionSpreadMask(P, Insertion_BixNum, InsertPosition::After);
+    SHOW_STREAM(SpreadMask);
 
     StreamSet * ExpandedBasis = P.CreateStreamSet(21, 1);
     SpreadByMask(P, SpreadMask, Basis, ExpandedBasis, 0, false, kernel::StreamExpandOptimization::None, 64, GammaDistribution(5.0f, 0.1f));
+    SHOW_BIXNUM(ExpandedBasis);
 
     P.CreateKernelCall<Replaceify>(BixData, ExpandedBasis, Output);
+    SHOW_BIXNUM(Output);
 }
