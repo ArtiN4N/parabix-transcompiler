@@ -48,7 +48,7 @@
 
 #include "kernel/titleify_kernel.h"
 #include "kernel/upperify_kernel.h"
-//#include "data/latingreekungegndata.h"
+#include "data/latingreekungegndata.h"
 //#include "data/greeklatindata.h"
 #include "data/lasciidata.h"
 /*#include "data/latingujaratidata.h"
@@ -106,19 +106,11 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
 
     StreamSet * finalBasis1 = P->CreateStreamSet(21, 1);
     replace_bixData LAT_replace_data(asciiCodeData);
-
-    std::cout << "about to enter kernel" << std::endl;
-
     ReplaceByBixData(P, LAT_replace_data, U21, finalBasis1);
 
-    std::cout << "working on going to greek now" << std::endl;
-
-    //StreamSet * finalBasis2 = P->CreateStreamSet(21, 1);
-    //replace_bixData SCRIPT_replace_data1(latingreekungegndata);
-
-    
-
-    //ReplaceByBixData(P, SCRIPT_replace_data1, finalBasis1, finalBasis2);
+    StreamSet * finalBasis2 = P->CreateStreamSet(21, 1);
+    replace_bixData SCRIPT_replace_data1(latingreekungegndata);
+    ReplaceByBixData(P, SCRIPT_replace_data1, finalBasis1, finalBasis2);
     //SHOW_BIXNUM(finalBasis1);
     
     /*StreamSet * finalBasis2 = P->CreateStreamSet(21, 1);
@@ -152,7 +144,7 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
 
     StreamSet * const OutputBasis = P->CreateStreamSet(8);
 
-    U21_to_UTF8(P, finalBasis1, OutputBasis);
+    U21_to_UTF8(P, finalBasis2, OutputBasis);
 
     StreamSet * OutputBytes = P->CreateStreamSet(1, 8);
     P->CreateKernelCall<P2SKernel>(OutputBasis, OutputBytes);
