@@ -17,8 +17,11 @@
 
 
 std::string toLowercase(std::string str) {
-    return std::transform(str.begin(), str.end(), str.begin(),
-                   [](unsigned char c) { return std::tolower(c); });
+    std::string result = str;
+    std::transform(result.begin(), result.end(), result.begin(), [](unsigned char c) {
+        return std::tolower(c);
+    });
+    return result;
 }
 
 void exitTransCompiler() {
