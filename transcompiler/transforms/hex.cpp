@@ -106,12 +106,12 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
     SHOW_BIXNUM(U21);
 
     StreamSet * finalBasis1 = P->CreateStreamSet(21, 1);
-    replace_bixData LAT_replace_data(asciiCodeData);
+    std::unique_ptr<replace_bixData> LAT_replace_data = std::make_unique<replace_bixData>(asciiCodeData);
     ReplaceByBixData(P, LAT_replace_data, U21, finalBasis1);
     SHOW_BIXNUM(finalBasis1);
 
     StreamSet * finalBasis2 = P->CreateStreamSet(21, 1);
-    replace_bixData SCRIPT_replace_data1(latingreekungegndata);
+    std::unique_ptr<replace_bixData> SCRIPT_replace_data1 = std::make_unique<replace_bixData>(latingreekungegndata);
     ReplaceByBixData(P, SCRIPT_replace_data1, finalBasis1, finalBasis2);
     
     
