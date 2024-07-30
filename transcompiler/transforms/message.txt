@@ -1,0 +1,127 @@
+#include <vector>
+#include <utility> // for std::pair
+#include <unicode/algo/decomposition.h>
+#include <unicode/core/unicode_set.h>
+#include <unicode/data/PropertyAliases.h>
+#include <unicode/data/PropertyObjects.h>
+#include <unicode/data/PropertyObjectTable.h>
+#include <unicode/utf/utf_compiler.h>
+#include <unicode/utf/transchar.h>
+
+// Define the type for codepoints (e.g., you might have a typedef or using statement for UCD::codepoint_t)
+using UCD::codepoint_t = uint32_t; // Assuming Unicode codepoints are represented as 32-bit integers
+
+"""
+Latin to Cyrillic.
+Cyrillic to Latin.
+Latin to Katakana.
+Katakana to Latin.
+"""
+
+
+// Define the transliteration mappings
+std::vector<std::pair<codepoint_t, std::vector<codepoint_t>>> latinToCyrillic = {
+    {0x0061, {0x0430}}, // Latin 'a' (U+0061) to Cyrillic 'а' (U+0430)
+    {0x0062, {0x0431}}, // Latin 'b' (U+0062) to Cyrillic 'б' (U+0431)
+    {0x0063, {0x0446}}, // Latin 'c' (U+0063) to Cyrillic 'ц' (U+0446)
+    {0x0064, {0x0434}}, // Latin 'd' (U+0064) to Cyrillic 'д' (U+0434)
+    {0x0065, {0x0435}}, // Latin 'e' (U+0065) to Cyrillic 'е' (U+0435)
+    {0x0066, {0x0444}}, // Latin 'f' (U+0066) to Cyrillic 'ф' (U+0444)
+    {0x0067, {0x0433}}, // Latin 'g' (U+0067) to Cyrillic 'г' (U+0433)
+    {0x0068, {0x0445}}, // Latin 'h' (U+0068) to Cyrillic 'х' (U+0445)
+    {0x0069, {0x0438}}, // Latin 'i' (U+0069) to Cyrillic 'и' (U+0438)
+    {0x006A, {0x0439}}, // Latin 'j' (U+006A) to Cyrillic 'й' (U+0439)
+    {0x006B, {0x043A}}, // Latin 'k' (U+006B) to Cyrillic 'к' (U+043A)
+    {0x006C, {0x043B}}, // Latin 'l' (U+006C) to Cyrillic 'л' (U+043B)
+    {0x006D, {0x043C}}, // Latin 'm' (U+006D) to Cyrillic 'м' (U+043C)
+    {0x006E, {0x043D}}, // Latin 'n' (U+006E) to Cyrillic 'н' (U+043D)
+    {0x006F, {0x043E}}, // Latin 'o' (U+006F) to Cyrillic 'о' (U+043E)
+    {0x0070, {0x043F}}, // Latin 'p' (U+0070) to Cyrillic 'п' (U+043F)
+    {0x0071, {0x0447}}, // Latin 'q' (U+0071) to Cyrillic 'ч' (U+0447)
+    {0x0072, {0x0440}}, // Latin 'r' (U+0072) to Cyrillic 'р' (U+0440)
+    {0x0073, {0x0441}}, // Latin 's' (U+0073) to Cyrillic 'с' (U+0441)
+    {0x0074, {0x0442}}, // Latin 't' (U+0074) to Cyrillic 'т' (U+0442)
+    {0x0075, {0x0443}}, // Latin 'u' (U+0075) to Cyrillic 'у' (U+0443)
+    {0x0076, {0x0432}}, // Latin 'v' (U+0076) to Cyrillic 'в' (U+0432)
+    {0x0077, {0x0449}}, // Latin 'w' (U+0077) to Cyrillic 'щ' (U+0449)
+    {0x0078, {0x043A}}, // Latin 'x' (U+0078) to Cyrillic 'к' (U+043A)
+    {0x0079, {0x044B}}, // Latin 'y' (U+0079) to Cyrillic 'ы' (U+044B)
+    {0x007A, {0x0437}}, // Latin 'z' (U+007A) to Cyrillic 'з' (U+0437)
+};
+
+std::vector<std::pair<codepoint_t, std::vector<codepoint_t>>> cyrillicToLatin = {
+    {0x0430, {0x0061}}, // Cyrillic 'а' (U+0430) to Latin 'a' (U+0061)
+    {0x0431, {0x0062}}, // Cyrillic 'б' (U+0431) to Latin 'b' (U+0062)
+    {0x0446, {0x0063}}, // Cyrillic 'ц' (U+0446) to Latin 'c' (U+0063)
+    {0x0434, {0x0064}}, // Cyrillic 'д' (U+0434) to Latin 'd' (U+0064)
+    {0x0435, {0x0065}}, // Cyrillic 'е' (U+0435) to Latin 'e' (U+0065)
+    {0x0444, {0x0066}}, // Cyrillic 'ф' (U+0444) to Latin 'f' (U+0066)
+    {0x0433, {0x0067}}, // Cyrillic 'г' (U+0433) to Latin 'g' (U+0067)
+    {0x0445, {0x0068}}, // Cyrillic 'х' (U+0445) to Latin 'h' (U+0068)
+    {0x0438, {0x0069}}, // Cyrillic 'и' (U+0438) to Latin 'i' (U+0069)
+    {0x0439, {0x006A}}, // Cyrillic 'й' (U+0439) to Latin 'j' (U+006A)
+    {0x043A, {0x006B}}, // Cyrillic 'к' (U+043A) to Latin 'k' (U+006B)
+    {0x043B, {0x006C}}, // Cyrillic 'л' (U+043B) to Latin 'l' (U+006C)
+    {0x043C, {0x006D}}, // Cyrillic 'м' (U+043C) to Latin 'm' (U+006D)
+    {0x043D, {0x006E}}, // Cyrillic 'н' (U+043D) to Latin 'n' (U+006E)
+    {0x043E, {0x006F}}, // Cyrillic 'о' (U+043E) to Latin 'o' (U+006F)
+    {0x043F, {0x0070}}, // Cyrillic 'п' (U+043F) to Latin 'p' (U+0070)
+    {0x0447, {0x0071}}, // Cyrillic 'ч' (U+0447) to Latin 'q' (U+0071)
+    {0x0440, {0x0072}}, // Cyrillic 'р' (U+0440) to Latin 'r' (U+0072)
+    {0x0441, {0x0073}}, // Cyrillic 'с' (U+0441) to Latin 's' (U+0073)
+    {0x0442, {0x0074}}, // Cyrillic 'т' (U+0442) to Latin 't' (U+0074)
+    {0x0443, {0x0075}}, // Cyrillic 'у' (U+0443) to Latin 'u' (U+0075)
+    {0x0432, {0x0076}}, // Cyrillic 'в' (U+0432) to Latin 'v' (U+0076)
+    {0x0449, {0x0077}}, // Cyrillic 'щ' (U+0449) to Latin 'w' (U+0077)
+    {0x043A, {0x0078}}, // Cyrillic 'к' (U+043A) to Latin 'x' (U+0078)
+    {0x044B, {0x0079}}, // Cyrillic 'ы' (U+044B) to Latin 'y' (U+0079)
+    {0x0437, {0x007A}}, // Cyrillic 'з' (U+0437) to Latin 'z' (U+007A)
+};
+
+// Define the transliteration mappings
+std::vector<std::pair<codepoint_t, std::vector<codepoint_t>>> latinToKatakana = {
+    {0x0061, {0x30A2}}, // Latin 'a' (U+0061) to Katakana 'ア' (U+30A2)
+    {0x0069, {0x30A4}}, // Latin 'i' (U+0069) to Katakana 'イ' (U+30A4)
+    {0x0075, {0x30A6}}, // Latin 'u' (U+0075) to Katakana 'ウ' (U+30A6)
+    {0x0065, {0x30A8}}, // Latin 'e' (U+0065) to Katakana 'エ' (U+30A8)
+    {0x006F, {0x30AA}}, // Latin 'o' (U+006F) to Katakana 'オ' (U+30AA)
+    {0x006B, {0x30AB}}, // Latin 'k' (U+006B) to Katakana 'カ' (U+30AB)
+    {0x0067, {0x30AC}}, // Latin 'g' (U+0067) to Katakana 'ガ' (U+30AC)
+    {0x0073, {0x30B5}}, // Latin 's' (U+0073) to Katakana 'サ' (U+30B5)
+    {0x007A, {0x30B6}}, // Latin 'z' (U+007A) to Katakana 'ザ' (U+30B6)
+    {0x0074, {0x30BF}}, // Latin 't' (U+0074) to Katakana 'タ' (U+30BF)
+    {0x0064, {0x30C0}}, // Latin 'd' (U+0064) to Katakana 'ダ' (U+30C0)
+    {0x006E, {0x30CA}}, // Latin 'n' (U+006E) to Katakana 'ナ' (U+30CA)
+    {0x0068, {0x30CF}}, // Latin 'h' (U+0068) to Katakana 'ハ' (U+30CF)
+    {0x0062, {0x30D0}}, // Latin 'b' (U+0062) to Katakana 'バ' (U+30D0)
+    {0x0070, {0x30D1}}, // Latin 'p' (U+0070) to Katakana 'パ' (U+30D1)
+    {0x006D, {0x30DE}}, // Latin 'm' (U+006D) to Katakana 'マ' (U+30DE)
+    {0x0079, {0x30E4}}, // Latin 'y' (U+0079) to Katakana 'ヤ' (U+30E4)
+    {0x0072, {0x30E9}}, // Latin 'r' (U+0072) to Katakana 'ラ' (U+30E9)
+    {0x0077, {0x30EF}}, // Latin 'w' (U+0077) to Katakana 'ワ' (U+30EF)
+    {0x006E, {0x30F3}}, // Latin 'n' (U+006E) to Katakana 'ン' (U+30F3)
+};
+
+// Define the transliteration mappings
+std::vector<std::pair<codepoint_t, std::vector<codepoint_t>>> katakanaToLatin = {
+    {0x30A2, {0x0061}}, // Katakana 'ア' (U+30A2) to Latin 'a' (U+0061)
+    {0x30A4, {0x0069}}, // Katakana 'イ' (U+30A4) to Latin 'i' (U+0069)
+    {0x30A6, {0x0075}}, // Katakana 'ウ' (U+30A6) to Latin 'u' (U+0075)
+    {0x30A8, {0x0065}}, // Katakana 'エ' (U+30A8) to Latin 'e' (U+0065)
+    {0x30AA, {0x006F}}, // Katakana 'オ' (U+30AA) to Latin 'o' (U+006F)
+    {0x30AB, {0x006B}}, // Katakana 'カ' (U+30AB) to Latin 'k' (U+006B)
+    {0x30AC, {0x0067}}, // Katakana 'ガ' (U+30AC) to Latin 'g' (U+0067)
+    {0x30B5, {0x0073}}, // Katakana 'サ' (U+30B5) to Latin 's' (U+0073)
+    {0x30B6, {0x007A}}, // Katakana 'ザ' (U+30B6) to Latin 'z' (U+007A)
+    {0x30BF, {0x0074}}, // Katakana 'タ' (U+30BF) to Latin 't' (U+0074)
+    {0x30C0, {0x0064}}, // Katakana 'ダ' (U+30C0) to Latin 'd' (U+0064)
+    {0x30CA, {0x006E}}, // Katakana 'ナ' (U+30CA) to Latin 'n' (U+006E)
+    {0x30CF, {0x0068}}, // Katakana 'ハ' (U+30CF) to Latin 'h' (U+0068)
+    {0x30D0, {0x0062}}, // Katakana 'バ' (U+30D0) to Latin 'b' (U+0062)
+    {0x30D1, {0x0070}}, // Katakana 'パ' (U+30D1) to Latin 'p' (U+0070)
+    {0x30DE, {0x006D}}, // Katakana 'マ' (U+30DE) to Latin 'm' (U+006D)
+    {0x30E4, {0x0079}}, // Katakana 'ヤ' (U+30E4) to Latin 'y' (U+0079)
+    {0x30E9, {0x0072}}, // Katakana 'ラ' (U+30E9) to Latin 'r' (U+0072)
+    {0x30EF, {0x0077}}, // Katakana 'ワ' (U+30EF) to Latin 'w' (U+0077)
+    {0x30F3, {0x006E}}, // Katakana 'ン' (U+30F3) to Latin 'n' (U+006E)
+};

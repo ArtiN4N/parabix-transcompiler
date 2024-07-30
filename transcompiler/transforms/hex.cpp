@@ -41,14 +41,10 @@
 #include <re/cc/cc_compiler.h>
 #include <re/cc/cc_kernel.h>
 
-#include "kernel/fullhalfify_kernel.h"
-#include "kernel/halffullify_kernel.h"
-#include "kernel/lowerify_kernel.h"
-#include "kernel/removeify_kernel.h"
+#include "data/LatinBopomofoData.h"
 #include "kernel/replaceify_kernel.h"
-#include "kernel/titleify_kernel.h"
-#include "kernel/upperify_kernel.h"
-#include "data/lasciiData.h"
+
+
 #define SHOW_STREAM(name) if (codegen::EnableIllustrator) P->captureBitstream(#name, name)
 #define SHOW_BIXNUM(name) if (codegen::EnableIllustrator) P->captureBixNum(#name, name)
 #define SHOW_BYTES(name) if (codegen::EnableIllustrator) P->captureByteData(#name, name)
@@ -59,12 +55,12 @@ using namespace pablo;
 
 //  These declarations are for command line processing.
 //  See the LLVM CommandLine 2.0 Library Manual https://llvm.org/docs/CommandLine.html
-static cl::OptionCategory TranscompilerAutoGenOptions("transcompilerAutoGen Options", "transcompilerAutoGen control options.");
-static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), cl::Required, cl::cat(TranscompilerAutoGenOptions));
+static cl::OptionCategory LasciiOptions("lascii Options", "lascii control options.");
+static cl::opt<std::string> inputFile(cl::Positional, cl::desc("<input file>"), cl::Required, cl::cat(LasciiOptions));
 
-typedef void (*TranscompilerAutoGenFunctionType)(uint32_t fd);
+typedef void (*ToLasciiFunctionType)(uint32_t fd);
 
-TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
+ToLasciiFunctionType generatePipeline(CPUDriver & pxDriver) {
     // A Parabix program is build as a set of kernel calls called a pipeline.
     // A pipeline is construction using a Parabix driver object.
     auto & b = pxDriver.getBuilder();
@@ -77,51 +73,53 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
     //  ReadSourceKernel is a Parabix Kernel that produces a stream of bytes
     //  from a file descriptor.
     P->CreateKernelCall<ReadSourceKernel>(fileDescriptor, ByteStream);
+    SHOW_BYTES(ByteStream);
 
     // Get the basis bits
     StreamSet * BasisBits = P->CreateStreamSet(8, 1);
     P->CreateKernelCall<S2PKernel>(ByteStream, BasisBits);
+    SHOW_BIXNUM(BasisBits);
 
     // Convert into codepoints
     StreamSet * u8index = P->CreateStreamSet(1, 1);
     P->CreateKernelCall<UTF8_index>(BasisBits, u8index);
+    //SHOW_STREAM(u8index);
 
     StreamSet * U21_u8indexed = P->CreateStreamSet(21, 1);
     P->CreateKernelCall<UTF8_Decoder>(BasisBits, U21_u8indexed);
 
     StreamSet * U21 = P->CreateStreamSet(21, 1);
     FilterByMask(P, u8index, U21_u8indexed, U21);
+    SHOW_BIXNUM(U21);
 
-    StreamSet * finalBasis1 = P->CreateStreamSet(21, 1);
-    doFullHalfTransform(P, U21, finalBasis1);
-    StreamSet * finalBasis2 = P->CreateStreamSet(21, 1);
-    doUpperTransform(P, finalBasis1, finalBasis2);
-    StreamSet * finalBasis3 = P->CreateStreamSet(21, 1);
-    replace_bixData LAT_replace_data(asciiCodeData);
-    ReplaceByBixData(P, LAT_replace_data, finalBasis2, finalBasis3);
+    StreamSet * finalBasis = P->CreateStreamSet(21, 1);
+    replace_bixData LAT_replace_data(LatinBopomofoData);
+    ReplaceByBixData(P, LAT_replace_data, U21, finalBasis);
 
+    // Convert back to UTF8 from codepoints.
     StreamSet * const OutputBasis = P->CreateStreamSet(8);
+    U21_to_UTF8(P, finalBasis, OutputBasis);
 
-    U21_to_UTF8(P, finalBasis3, OutputBasis);
+    SHOW_BIXNUM(OutputBasis);
 
     StreamSet * OutputBytes = P->CreateStreamSet(1, 8);
     P->CreateKernelCall<P2SKernel>(OutputBasis, OutputBytes);
     P->CreateKernelCall<StdOutKernel>(OutputBytes);
 
-    return reinterpret_cast<TranscompilerAutoGenFunctionType>(P->compile());
+    return reinterpret_cast<ToLasciiFunctionType>(P->compile());
 }
 
 int main(int argc, char *argv[]) {
     //  ParseCommandLineOptions uses the LLVM CommandLine processor, but we also add
     //  standard Parabix command line options such as -help, -ShowPablo and many others.
-    codegen::ParseCommandLineOptions(argc, argv, {&TranscompilerAutoGenOptions, pablo::pablo_toolchain_flags(), codegen::codegen_flags()});
+    codegen::ParseCommandLineOptions(argc, argv, {&LasciiOptions, pablo::pablo_toolchain_flags(), codegen::codegen_flags()});
 
     //  A CPU driver is capable of compiling and running Parabix programs on the CPU.
-    CPUDriver driver("transcompilerAutoGen");
+    CPUDriver driver("tolascii");
 
     //  Build and compile the Parabix pipeline by calling the Pipeline function above.
-    TranscompilerAutoGenFunctionType fn = generatePipeline(driver);
-
+    ToLasciiFunctionType fn = generatePipeline(driver);
+    
     //  The compile function "fn"  can now be used.   It takes a file
     //  descriptor as an input, which is specified by the filename given by
     //  the inputFile command line option.
