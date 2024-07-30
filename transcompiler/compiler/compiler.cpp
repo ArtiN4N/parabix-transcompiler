@@ -265,8 +265,7 @@ std::string createPipelineFrom(LDMLtransformSet transformSet, bool outputToFile,
     std::cout << std::endl << "Successfully created parabix code!" << std::endl;
 
     ret += codeBegin + codePipelineBegin + codePipelineDynamic + codePipelineEnd + codeEnd;
-    std::cout << "leaving pipeline" << std::endl;
-    //std::cout << std::endl << "Here is the generated code:" << std::endl << ret << std::endl;
+    std::cout << std::endl << "Here is the generated code:" << std::endl << ret << std::endl;
     return ret;
 }
 
@@ -317,7 +316,6 @@ void runCommand(const std::string& command) {
 }
 
 std::string compilePipeline(std::string piplineCode, bool usesCustomProgName, std::string customProgName) {
-    std::cout << "in pipeline" << std::endl;
     std::filesystem::path exePath = getExecutablePath();
     // Change the current working directory to the directory of the executable
     std::filesystem::current_path(exePath);
@@ -405,7 +403,6 @@ int main(int argc, char* argv[]) {
     LDMLtransformSet validTransforms = validateTransforms(LMDLtransforms);
     
     std::string piplineCode = createPipelineFrom(validTransforms, outputToFile, transformedOut);
-    std::cout << "out of code pipeline" << std::endl;
     std::string compiledProgFilename = compilePipeline(piplineCode, usesCustomProgName, customProgName);
 
     std::cout << std::endl << compiledProgFilename << " compiled successfully!" << std::endl;
