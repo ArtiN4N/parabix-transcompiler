@@ -134,6 +134,7 @@ LDMLtransformSet validateTransforms(std::vector<std::string> transforms) {
             ret.transforms.push_back(LDMLtransformEnum::REMOVE_T);
 
             std::string regexPat = transform.substr(6);
+            std::cout << "regex: " << regexPat << std::endl;
             ret.removeRegex.push_back(regexPat);
         } else {
             std::cerr << transform << " is not a valid LDML transform" << std::endl;
