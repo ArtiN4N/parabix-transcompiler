@@ -1,0 +1,10 @@
+:: Latin-Cyrillic;
+:: Cyrillic-Latin;
+:: Latin-Devanagari;
+:: Devanagari-Latin;
+:: Latin-Ethiopic;
+:: Ethiopic-Latin;
+:: Latin-Ethiopic/ALALOC;
+:: Latin-Ethiopic/Aethiopica;
+:: Latin-Ethiopic/Beta_Metsehaf;
+:: Latin-Ethiopic/IES_JES_1964;

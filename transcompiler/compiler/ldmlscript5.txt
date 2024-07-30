@@ -1,0 +1,10 @@
+:: Latin-Hiragana;
+:: Hiragana-Latin;
+:: Latin-Jamo;
+:: Hangul-Latin;
+:: Latin-Kannada;
+:: Kannada-Latin;
+:: Latin-Katakana;
+:: Katakana-Latin;
+:: Latin-Malayalam;
+:: Malayalam-Latin;
