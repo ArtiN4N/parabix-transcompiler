@@ -215,6 +215,7 @@ inline void ReplaceByBixData(const std::unique_ptr<ProgramBuilder> & P, replace_
 
 void ReplaceByBixData(PipelineBuilder & P, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output) {
     auto insert_ccs = BixData.insertionBixNumCCs();
+    std::cout << BixData.maxAdd << ", " << BixData.bitsNeeded << std::endl;
 
     StreamSet * Insertion_BixNum = P.CreateStreamSet(insert_ccs.size());
     P.CreateKernelCall<CharClassesKernel>(insert_ccs, Basis, Insertion_BixNum);
