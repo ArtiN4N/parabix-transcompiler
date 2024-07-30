@@ -135,7 +135,7 @@ LDMLtransformSet validateTransforms(std::vector<std::string> transforms) {
 
     for (auto transform : transforms) {
         std::string transformCheck = toLowercase(transform);
-
+        std::cout << transformCheck << std::endl;
         if (transformCheck == "null")
             ret.transforms.push_back(LDMLtransformEnum::NULL_T);
         else if (transformCheck == "fullwidth-halfwidth")
