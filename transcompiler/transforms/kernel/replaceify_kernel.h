@@ -131,19 +131,13 @@ unicode::BitTranslationSets replace_bixData::matchBitCCs(unsigned i) {
 
 class Replaceify : public pablo::PabloKernel {
 public:
-    Replaceify(KernelBuilder & b, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output);
+    Replaceify(KernelBuilder & b, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output)
+    : pablo::PabloKernel(b, "Replaceify",
+                        {Binding{"BixData", BixData}, Binding{"Basis", Basis}},
+                            {Binding{"Output", Output}}) {}
 protected:
     void generatePabloMethod() override;
-    replace_bixData & mBixData;
 };
-
-Replaceify::Replaceify (KernelBuilder & b, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output)
-: PabloKernel(b, "Replaceify" + std::to_string(Basis->getNumElements()) + "x1",
-// inputs
-{Binding{"basis", Basis}},
-// output
-{Binding{"Output", Output}}), mBixData(BixData) {
-}
 
 void Replaceify::generatePabloMethod() {
     PabloBuilder pb(getEntryScope());
