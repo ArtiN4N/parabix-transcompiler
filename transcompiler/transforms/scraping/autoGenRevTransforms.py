@@ -55,6 +55,7 @@ def perform_transformation(transform):
     
     input_text = get_script_characters(script)
     #print(input_text)
+    transform = ":: CanadianAboriginal-Latin;"
     chunks = split_string(input_text, 460)  # Adjust chunk_size as needed
     res = []
     k = 0
@@ -108,18 +109,19 @@ with open(inputTransformFile, 'r', encoding='utf-8') as transformfile:
 # Perform transformations for each transform in the list
 #i = 0
 skipping = True
-for transform in transforms:
+#for transform in transforms:
     #transformed_text = 
     #if transform != ":: Latin-Ethiopic/ALALOC;" and skipping:
         #continue
     #skipping = False
-    perform_transformation(transform)
+    #perform_transformation(transform)
     #results[transform] = transformed_text
     #print(transformed_text)
     #if (i > 0):
      #   break
     #i += 1
 #perform_transformation(transforms[3])
+perform_transformation(":: Canadian-Latin;")
 
 # Close the web driver
 driver.quit()
