@@ -131,15 +131,15 @@ unicode::BitTranslationSets replace_bixData::matchBitCCs(unsigned i) {
 
 class Replaceify : public pablo::PabloKernel {
 public:
-    Replaceify(KernelBuilder & b, std::unique_ptr<replace_bixData> && BixData, StreamSet * Basis, StreamSet * Output)
+    Replaceify(KernelBuilder & b, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output)
     : pablo::PabloKernel(b, "Replaceify",
-                        {Binding{"Basis", Basis}},
-                            {Binding{"Output", Output}}), mBixData(std::move(BixData)) {}
+                        {Binding{"Basis", Basis}, Binding{"BixData", BixData}},
+                            {Binding{"Output", Output}}), mBixData(BixData) {}
 
 protected:
     void generatePabloMethod() override;
 private:
-    std::unique_ptr<replace_bixData> mBixData;
+    replace_bixData mBixData;
 };
 
 void Replaceify::generatePabloMethod() {
@@ -149,6 +149,7 @@ void Replaceify::generatePabloMethod() {
     std::cout << "called replaceify" << std::endl;
     std::cout << mBixData->maxAdd << ", " << mBixData->bitsNeeded << std::endl;
 
+    // somehow get bixdata from binding
 
     std::vector<unicode::BitTranslationSets> nReplaceSets;
     nReplaceSets.push_back(mBixData->matchBitXorCCs(0));
