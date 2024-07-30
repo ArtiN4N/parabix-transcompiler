@@ -322,7 +322,7 @@ std::string compilePipeline(std::string piplineCode, bool usesCustomProgName, st
 
     std::string codeFileName = "../../transcompiler/transforms/TRANSCOMPILERAUTOGENTEMPSOURCECODE.cpp";
     std::string makeName = "TRANSCOMPILERAUTOGEN";
-    if (usesCustomProgName) makeName = customProgName;
+    //if (usesCustomProgName) makeName = customProgName;
 
     std::ofstream outFile(codeFileName);
     if (!outFile.is_open()) {
