@@ -67,11 +67,13 @@ replace_bixData::replace_bixData(std::array<std::pair<UCD::codepoint_t, std::vec
     maxAdd = 0;
     for (auto& pair : data) {
         mInsertLength.emplace(pair.first, pair.second.size());
-        unsigned int oldSize = pair.second.size();
         if (pair.second.size() > maxAdd) {
-            maxAdd++;
-            for (unsigned int i = 0; i < (maxAdd - oldSize); i++)
+            
+            for (auto i = 0; i < (pair.second.size() - maxAdd); i++) {
                 mCharMap.push_back({});
+                std::cout << "hi" << std::endl;
+            }
+            maxAdd++;  
         }
 
         unsigned int i = 0;
