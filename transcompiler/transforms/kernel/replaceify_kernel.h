@@ -177,7 +177,6 @@ void Replaceify::generatePabloMethod() {
     for (unsigned i = 0; i < basis.size(); i++) {
         auto initSet = nReplaceVars[0];
         if (i < initSet.size()) {
-            pb.createDebugPrint(pb.createXor(basis[i], initSet[i]));
             output_basis[i] = pb.createXor(basis[i], initSet[i]);
         } else {
             output_basis[i] = basis[i];
