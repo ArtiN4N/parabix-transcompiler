@@ -17,7 +17,7 @@ for filename in os.listdir(directory):
     new_filename = filename.lower()
     name, ext = os.path.splitext(new_filename)
     
-    new_filename = name + "A" + ext
+    new_filename = name[:-1] + ext
     new_file = os.path.join(directory, new_filename)
     
     # Create the full new file path
