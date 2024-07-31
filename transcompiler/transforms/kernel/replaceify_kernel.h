@@ -57,13 +57,15 @@ struct replace_bixData {
     unicode::BitTranslationSets matchBitCCs(unsigned);
     unsigned bitsNeeded;
     unsigned maxAdd;
+    unsigned int generation;
 private:
     std::unordered_map<codepoint_t, unsigned> mInsertLength;
     std::vector<unicode::TranslationMap> mCharMap;
 };
 
 template <std::size_t N>
-replace_bixData::replace_bixData(std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, N> data) {
+replace_bixData::replace_bixData(std::array<std::pair<UCD::codepoint_t, std::vector<UCD::codepoint_t>>, N> data, unsigned int gen) {
+    generation = gen;
     maxAdd = 0;
     for (auto& pair : data) {
         mInsertLength.emplace(pair.first, pair.second.size());
@@ -132,8 +134,8 @@ unicode::BitTranslationSets replace_bixData::matchBitCCs(unsigned i) {
 class Replaceify : public pablo::PabloKernel {
 public:
     Replaceify(KernelBuilder & b, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output)
-    : pablo::PabloKernel(b, "Replaceify",
-                        {Binding{"Basis", Basis}, Binding{"BixData", BixData}},
+    : pablo::PabloKernel(b, "Replaceify" + std::to_string(BixData.generation),
+                        {Binding{"Basis", Basis}},
                             {Binding{"Output", Output}}), mBixData(BixData) {}
 
 protected:
