@@ -199,17 +199,17 @@ void Replaceify::generatePabloMethod() {
     }
 }
 
-void ReplaceByBixData(PipelineBuilder & P, std::unique_ptr<replace_bixData> & BixData, StreamSet * Basis, StreamSet * Output);
+void ReplaceByBixData(PipelineBuilder & P, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output);
 
-inline void ReplaceByBixData(const std::unique_ptr<PipelineBuilder> & P, std::unique_ptr<replace_bixData> & BixData, StreamSet * Basis, StreamSet * Output) {
+inline void ReplaceByBixData(const std::unique_ptr<PipelineBuilder> & P, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output) {
     return ReplaceByBixData(*P.get(), BixData, Basis, Output);
 }
 
-inline void ReplaceByBixData(const std::unique_ptr<ProgramBuilder> & P, std::unique_ptr<replace_bixData> & BixData, StreamSet * Basis, StreamSet * Output) {
+inline void ReplaceByBixData(const std::unique_ptr<ProgramBuilder> & P, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output) {
     return ReplaceByBixData(*P.get(), BixData, Basis, Output);
 }
 
-void ReplaceByBixData(PipelineBuilder & P, std::unique_ptr<replace_bixData> & BixData, StreamSet * Basis, StreamSet * Output) {
+void ReplaceByBixData(PipelineBuilder & P, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output) {
     auto insert_ccs = BixData->insertionBixNumCCs();
 
     StreamSet * Insertion_BixNum = P.CreateStreamSet(insert_ccs.size());
