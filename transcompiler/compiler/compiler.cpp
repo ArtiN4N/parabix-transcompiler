@@ -229,13 +229,13 @@ std::string createPipelineFrom(LDMLtransformSet transformSet, bool outputToFile,
         if (transform == LDMLtransformEnum::LASCII_T) {
             //int uses = transformSet.transformUses[transform];
             if (lasciiUses == 0) codeBegin += ValidCode::lasciiDataInclude;
-            codePipelineDynamic += "    replace_bixData LAT_replace_data" + std::to_string(lasciiUses + 1) + "(asciiCodeData);\n";
+            codePipelineDynamic += "    replace_bixData LAT_replace_data" + std::to_string(lasciiUses + 1) + "(asciiCodeData, " + std::to_string(i + 1) + ");\n";
             codePipelineDynamic += "    ReplaceByBixData(P, LAT_replace_data" + std::to_string(lasciiUses + 1) + ", " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
             lasciiUses++;
         } else if (transform == LDMLtransformEnum::SCRIPT_T) {
             int uses = transformSet.transformUses[transform];
             codeBegin += "#include \"data/" + transformSet.scriptData[scripts] + "\"" + "\n";
-            codePipelineDynamic += "    replace_bixData SCRIPT_replace_data" + std::to_string(scripts + 1) + "(" + transformSet.scriptData[scripts].substr(0, transformSet.scriptData[scripts].length() - 2) + ");\n";
+            codePipelineDynamic += "    replace_bixData SCRIPT_replace_data" + std::to_string(scripts + 1) + "(" + transformSet.scriptData[scripts].substr(0, transformSet.scriptData[scripts].length() - 2) + ", " + std::to_string(i + 1) + ");\n";
             codePipelineDynamic += "    ReplaceByBixData(P, SCRIPT_replace_data" + std::to_string(scripts + 1) + ", " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
             scripts++;
         }else if (transform == LDMLtransformEnum::REMOVE_T) {
