@@ -150,13 +150,13 @@ void Replaceify::generatePabloMethod() {
     // somehow get bixdata from binding
 
     std::vector<unicode::BitTranslationSets> nReplaceSets;
-    nReplaceSets.push_back(mBixData->matchBitXorCCs(0));
-    for (unsigned i = 1; i < mBixData->maxAdd; i++) {
-        nReplaceSets.push_back(mBixData->matchBitCCs(i));
+    nReplaceSets.push_back(mBixData.matchBitXorCCs(0));
+    for (unsigned i = 1; i < mBixData.maxAdd; i++) {
+        nReplaceSets.push_back(mBixData.matchBitCCs(i));
     }
 
     std::vector<std::vector<Var *>> nReplaceVars;
-    nReplaceVars.assign(mBixData->maxAdd, {});
+    nReplaceVars.assign(mBixData.maxAdd, {});
 
     unsigned j = 0;
     for (auto& set : nReplaceSets) {
@@ -188,7 +188,7 @@ void Replaceify::generatePabloMethod() {
             output_basis[i] = basis[i];
         }
 
-        for (unsigned j = 1; j < mBixData->maxAdd; j++) {
+        for (unsigned j = 1; j < mBixData.maxAdd; j++) {
             auto set = nReplaceVars[j];
             if (i < set.size()) {
                 output_basis[i] = pb.createOr(pb.createAdvance(set[i], j), output_basis[i]);
@@ -210,7 +210,7 @@ inline void ReplaceByBixData(const std::unique_ptr<ProgramBuilder> & P, replace_
 }
 
 void ReplaceByBixData(PipelineBuilder & P, replace_bixData & BixData, StreamSet * Basis, StreamSet * Output) {
-    auto insert_ccs = BixData->insertionBixNumCCs();
+    auto insert_ccs = BixData.insertionBixNumCCs();
 
     StreamSet * Insertion_BixNum = P.CreateStreamSet(insert_ccs.size());
     P.CreateKernelCall<CharClassesKernel>(insert_ccs, Basis, Insertion_BixNum);
