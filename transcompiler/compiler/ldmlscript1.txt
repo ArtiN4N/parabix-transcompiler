@@ -6,3 +6,5 @@
 :: Bengali-Latin;
 :: Latin-Bopomofo;
 :: Bopomofo-Latin;
+:: Latin-CanadianAboriginal;
+:: CanadianAboriginal-Latin;
