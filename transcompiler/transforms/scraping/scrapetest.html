@@ -1,0 +1,88 @@
+<html><head>
+    <!-- Global site tag (gtag.js) - Google Analytics -->
+    <script type="text/javascript" async="" src="https://www.google-analytics.com/analytics.js"></script><script async="" src="https://www.googletagmanager.com/gtag/js?id=UA-19876713-1"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'UA-19876713-1');
+    </script>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta http-equiv="Content-Language" content="en-us">
+    <link rel="stylesheet" type="text/css" href="index.css">
+    
+    
+    
+    
+     
+     
+    
+    
+    
+    
+     
+    
+    
+    
+    
+    <!--  -->
+    
+    
+    
+    <title>Unicode Utilities: Transforms</title>
+    </head>
+    <body>
+    
+    <h1>Unicode Utilities: Transforms</h1>
+    
+    <p style="border: 1pt solid red;">Unmarked properties are from Unicode V15.1.0; the beta properties are from Unicode V16.0.0β. For more information, see <a target="help" href="https://unicode-org.github.io/unicodetools/help/changes">Unicode Utilities Beta</a>.</p>
+    <p><a target="help" href="https://unicode-org.github.io/unicodetools/help/transform"><b>help</b></a> |      <a target="character" href="character.jsp">character</a>
+       | <a target="properties" href="properties.jsp">properties</a>
+       | <a target="confusables" href="confusables.jsp">confusables</a>
+       | <a target="list" href="list-unicodeset.jsp">unicode-set</a>
+       | <a target="compare" href="unicodeset.jsp">compare-sets</a>
+       | <a target="regex" href="regex.jsp">regex</a>
+       | <a target="bnf" href="bnf.jsp">bnf-regex</a>
+       | <a target="breaks" href="breaks.jsp">breaks</a>
+       | <a target="transform" href="transform.jsp">transform</a>
+       | <a target="bidi" href="bidi.jsp">bidi</a>
+       | <a target="bidic" href="bidic.jsp">bidi-c</a>
+       | <a target="idna" href="idna.jsp">idna</a>
+       | <a target="languageid" href="languageid.jsp">languageid</a></p>
+    <form name="myform">
+      <table border="1" cellpadding="0" cellspacing="0" style="border-collapse: collapse; width:100%">
+        <tbody><tr>
+          <th style="width: 50%">Transform Rules</th>
+        </tr>
+        <tr>
+          <td><textarea name="a" rows="8" cols="10" style="width: 100%">:: latin-cyrillic;</textarea></td>
+        </tr>
+        <tr>
+          <th style="width: 50%">Sample</th>
+        </tr>
+        <tr>
+          <td><textarea name="b" rows="8" cols="10" style="width: 100%">abs</textarea></td>
+        </tr>
+    </tbody></table>
+    <input id="main" type="submit" value="Show Transform" onclick="window.location.href='transform.jsp?a='+document.getElementById('main').value">
+    <input type="checkbox" name="show"><label for="show">Show Transforms</label>
+      <hr>
+      <h2>Result</h2>
+      абс
+      
+    </form>
+    
+    <hr>
+    <p style="font-size:80%"><b><a name="fonts">Fonts and Display.</a></b> If you don't have a good set of Unicode fonts (and modern browser), 
+    you may not be able to read some of the characters.
+    Some suggested fonts that you can add for coverage are:
+    <a href="https://www.google.com/get/noto/" target="_blank">Noto Fonts site</a>,
+    <a href="http://greekfonts.teilar.gr/" target="_blank">Unicode Fonts for Ancient Scripts</a>,
+    <a href="http://www.alanwood.net/unicode/fonts.html" target="_blank">Large, multi-script Unicode fonts</a>.
+    See also: <a href="http://www.unicode.org/help/display_problems.html" target="_blank">Unicode Display Problems</a>.</p>
+    <p style="font-size:80%">Version 3.9; ICU version: 74.1; Unicode/Emoji version: 15.1.0; Unicodeβ version: 16.0.0; </p>
+    <hr>
+    
+    
+    
+    </body></html>

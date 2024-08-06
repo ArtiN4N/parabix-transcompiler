@@ -1,0 +1,10 @@
+:: Latin-Greek/UNGEGN;
+:: Greek-Latin;
+:: Latin-Gujarati;
+:: Gujarati-Latin;
+:: Latin-Gurmukhi;
+:: Gurmukhi-Latin;
+:: Latin-Hangul;
+:: Hangul-Latin;
+:: Latin-Hebrew;
+:: Hebrew-Latin;

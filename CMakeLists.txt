@@ -25,6 +25,7 @@ option(ENABLE_PAPI "Enable PAPI support if available" OFF)
 option(REPORT_PAPI_TESTS "Report PAPI testing results" OFF)
 option(LLVM_PATH "LLVM root directory")
 option(GENERATE_TOOLS "Controls whether or not it generate tools" ON)
+option(GENERATE_TRANSCOMPILER "Controls whether or not it generate the transliterator compiler" ON)
 option(USE_LIBBACKTRACE "Allows framework to provide more detailed backtraces in JIT compiled code. Library available from github.com/ianlancetaylor/libbacktrace" OFF)
 option(SET_DEFAULT_OBJCACHE_DIR "Whether or not to set the default object cache directory at compile time" ON)
 
@@ -441,6 +442,10 @@ if (GENERATE_TOOLS)
     add_subdirectory(tools/ztf8)
     add_subdirectory(tools/util)
     add_subdirectory(tools/csv)
+endif()
+
+if (GENERATE_TRANSCOMPILER)
+    add_subdirectory(transcompiler/transforms)
 endif()
 
 # Kernel Tests

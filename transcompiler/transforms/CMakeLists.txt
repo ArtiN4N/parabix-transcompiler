@@ -1,0 +1,152 @@
+parabix_add_executable(
+NAME
+    lower
+SRC
+    lower.cpp
+DEPS
+    grep
+    pablo
+    kernel.basis
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    kernel.util
+    toolchain
+)
+
+parabix_add_executable(
+NAME
+    title
+SRC
+    title.cpp
+DEPS
+    grep
+    pablo
+    kernel.basis
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    kernel.util
+    toolchain
+)
+
+parabix_add_executable(
+NAME
+    upper
+SRC
+    upper.cpp
+DEPS
+    grep
+    pablo
+    kernel.basis
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    kernel.util
+    re.cc
+    toolchain
+)
+
+parabix_add_executable(
+NAME
+    full-half
+SRC
+    fullwidth-halfwidth.cpp
+DEPS
+    grep
+    pablo
+    kernel.basis
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    kernel.util
+    re.cc
+    toolchain
+)
+
+parabix_add_executable(
+NAME
+    half-full
+SRC
+    halfwidth-fullwidth.cpp
+DEPS
+    grep
+    pablo
+    kernel.basis
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    kernel.util
+    re.cc
+    toolchain
+)
+
+
+parabix_add_executable(
+NAME
+    toRemove
+SRC
+    toRemove.cpp
+DEPS
+    grep
+    pablo
+    kernel.basis
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    kernel.util
+    re.cc
+    toolchain
+)
+
+
+parabix_add_executable(
+NAME
+    lascii
+SRC
+    latin-ascii.cpp
+DEPS
+    grep
+    pablo
+    kernel.basis
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    kernel.util
+    re.cc
+    toolchain
+)
+
+parabix_add_executable(
+NAME
+    hex
+SRC
+    hex.cpp
+DEPS
+    grep
+    pablo
+    kernel.basis
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    kernel.util
+    re.cc
+    toolchain
+)
+
+parabix_add_executable(
+NAME
+    TRANSCOMPILERAUTOGEN
+SRC
+    TRANSCOMPILERAUTOGENTEMPSOURCECODE.cpp
+DEPS
+    grep
+    pablo
+    kernel.basis
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    kernel.util
+    re.cc
+    toolchain
+)

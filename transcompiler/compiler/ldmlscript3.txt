@@ -1,0 +1,10 @@
+:: Latin-Ethiopic/Lambdin;
+:: Latin-Ethiopic/SERA;
+:: Latin-Ethiopic/Tekie_Alibekit;
+:: Latin-Ethiopic/Williamson;
+:: Latin-Ethiopic/Xalaget;
+:: Ethiopic-Latin;
+:: Latin-Georgian;
+:: Georgian-Latin;
+:: Latin-Greek;
+:: Greek-Latin;

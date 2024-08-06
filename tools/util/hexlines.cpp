@@ -126,6 +126,17 @@ static cl::opt<bool> LowerHex("l", cl::desc("Use lower case hex output (default 
 //  from a source bit stream set called spreadBasis and the insertMask
 //  used to spread out the bits.
 //
+
+class Spacify : public PabloKernel {
+public:
+    Spacify(KernelBuilder & kb, StreamSet * insertMask, StreamSet * spreadBasis, StreamSet * hexBasis)
+        : PabloKernel(kb, LowerHex ? "Spacify_lc" : "Spacify",
+                      {Binding{"insertMask", insertMask}, Binding{"spreadBasis", spreadBasis}},
+                      {Binding{"hexBasis", hexBasis}}) {}
+protected:
+    void generatePabloMethod() override;
+};
+
 class Hexify : public PabloKernel {
 public:
     Hexify(KernelBuilder & kb, StreamSet * insertMask, StreamSet * spreadBasis, StreamSet * hexBasis)
@@ -136,6 +147,21 @@ protected:
     void generatePabloMethod() override;
 };
 
+
+void Spacify::generatePabloMethod() {
+	//todo: turn null characters into space characters (change bit 5)
+	//  pb is an object used for build Pablo language statements
+	pablo::PabloBuilder pb(getEntryScope());
+	//  bnc is an object that can perform arithmetic on sets of parallel bit streams
+	BixNumCompiler bnc(pb);
+	// Get the input stream sets.
+	PabloAST * insertMask = getInputStreamSet("insertMask")[0];
+	std::vector<PabloAST *> spreadBasis = getInputStreamSet("spreadBasis");
+	// ccc is an object that can compile character classes from a set of 8 parallel bit streams.
+	cc::Parabix_CC_Compiler_Builder ccc(getEntryScope(), spreadBasis);
+	// Compute the stream marking LFs.
+	PabloAST * LF = ccc.compileCC(re::makeByte(0xA));
+}
 
 void Hexify::generatePabloMethod() {
     //  pb is an object used for build Pablo language statements
@@ -210,6 +236,8 @@ HexLinesFunctionType generatePipeline(CPUDriver & pxDriver) {
     StreamSet * nonLF = P->CreateStreamSet(1);
     std::vector<re::CC *> nonLF_CC = {re::makeCC(re::makeByte(0,9), re::makeByte(0xB, 0xff))};
     P->CreateKernelCall<CharacterClassKernelBuilder>(nonLF_CC, BasisBits, nonLF);
+    
+    
     SHOW_STREAM(nonLF);
 
     //  We need to spread out the basis bits to make room for two positions for
@@ -237,10 +265,52 @@ HexLinesFunctionType generatePipeline(CPUDriver & pxDriver) {
     // P2S kernel (parallel-to-serial).
     StreamSet * hexLines = P->CreateStreamSet(1, 8);
     P->CreateKernelCall<P2SKernel>(hexBasis, hexLines);
+    
+    
+    
+    
+    // Now we want to spread out by each ascii character
+    
+    // First, create our thingy that will find the space for every char
+    StreamSet * everyCharSpace = P->CreateStreamSet(1);
+    
+    std::vector<re::CC *> everyCharSpace_CC = {re::makeCC(re::makeByte(0xf,0x00), re::makeByte(0x00, 0xff))};
+    
+    P->CreateKernelCall<CharacterClassKernelBuilder>(everyCharSpace_CC, hexBasis, everyCharSpace);
+    
+    SHOW_STREAM(everyCharSpace);
+
+    
+    
+    StreamSet* spaceInsertMask = UnitInsertionSpreadMask(P, everyCharSpace, InsertPosition::After);
+    SHOW_STREAM(spaceInsertMask);
+    
+    //replicating
+    StreamSet * spacedBasis = P->CreateStreamSet(8);
+    SpreadByMask(P, spaceInsertMask, hexBasis, spacedBasis);
+    SHOW_BIXNUM(spacedBasis);
+
+    // Perform the logic of the Hexify kernel.
+    StreamSet * spacifyBasis = P->CreateStreamSet(8);
+    P->CreateKernelCall<Spacify>(spaceInsertMask, spacedBasis, spacifyBasis);
+    SHOW_BIXNUM(spacifyBasis);
+
+    // The computed output can be converted back to byte stream form by the
+    // P2S kernel (parallel-to-serial).
+    StreamSet * spacedLined = P->CreateStreamSet(1, 8);
+    P->CreateKernelCall<P2SKernel>(spacedBasis, spacedLined);
+    
+    SHOW_BYTES(spacedLined);
+    
+    
     SHOW_BYTES(hexLines);
+    
+    //  The StdOut kernel writes a byte stream to standard output.
+    P->CreateKernelCall<StdOutKernel>(spacedLined);
 
     //  The StdOut kernel writes a byte stream to standard output.
     P->CreateKernelCall<StdOutKernel>(hexLines);
+    
     return reinterpret_cast<HexLinesFunctionType>(P->compile());
 }
 

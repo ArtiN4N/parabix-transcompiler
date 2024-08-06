@@ -7,6 +7,7 @@
 #include <boost/filesystem.hpp>
 #include <re/cc/cc_compiler.h>
 #include <re/cc/cc_compiler_target.h>
+#include <re/transforms/re_simplifier.h>
 #include <re/adt/adt.h>
 #include <re/parse/parser.h>
 #include <re/unicode/resolve_properties.h>
@@ -143,7 +144,7 @@ int main(int argc, char *argv[]) {
     const auto fileCount = allFiles.size();
 
     UCountFunctionType uCountFunctionPtr = nullptr;
-    re::RE * CC_re = re::RE_Parser::parse(CC_expr);
+    re::RE * CC_re = re::simplifyRE(re::RE_Parser::parse(CC_expr));
     CC_re = UCD::linkAndResolve(CC_re);
     CC_re = UCD::externalizeProperties(CC_re);
     if (re::Name * UCD_property_name = dyn_cast<re::Name>(CC_re)) {

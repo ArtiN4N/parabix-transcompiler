@@ -1,0 +1,13 @@
+:: Latin-Oriya;
+:: Oriya-Latin;
+:: Latin-Syriac;
+:: Syriac-Latin;
+:: Latin-Tamil;
+:: Tamil-Latin;
+:: Latin-Telugu;
+:: Telugu-Latin;
+:: Latin-Thaana;
+:: Thaana-Latin;
+:: Latin-Thai;
+:: Thai-Latin;
+:: Latin-Russian/BGN;

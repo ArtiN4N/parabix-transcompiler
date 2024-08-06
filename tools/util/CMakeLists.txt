@@ -52,13 +52,23 @@ DEPS
 
 parabix_add_executable(
 NAME
-    latinhalffull
+    packdemo
 SRC
-    latinhalftofull.cpp
+    packdemo.cpp
 DEPS
-    grep
-    pablo
-    kernel.basis
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    kernel.util
+    toolchain
+)
+
+parabix_add_executable(
+NAME
+    expanddemo
+SRC
+    expanddemo.cpp
+DEPS
     kernel.io
     kernel.pipeline
     kernel.streamutils
