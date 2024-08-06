@@ -220,5 +220,5 @@ void ReplaceByBixData(PipelineBuilder & P, replace_bixData & BixData, StreamSet 
     StreamSet * ExpandedBasis = P.CreateStreamSet(21, 1);
     SpreadByMask(P, SpreadMask, Basis, ExpandedBasis, 0, false, kernel::StreamExpandOptimization::None, 64, GammaDistribution(5.0f, 0.1f));
 
-    P.CreateKernelCall<Replaceify>(BixData, ExpandedBasis, Output);
+    P.CreateKernelCall<Replaceify>(BixData, ExpandedBasis, Output); 
 }
