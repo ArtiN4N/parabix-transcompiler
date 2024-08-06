@@ -62,7 +62,6 @@ protected:
 };
 
 void Lowerify::generatePabloMethod() {
-    std::cout << "called lowerify" << std::endl;
     //  pb is an object used for build Pablo language statements
     pablo::PabloBuilder pb(getEntryScope());
 
