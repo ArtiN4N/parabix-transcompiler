@@ -83,7 +83,6 @@ ToLasciiFunctionType generatePipeline(CPUDriver & pxDriver) {
     // Convert into codepoints
     StreamSet * u8index = P->CreateStreamSet(1, 1);
     P->CreateKernelCall<UTF8_index>(BasisBits, u8index);
-    //SHOW_STREAM(u8index);
 
     StreamSet * U21_u8indexed = P->CreateStreamSet(21, 1);
     P->CreateKernelCall<UTF8_Decoder>(BasisBits, U21_u8indexed);
@@ -93,7 +92,7 @@ ToLasciiFunctionType generatePipeline(CPUDriver & pxDriver) {
     SHOW_BIXNUM(U21);
 
     StreamSet * finalBasis = P->CreateStreamSet(21, 1);
-    replace_bixData LAT_replace_data(asciiCodeData);
+    replace_bixData LAT_replace_data(asciiCodeData, 1);
 
     ReplaceByBixData(P, LAT_replace_data, U21, finalBasis);
 
