@@ -296,7 +296,6 @@ std::string compilePipeline(std::string piplineCode, bool usesCustomProgName, st
 
     std::string codeFileName = "../../transcompiler/transforms/TRANSCOMPILERAUTOGENTEMPSOURCECODE.cpp";
     std::string makeName = "TRANSCOMPILERAUTOGEN";
-    //if (usesCustomProgName) makeName = customProgName;
 
     std::ofstream outFile(codeFileName);
     if (!outFile.is_open()) {
@@ -306,10 +305,6 @@ std::string compilePipeline(std::string piplineCode, bool usesCustomProgName, st
 
     outFile << piplineCode;
     outFile.close();
-
-    //createCMakeLists("../../transcompiler/transforms/CMakeLists.txt", makeName, codeFileName);
-
-    //runCommand("cd ../; cmake ..");
 
     runCommand("cd ../; make " + makeName);
 
