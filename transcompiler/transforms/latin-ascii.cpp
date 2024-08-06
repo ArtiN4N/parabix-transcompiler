@@ -96,7 +96,7 @@ ToLasciiFunctionType generatePipeline(CPUDriver & pxDriver) {
     SHOW_BIXNUM(U21);
 
     StreamSet * finalBasis = P->CreateStreamSet(21, 1);
-    replace_bixData LAT_replace_data(asciiCodeData);
+    replace_bixData LAT_replace_data(asciiCodeData,1);
 
     ReplaceByBixData(P, LAT_replace_data, U21, finalBasis);
 

@@ -2,6 +2,7 @@
 #include <fcntl.h>
 #include <string>
 #include <iostream>
+#include <ctime>
 
 #include <unicode/data/PropertyObjects.h>
 #include <unicode/data/PropertyObjectTable.h>
@@ -124,14 +125,14 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
     StreamSet * finalBasis6 = P->CreateStreamSet(21, 1);
     replace_bixData SCRIPT_replace_data6(bengalilatindata, 6);
     ReplaceByBixData(P, SCRIPT_replace_data6, finalBasis5, finalBasis6);
-    /*
+    
     StreamSet * finalBasis7 = P->CreateStreamSet(21, 1);
     replace_bixData SCRIPT_replace_data7(latinbopomofodata, 7);
     ReplaceByBixData(P, SCRIPT_replace_data7, finalBasis6, finalBasis7);
     StreamSet * finalBasis8 = P->CreateStreamSet(21, 1);
     replace_bixData SCRIPT_replace_data8(bopomofolatindata, 8);
     ReplaceByBixData(P, SCRIPT_replace_data8, finalBasis7, finalBasis8);
-    */
+    
     StreamSet * const OutputBasis = P->CreateStreamSet(8);
 
     U21_to_UTF8(P, finalBasis6, OutputBasis);
