@@ -39,6 +39,9 @@
 
 #include "kernel/halffullify_kernel.h"
 
+// time testing
+#include <time.h>
+#include <stdio.h>
 
 #define SHOW_STREAM(name) if (codegen::EnableIllustrator) P->captureBitstream(#name, name)
 #define SHOW_BIXNUM(name) if (codegen::EnableIllustrator) P->captureBixNum(#name, name)
@@ -104,6 +107,11 @@ ToHalfFullFunctionType generatePipeline(CPUDriver & pxDriver) {
 }
 
 int main(int argc, char *argv[]) {
+    double time1, timedif;
+
+    time1 = (double) clock();       /* get initial time */
+    time1 = time1 / CLOCKS_PER_SEC; /*    in seconds    */
+
     //  ParseCommandLineOptions uses the LLVM CommandLine processor, but we also add
     //  standard Parabix command line options such as -help, -ShowPablo and many others.
     codegen::ParseCommandLineOptions(argc, argv, {&HalfFullOptions, pablo::pablo_toolchain_flags(), codegen::codegen_flags()});
@@ -125,5 +133,9 @@ int main(int argc, char *argv[]) {
         fn(fd);
         close(fd);
     }
+    // Calculatte elapsed time
+    timedif = ((double) clock() / CLOCKS_PER_SEC) - time1;
+    printf("\nThe elapsed time is %lf seconds\n", timedif);
+
     return 0;
 }

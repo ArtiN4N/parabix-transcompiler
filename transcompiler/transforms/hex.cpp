@@ -48,14 +48,18 @@
 #include "kernel/replaceify_kernel.h"
 #include "kernel/titleify_kernel.h"
 #include "kernel/upperify_kernel.h"
-#include "data/latinarabicdata.h"
-#include "data/arabiclatindata.h"
-#include "data/latinarmeniandata.h"
-#include "data/armenianlatindata.h"
-#include "data/latinbengalidata.h"
-#include "data/bengalilatindata.h"
-#include "data/latinbopomofodata.h"
-#include "data/bopomofolatindata.h"
+#include "data/LatinArabicData.h"
+#include "data/ArabicLatinData.h"
+#include "data/LatinArmenianData.h"
+#include "data/ArmenianLatinData.h"
+#include "data/LatinBengaliData.h"
+#include "data/BengaliLatinData.h"
+#include "data/LatinBopomofoData.h"
+#include "data/BopomofoLatinData.h"
+
+// time testing
+#include <time.h>
+#include <stdio.h>
 
 #define SHOW_STREAM(name) if (codegen::EnableIllustrator) P->captureBitstream(#name, name)
 #define SHOW_BIXNUM(name) if (codegen::EnableIllustrator) P->captureBixNum(#name, name)
@@ -140,6 +144,11 @@ TranscompilerAutoGenFunctionType generatePipeline(CPUDriver & pxDriver) {
 }
 
 int main(int argc, char *argv[]) {
+    double time1, timedif;
+
+    time1 = (double) clock();       /* get initial time */
+    time1 = time1 / CLOCKS_PER_SEC; /*    in seconds    */
+
     //  ParseCommandLineOptions uses the LLVM CommandLine processor, but we also add
     //  standard Parabix command line options such as -help, -ShowPablo and many others.
     codegen::ParseCommandLineOptions(argc, argv, {&TranscompilerAutoGenOptions, pablo::pablo_toolchain_flags(), codegen::codegen_flags()});
@@ -161,5 +170,9 @@ int main(int argc, char *argv[]) {
         fn(fd);
         close(fd);
     }
+    // Calculatte elapsed time
+    timedif = ((double) clock() / CLOCKS_PER_SEC) - time1;
+    printf("\nThe elapsed time is %lf seconds\n", timedif);
+
     return 0;
 }
