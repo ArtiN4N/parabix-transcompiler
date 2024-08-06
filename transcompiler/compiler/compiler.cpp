@@ -235,7 +235,7 @@ std::string createPipelineFrom(LDMLtransformSet transformSet, bool outputToFile,
         } else if (transform == LDMLtransformEnum::SCRIPT_T) {
             int uses = transformSet.transformUses[transform];
             codeBegin += "#include \"data/" + transformSet.scriptData[scripts] + "\"" + "\n";
-            codePipelineDynamic += "    replace_bixData SCRIPT_replace_data" + std::to_string(scripts + 1) + "(" + transformSet.scriptData[scripts].substr(0, transformSet.scriptData[scripts].length() - 2) + ", " + std::to_string(i + 1) + ");\n";
+            codePipelineDynamic += "    replace_bixData SCRIPT_replace_data" + std::to_string(scripts + 1) + "(" + transformSet.scriptData[scripts].substr(0, transformSet.scriptData[scripts].length() - 2) + ", " + std::to_string(i + 1) + " );\n";
             codePipelineDynamic += "    ReplaceByBixData(P, SCRIPT_replace_data" + std::to_string(scripts + 1) + ", " + input + ", finalBasis" + std::to_string(i + 1) + ");\n";
             scripts++;
         }else if (transform == LDMLtransformEnum::REMOVE_T) {
@@ -278,32 +278,6 @@ std::filesystem::path getExecutablePath() {
         return std::filesystem::path(buffer).remove_filename();
     } else {
         throw std::runtime_error("Failed to get executable path");
-    }
-}
-
-void createCMakeLists(const std::string& cmakeListFile, const std::string& programName, const std::string& sourceFile) {
-    std::ofstream cmakeFile(cmakeListFile);
-    if (cmakeFile.is_open()) {
-        cmakeFile << "parabix_add_executable(\n"
-                  << "NAME\n"
-                  << "    " << programName << "\n"
-                  << "SRC\n"
-                  << "    " << sourceFile << "\n"
-                  << "DEPS\n"
-                  << "    grep\n"
-                  << "    pablo\n"
-                  << "    kernel.basis\n"
-                  << "    kernel.io\n"
-                  << "    kernel.pipeline\n"
-                  << "    kernel.streamutils\n"
-                  << "    kernel.util\n"
-                  << "    re.cc\n"
-                  << "    toolchain\n"
-                  << ")";
-        cmakeFile.close();
-    } else {
-        std::cerr << "Unable to open CMakeLists.txt file.";
-        exit(1);
     }
 }
 
