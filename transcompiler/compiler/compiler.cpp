@@ -390,7 +390,9 @@ int main(int argc, char* argv[]) {
     std::string piplineCode = createPipelineFrom(validTransforms, outputToFile, transformedOut);
     std::string compiledProgFilename = compilePipeline(piplineCode, usesCustomProgName, customProgName);
 
-    std::cout << std::endl << compiledProgFilename << " compiled successfully!" << std::endl;
+    if (usesCustomProgName) std::cout << std::endl << customProgName << " compiled successfully!" << std::endl;
+
+    else std::cout << std::endl << compiledProgFilename << " compiled successfully!" << std::endl;
 
     return 0;
 }
